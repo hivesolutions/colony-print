@@ -1,4 +1,4 @@
-var BASE_URL = "http://srio.hive:8080/"
+var BASE_URL = "http://print.bemisc.com/"
 
 jQuery(document).ready(function() {
             var body = jQuery("body");
