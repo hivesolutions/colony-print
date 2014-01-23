@@ -537,7 +537,7 @@ class Visitor:
             # saves the new image into the string buffer and then
             # retrieve the buffer data
             other_image.save(string_buffer, "bmp")
-            buffer = string_buffer.get_value()
+            buffer = string_buffer.getvalue()
 
             # packs the element image element structure containing all the meta
             # information that makes part of it then adds the "just" created
