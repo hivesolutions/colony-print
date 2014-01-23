@@ -1,8 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import main
+import controllers
 import printing
+import main
 
-from main import *
+from controllers import *
 from printing import *
+from main import *
