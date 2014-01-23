@@ -187,7 +187,7 @@ class Visitor:
     visit_index = 0
     """ The visit index, for multiple visits """
 
-    printing_options = {}
+    options = {}
     """ The printing options """
 
     elements_list = []
@@ -204,7 +204,7 @@ class Visitor:
         self.visit_childs = True
         self.visit_next = True
         self.visit_index = 0
-        self.printing_options = {}
+        self.options = {}
         self.elements_list = []
         self.current_position = None
         self.context_map = {}
@@ -232,7 +232,7 @@ class Visitor:
             ast_node_class = getattr(self_class_real_element, "ast_node_class")
             self.node_method_map[ast_node_class] = self_class_real_element
 
-    def get_printing_options(self):
+    def get_options(self):
         """
         Retrieves the printing options.
 
@@ -240,17 +240,17 @@ class Visitor:
         @return: The printing options.
         """
 
-        return self.printing_options
+        return self.options
 
-    def set_printing_options(self, printing_options):
+    def set_options(self, options):
         """
         Sets the printing options.
 
-        @type printing_options: Dictionary.
-        @param printing_options: The printing options.
+        @type options: Dictionary.
+        @param options: The printing options.
         """
 
-        self.printing_options = printing_options
+        self.options = options
 
     @dispatch_visit()
     def visit(self, node):
@@ -304,7 +304,7 @@ class Visitor:
                 printing_document_height,
                 len(self.elements_list)
             )
-            self.printing_options["file"].write(header)
+            self.options["file"].write(header)
 
             # iterates over all the elements list to create their header
             # and then add the element data
@@ -318,8 +318,8 @@ class Visitor:
                 # of the element and then writes it and the data into the
                 # the current file
                 element_header = struct.pack("<II", element_type, element_length)
-                self.printing_options["file"].write(element_header)
-                self.printing_options["file"].write(element_data)
+                self.options["file"].write(element_header)
+                self.options["file"].write(element_data)
 
             # removes the context information
             self.remove_context(node)

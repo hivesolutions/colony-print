@@ -227,7 +227,7 @@ class Visitor:
     visit_index = 0
     """ The visit index, for multiple visits """
 
-    printing_options = {}
+    options = {}
     """ The printing options """
 
     canvas = None
@@ -263,7 +263,7 @@ class Visitor:
         self.visit_childs = True
         self.visit_next = True
         self.visit_index = 0
-        self.printing_options = {}
+        self.options = {}
         self.canvas = None
         self.width = 0
         self.height = 0
@@ -294,7 +294,7 @@ class Visitor:
             ast_node_class = getattr(self_class_real_element, "ast_node_class")
             self.node_method_map[ast_node_class] = self_class_real_element
 
-    def get_printing_options(self):
+    def get_options(self):
         """
         Retrieves the printing options.
 
@@ -302,17 +302,17 @@ class Visitor:
         @return: The printing options.
         """
 
-        return self.printing_options
+        return self.options
 
-    def set_printing_options(self, printing_options):
+    def set_options(self, options):
         """
         Sets the printing options.
 
-        @type printing_options: Dictionary.
-        @param printing_options: The printing options.
+        @type options: Dictionary.
+        @param options: The printing options.
         """
 
-        self.printing_options = printing_options
+        self.options = options
 
     @dispatch_visit()
     def visit(self, node):
@@ -343,8 +343,8 @@ class Visitor:
             # retrieves both the file (buffer) to be used for the output
             # of the pdf file contents and the expected size for the pdf
             # document, in case no size is provided a default one is used
-            file = self.printing_options["file"]
-            size = self.printing_options.get("size", PAPER_SIZE)
+            file = self.options["file"]
+            size = self.options.get("size", PAPER_SIZE)
 
             # unpacks the size tuple into the width and height
             # components and sets the tuple containing both values
