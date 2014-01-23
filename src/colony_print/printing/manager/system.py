@@ -1,25 +1,26 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import colony.base.system
-
 import parser
 import exceptions
 
-TEST_IMAGE_PATH = "printing/manager/resources/test_logo.png"
-""" The test image relative path """
+TEST_IMAGE_PATH = "resources/test_logo.png"
+""" The test image relative path to the current
+file path (considered the base path) """
 
-class PrintingManager(colony.base.system.System):
+class PrintingManager(object):
     """
-    The printing manager class.
+    The printing manager class, that is responsible for the
+    top level handling of the printing operations.
     """
 
-    printing_plugins_map = {}
-    """ The printing plugins map """
+    handlers_map = {}
+    """ The map containing an association between the
+    name of the printing handler and the proper instance
+    that may be used for printing processing """
 
-    def __init__(self, plugin):
-        colony.base.system.System.__init__(self, plugin)
-        self.printing_plugins_map = {}
+    def __init__(self):
+        self.handlers_map = {}
 
     def print_test(self, printing_options = {}):
         # retrieves the printing plugin for the given
@@ -66,12 +67,10 @@ class PrintingManager(colony.base.system.System):
         # prints the printing language document in the printing plugin
         printing_plugin.print_printing_language(printing_document, printing_options)
 
-    def load_printing_plugin(self, printing_plugin):
+    def load_printing_handler(self, handler):
         # retrieves the printing name from the printing plugin
-        printing_name = printing_plugin.get_printing_name()
-
-        # sets the printing plugin in the printing plugins map
-        self.printing_plugins_map[printing_name] = printing_plugin
+        printing_name = handler.get_printing_name()
+        self.handlers_map[printing_name] = handler
 
     def unload_printing_plugin(self, printing_plugin):
         # retrieves the printing name from the printing plugin
