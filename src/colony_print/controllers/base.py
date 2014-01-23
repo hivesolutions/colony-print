@@ -33,19 +33,23 @@ class BaseController(appier.Controller):
 
     @appier.route("/print.<format>", "POST")
     def print_language(self, format):
-        base64 = self.get_field("base64", False)
+        # retrieves the current request reference and then
+        # uses it to retrieve its "raw" data, that should
+        # contain the xml string for the generation of the
+        # of binie result and then sends the value for print
+        request = self.get_request()
+        data = request.get_data()
+        return self.send_print(data, format = format)
+
+    def send_print(self, data, format = "binie"):
+        # retrieves the various optional fields for printing
+        # and then parses them creating the composite values
+        # (should include the size tuple)
+        b64 = self.get_field("base64", False)
         width = float(self.get_field("width", 0.0))
         height = float(self.get_field("height", 0.0))
         size = (width, height)
-        data = self.request.data
-        return self.send_print(
-            data,
-            format = format,
-            size = size,
-            b64 = base64
-        )
 
-    def send_print(self, data, format = "binie", size = None, b64 = False):
         mime = self.get_mime(format, b64 = base64)
         manager = self.get_manager()
 
