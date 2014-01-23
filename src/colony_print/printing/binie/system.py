@@ -1,16 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import colony.base.system
-
 import visitor
 
 PRINTING_NAME = "binie"
 """ The printing name """
 
-class PrintingBinie(colony.base.system.System):
+class PrintingBinie(object):
     """
-    The printing binie class.
+    The printing binie class, responsible for the handling
+    of the front-end of the printing to binie support.
     """
 
     def get_printing_name(self):
