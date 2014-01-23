@@ -67,12 +67,13 @@ class PrintingManager(object):
         # prints the printing language document in the printing plugin
         printing_plugin.print_printing_language(printing_document, printing_options)
 
-    def load_printing_handler(self, handler):
-        # retrieves the printing name from the printing plugin
-        printing_name = handler.get_printing_name()
+    def load_handler(self, handler):
+        # retrieves the printing name from the handler and
+        # uses it to register the handler in the proper map
+        printing_name = handler.get_name()
         self.handlers_map[printing_name] = handler
 
-    def unload_printing_plugin(self, printing_plugin):
+    def unload_handler(self, printing_plugin):
         # retrieves the printing name from the printing plugin
         printing_name = printing_plugin.get_printing_name()
 
