@@ -86,7 +86,7 @@ PAPER_SIZE = A4_PAPER
 """ The default paper size to be used when no paper
 size value is defined for the print operation """
 
-FONT_PATHS = ("", "~/.fonts/")
+FONT_PATHS = ("", "~/.fonts/", "/usr/share/fonts/truetype/")
 """ The set of base paths to be used for searching
 for fonts on the current system """
 
@@ -701,7 +701,7 @@ class Visitor:
                 # creates the complete font path with the current
                 # base path in iteration and the font name in case
                 # the font path is empty the default system wide
-                # search will be used
+                # search will be used (varies from system to system)
                 file_path_f = font_path + file_path
                 file_path_f = os.path.expanduser(file_path_f)
 
