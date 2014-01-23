@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<printing_document name="hello" font="Calibri" font_size="9">
+    <paragraph text_align="center">
+        <line>
+            <text>Hello World</text>
+        </line>
+    </paragraph>
+</printing_document>
