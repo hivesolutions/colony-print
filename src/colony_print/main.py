@@ -3,6 +3,10 @@
 
 import appier
 
+import printing
+
+print printing
+
 class ColonyPrintApp(appier.App):
 
     def __init__(self):
