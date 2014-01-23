@@ -1,9 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import colony.base.exceptions
-
-class PrintingManagerException(colony.base.exceptions.ColonyException):
+class PrintingManagerException(Exception):
     """
     The printing manager exception class.
     """

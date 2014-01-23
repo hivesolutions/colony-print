@@ -1,9 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import colony.base.exceptions
-
-class PrintingPdfException(colony.base.exceptions.ColonyException):
+class PrintingPdfException(Exception):
     """
     The printing pdf exception class.
     """

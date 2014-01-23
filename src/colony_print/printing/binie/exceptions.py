@@ -1,9 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import colony.base.exceptions
-
-class PrintingBinieException(colony.base.exceptions.ColonyException):
+class PrintingBinieException(Exception):
     """
     The printing binie exception class.
     """
