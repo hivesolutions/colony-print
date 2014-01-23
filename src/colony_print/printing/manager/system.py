@@ -6,6 +6,8 @@ import os
 import parser
 import exceptions
 
+import colony_print.printing
+
 TEST_IMAGE_PATH = "resources/test_logo.png"
 """ The test image relative path to the current
 file path (considered the base path) """
@@ -23,6 +25,16 @@ class PrintingManager(object):
 
     def __init__(self):
         self.handlers_map = {}
+
+    def load(self):
+        pdf_handler = colony_print.printing.PrintingPDF()
+        binie_handler = colony_print.printing.PrintingBinie()
+        self.load_handler(pdf_handler)
+        self.load_handler(binie_handler)
+
+    def unload(self):
+        for _name, handler in self.handlers_map:
+            self.unload_handler(handler)
 
     def print_test(self, options = {}):
         # retrieves the proper handler using the provided map of options

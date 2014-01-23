@@ -3,13 +3,13 @@
 
 import struct
 import base64
+import cStringIO
 
 import PIL.Image
 
-import colony.libs.string_buffer_util
-
 import exceptions
-import printing.manager.ast
+
+from colony_print.printing.manager.ast import *
 
 FONT_SCALE_FACTOR = 20
 """ The font scale factor """
@@ -263,15 +263,15 @@ class Visitor:
     def after_visit(self, node):
         pass
 
-    @_visit(printing.manager.ast.AstNode)
+    @_visit(AstNode)
     def visit_ast_node(self, node):
         pass
 
-    @_visit(printing.manager.ast.GenericElement)
+    @_visit(GenericElement)
     def visit_generic_element(self, node):
         pass
 
-    @_visit(printing.manager.ast.PrintingDocument)
+    @_visit(PrintingDocument)
     def visit_printing_document(self, node):
         # in case it's the first visit
         if self.visit_index == 0:
@@ -324,7 +324,7 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @_visit(printing.manager.ast.Block)
+    @_visit(Block)
     def visit_block(self, node):
         if self.visit_index == 0:
             # adds the node as the context information, this way
@@ -338,12 +338,12 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @_visit(printing.manager.ast.Paragraph)
+    @_visit(Paragraph)
     def visit_paragraph(self, node):
         if self.visit_index == 0: self.add_context(node)
         elif self.visit_index == 1: self.remove_context(node)
 
-    @_visit(printing.manager.ast.Line)
+    @_visit(Line)
     def visit_line(self, node):
         if self.visit_index == 0:
             self.add_context(node)
@@ -379,7 +379,7 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @_visit(printing.manager.ast.Text)
+    @_visit(Text)
     def visit_text(self, node):
         if self.visit_index == 0:
             # adds the node as the context information
@@ -460,7 +460,7 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @_visit(printing.manager.ast.Image)
+    @_visit(Image)
     def visit_image(self, node):
         if self.visit_index == 0:
             # adds the node as the context information
@@ -501,7 +501,7 @@ class Visitor:
                 # creates the image buffer then writes the decoded
                 # image into it and opens the file object with the
                 # created buffer (image loading into structure)
-                image_source_buffer = colony.libs.string_buffer_util.StringBuffer(False)
+                image_source_buffer = cStringIO.StringIO()
                 image_source_buffer.write(image_source_decoded)
                 image_source_buffer.seek(0)
                 bitmap_image = PIL.Image.open(image_source_buffer)
@@ -532,7 +532,7 @@ class Visitor:
             real_bitmap_image_height = bitmap_image_height
 
             # creates a new string buffer for the image
-            string_buffer = colony.libs.string_buffer_util.StringBuffer(False)
+            string_buffer = cStringIO.StringIO()
 
             # saves the new image into the string buffer and then
             # retrieve the buffer data
