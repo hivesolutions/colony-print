@@ -210,7 +210,9 @@ def dispatch_visit():
 
 class Visitor:
     """
-    The visitor class.
+    The visitor class for the pdf printing infra-structure
+    this visitor should be able to generate a pdf file
+    using the reportlab library as basics.
     """
 
     node_method_map = {}
