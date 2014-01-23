@@ -15,3 +15,7 @@ pip install netius
 pip install pillow
 pip install reportlab
 ```
+
+### Fonts
+
+To be able to install new fonts
