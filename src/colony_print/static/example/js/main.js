@@ -1,4 +1,4 @@
-var BASE_URL = "http://localhost:8080/"
+var BASE_URL = "http://srio.hive:8080/"
 
 jQuery(document).ready(function() {
             var body = jQuery("body");
@@ -92,13 +92,21 @@ var sizes = function(gateway, data) {
 };
 
 var serialize = function(data) {
-    var buffer = "?";
+    var buffer = ["?"];
+    var isFirst = true;
 
     for (key in data) {
         var value = data[key];
-        buffer.push(String(key) + "=" + String(value));
+        if (isFirst) {
+            isFirst = false
+        } else {
+            buffer.push("&");
+        }
+        var keyS = encodeURIComponent(String(key));
+        var valueS = encodeURIComponent(String(value));
+        buffer.push(keyS + "=" + valueS);
     }
 
-    var value = buffer.join();
+    var value = buffer.join("");
     return value;
 };

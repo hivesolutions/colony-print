@@ -34,16 +34,28 @@ class BaseController(appier.Controller):
     @appier.route("/print.<format>", "POST")
     def print_language(self, format):
         base64 = self.get_field("base64", False)
+        width = float(self.get_field("width", 0.0))
+        height = float(self.get_field("height", 0.0))
+        size = (width, height)
         data = self.request.data
-        return self.send_print(data, format, b64 = base64)
+        return self.send_print(
+            data,
+            format = format,
+            size = size,
+            b64 = base64
+        )
 
-    def send_print(self, data, format, b64 = False):
+    def send_print(self, data, format = "binie", size = None, b64 = False):
         mime = self.get_mime(format, b64 = base64)
         manager = self.get_manager()
 
         data = data
         file = cStringIO.StringIO()
-        options = dict(name = format, file = file)
+        options = dict(
+            name = format,
+            file = file,
+            size = size
+        )
 
         manager.print_language(data, options)
         value = file.getvalue()
