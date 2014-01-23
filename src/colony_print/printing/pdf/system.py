@@ -7,7 +7,7 @@ PRINTING_NAME = "pdf"
 """ The printing name, for the current pdf
 infra-structure (as defined in spec) """
 
-class PrintingPdf(object):
+class PrintingPDF(object):
     """
     The printing pdf class, that is responsible for
     the handling of the logic for the printing of pdf
