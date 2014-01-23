@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
+
 import parser
 import exceptions
 
@@ -22,50 +24,46 @@ class PrintingManager(object):
     def __init__(self):
         self.handlers_map = {}
 
-    def print_test(self, printing_options = {}):
-        # retrieves the printing plugin for the given
-        # printing options
-        printing_plugin = self._get_printing_plugin(printing_options)
+    def print_test(self, options = {}):
+        # retrieves the proper handler using the provided map of options
+        # and then uses the same options to run a test print operation
+        handler = self._get_handler(options)
+        handler.print_test(options)
 
-        # prints the test in the printing plugin
-        printing_plugin.print_test(printing_options)
+    def print_test_image(self, options = {}):
+        # retrieves the complete path for the current file and then
+        # retrieves it's directory path, to be used in the calculus
+        # of the image path to be used
+        file_path = os.path.realpath(__file__)
+        base_path = os.path.dirname(file_path)
 
-    def print_test_image(self, printing_options = {}):
-        # retrieves the plugin manager
-        plugin_manager = self.plugin.manager
+        # creates the complete image path using the calculated base
+        # path from the current file's path and then appends the relative
+        # path to the image resource
+        image_path = os.path.join(base_path, TEST_IMAGE_PATH)
 
-        # retrieves the plugin path
-        plugin_path = plugin_manager.get_plugin_path_by_id(self.plugin.id)
+        # retrieves the proper printing handler for the provided options
+        # and then uses it to print the test image in the calculated path
+        handler = self._get_handler(options)
+        handler.print_test_image(image_path, options)
 
-        # creates the complete image path
-        image_path = plugin_path + "/" + TEST_IMAGE_PATH
-
-        # retrieves the printing plugin for the given
-        # printing options
-        printing_plugin = self._get_printing_plugin(printing_options)
-
-        # prints the test image in the printing plugin
-        printing_plugin.print_test_image(image_path, printing_options)
-
-    def print_printing_language(self, printing_language_string, printing_options = {}):
-        # creates a new printing language parser
+    def print_printing_language(self, data, options = {}):
+        # creates a new printing language parser and sets the
+        # proper data in it running then the parse string operation
+        # that is going to be parsing the provided string
         _parser = parser.PrintingLanguageParser()
-
-        # sets the printing language string in the parser
-        _parser.string = printing_language_string
-
-        # parses the string
+        _parser.string = data
         _parser.parse_string()
 
-        # retrieves the printing document
-        printing_document = _parser.get_value()
+        # retrieves the (printing) document resulting from
+        # the parsing of the provided value this value is
+        # going to be sent to the handler for "printing"
+        document = _parser.get_value()
 
-        # retrieves the printing plugin for the given
-        # printing options
-        printing_plugin = self._get_printing_plugin(printing_options)
-
-        # prints the printing language document in the printing plugin
-        printing_plugin.print_printing_language(printing_document, printing_options)
+        # retrieves the proper handler according to the provided
+        # options and uses it in the printing operation
+        handler = self._get_handler(options)
+        handler.print_printing_language(document, options)
 
     def load_handler(self, handler):
         # retrieves the printing name from the handler and
@@ -73,35 +71,25 @@ class PrintingManager(object):
         printing_name = handler.get_name()
         self.handlers_map[printing_name] = handler
 
-    def unload_handler(self, printing_plugin):
-        # retrieves the printing name from the printing plugin
-        printing_name = printing_plugin.get_printing_name()
+    def unload_handler(self, handler):
+        # gathers the name of the provided handler and then
+        # removes any reference to it in the map of handlers
+        printing_name = handler.get_name()
+        del self.handlers_map[printing_name]
 
-        # unsets the printing plugin from the printing plugins map
-        del self.printing_plugins_map[printing_name]
-
-    def _get_printing_plugin(self, printing_options):
+    def _get_handler(self, options):
         # retrieves the printing name (engine) from the printing options
-        printing_name = printing_options.get("printing_name", None)
+        # this value is going to be used to select the proper handler
+        printing_name = options.get("printing_name", None)
+        if not printing_name: raise exceptions.PrintingPluginNotAvailable("missing name")
 
-        # in case the printing name is defined
-        if printing_name:
-            # tries to retrieve the printing plugin from the printing plugins
-            # map
-            printing_plugin = self.printing_plugins_map.get(printing_name, None)
-        else:
-            if self.plugin.printing_plugins:
-                # retrieves the first printing plugin
-                printing_plugin = self.plugin.printing_plugins[0]
-            else:
-                # sets the printing plugin as invalid, because there
-                # is not printing plugin available
-                printing_plugin = None
+        # tries to retrieve the proper handler for the requested name that
+        # exists in the handlers map in case it's not available raises an
+        # exception indicating the problem
+        handler = self.handlers_map.get(printing_name, None)
+        if not handler:
+            raise exceptions.PrintingPluginNotAvailable("no handler for requested name")
 
-        # in case no printing plugin is selected
-        if not printing_plugin:
-            # raises the printing not available exception
-            raise exceptions.PrintingPluginNotAvailable("the required printer is not available or no printers are available")
-
-        # returns the printing plugin
-        return printing_plugin
+        # returns the (printing) handler that has been requested according
+        # to the provided map of options
+        return handler
