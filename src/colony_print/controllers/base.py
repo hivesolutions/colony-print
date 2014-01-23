@@ -12,6 +12,9 @@ MIME = dict(
     binie = "text/x-binie",
     pdf = "application/pdf"
 )
+""" Map defining the association between the print
+format naming and the associated base mime type value
+(note that this value may be complemented with base64) """
 
 EXAMPLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
     <printing_document name=\"hello_world\" font=\"Calibri\" font_size=\"9\">\
@@ -19,6 +22,8 @@ EXAMPLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
             <line><text>Hello World</text></line>\
         </paragraph>\
     </printing_document>"
+""" Example xml string that should display an hello world
+message using the xml printing language """
 
 class BaseController(appier.Controller):
 
