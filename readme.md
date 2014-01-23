@@ -18,4 +18,5 @@ pip install reportlab
 
 ### Fonts
 
-To be able to install new fonts
+To be able to use new fonts (other than the ones provided by the system) one must install them
+into the `/usr/share/fonts/truetype/${FONT_NAME}`
