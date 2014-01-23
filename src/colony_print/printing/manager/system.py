@@ -59,7 +59,7 @@ class PrintingManager(object):
         handler = self._get_handler(options)
         handler.print_test_image(image_path, options)
 
-    def print_printing_language(self, data, options = {}):
+    def print_language(self, data, options = {}):
         # creates a new printing language parser and sets the
         # proper data in it running then the parse string operation
         # that is going to be parsing the provided string
@@ -75,7 +75,7 @@ class PrintingManager(object):
         # retrieves the proper handler according to the provided
         # options and uses it in the printing operation
         handler = self._get_handler(options)
-        handler.print_printing_language(document, options)
+        handler.print_language(document, options)
 
     def load_handler(self, handler):
         # retrieves the printing name from the handler and
@@ -92,7 +92,7 @@ class PrintingManager(object):
     def _get_handler(self, options):
         # retrieves the printing name (engine) from the printing options
         # this value is going to be used to select the proper handler
-        printing_name = options.get("printing_name", None)
+        printing_name = options.get("name", None)
         if not printing_name: raise exceptions.PrintingPluginNotAvailable("missing name")
 
         # tries to retrieve the proper handler for the requested name that

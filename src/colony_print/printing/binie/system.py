@@ -21,7 +21,7 @@ class PrintingBinie(object):
     def print_test_image(self, image_path, printing_options = {}):
         pass
 
-    def print_printing_language(self, printing_document, printing_options = {}):
+    def print_language(self, printing_document, printing_options = {}):
         # creates the pdf printing visitor then sets the
         # provided printing options in the visitor
         _visitor = visitor.Visitor()
