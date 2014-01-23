@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import base64
 import cStringIO
 
 import appier
@@ -32,11 +33,12 @@ class BaseController(appier.Controller):
 
     @appier.route("/print.<format>", "POST")
     def print_language(self, format):
-        # data = @todo: tenho de sacar os dados de post
-        return self.send_print(EXAMPLE, format)
+        base64 = self.get_field("base64", False)
+        data = self.request.data
+        return self.send_print(data, format, b64 = base64)
 
-    def send_print(self, data, format):
-        mime = self.get_mime(format)
+    def send_print(self, data, format, b64 = False):
+        mime = self.get_mime(format, b64 = base64)
         manager = self.get_manager()
 
         data = data
@@ -45,12 +47,15 @@ class BaseController(appier.Controller):
 
         manager.print_language(data, options)
         value = file.getvalue()
+        value = base64.b64encode(value) if b64 else value
 
         self.content_type(mime)
         return value
 
-    def get_mime(self, format):
-        return MIME.get(format, "application/octet-stream")
+    def get_mime(self, format, b64 = False):
+        mime = MIME.get(format, "application/octet-stream")
+        mime = mime + "-base64" if b64 else mime
+        return mime
 
     def get_manager(self):
         if self.manager: return self.manager
