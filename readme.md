@@ -1,6 +1,11 @@
 # Colony Print Infra-structure
 
-Small web app for the printing of colony based documents.
+Small web app for printing of colony based documents.
+
+This project includes two main components:
+
+* The web app end point that allows for xml to binie converstion `colony_print.controllers`
+* The structure conversion infra-structure (visitors, ast, etc.) `colony_print.printing`
 
 ## Installation
 
