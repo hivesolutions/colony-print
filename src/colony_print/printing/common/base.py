@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-def visit(ast_node_class):
+def visited(ast_node_class):
 
     def decorator(function, *args, **kwargs):
         function.ast_node_class = ast_node_class

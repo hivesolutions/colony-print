@@ -208,15 +208,15 @@ class Visitor:
     def after_visit(self, node):
         pass
 
-    @visit(AstNode)
+    @visited(AstNode)
     def visit_ast_node(self, node):
         pass
 
-    @visit(GenericElement)
+    @visited(GenericElement)
     def visit_generic_element(self, node):
         pass
 
-    @visit(PrintingDocument)
+    @visited(PrintingDocument)
     def visit_printing_document(self, node):
         # in case it's the first visit
         if self.visit_index == 0:
@@ -258,7 +258,7 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @visit(Block)
+    @visited(Block)
     def visit_block(self, node):
         if self.visit_index == 0:
             # adds the node as the context information, this way
@@ -272,12 +272,12 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @visit(Paragraph)
+    @visited(Paragraph)
     def visit_paragraph(self, node):
         if self.visit_index == 0: self.add_context(node)
         elif self.visit_index == 1: self.remove_context(node)
 
-    @visit(Line)
+    @visited(Line)
     def visit_line(self, node):
         if self.visit_index == 0:
             self.add_context(node)
@@ -313,7 +313,7 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @visit(Text)
+    @visited(Text)
     def visit_text(self, node):
         if self.visit_index == 0:
             # adds the node as the context information
@@ -401,7 +401,7 @@ class Visitor:
             # removes the context information
             self.remove_context(node)
 
-    @visit(Image)
+    @visited(Image)
     def visit_image(self, node):
         if self.visit_index == 0:
             # adds the node as the context information

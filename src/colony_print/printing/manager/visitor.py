@@ -62,34 +62,34 @@ class Visitor:
     def after_visit(self, node):
         pass
 
-    @visit(ast.AstNode)
+    @visited(ast.AstNode)
     def visit_ast_node(self, node):
         print "AstNode: " + str(node)
 
-    @visit(ast.GenericElement)
+    @visited(ast.GenericElement)
     def visit_generic_element(self, node):
         print "GenericElement: " + str(node)
 
-    @visit(ast.PrintingDocument)
+    @visited(ast.PrintingDocument)
     def visit_printing_document(self, node):
         print "PrintingDocument: " + str(node)
 
-    @visit(ast.Block)
+    @visited(ast.Block)
     def visit_block(self, node):
         print "Block: " + str(node)
 
-    @visit(ast.Paragraph)
+    @visited(ast.Paragraph)
     def visit_paragraph(self, node):
         print "Paragraph: " + str(node)
 
-    @visit(ast.Line)
+    @visited(ast.Line)
     def visit_line(self, node):
         print "Line: " + str(node)
 
-    @visit(ast.Text)
+    @visited(ast.Text)
     def visit_text(self, node):
         print "Text: " + str(node)
 
-    @visit(ast.Image)
+    @visited(ast.Image)
     def visit_image(self, node):
         print "Image: " + str(node)
