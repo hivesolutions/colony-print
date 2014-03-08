@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import colony_print
-
 import ast
+
+from colony_print.printing.common.base import *
 
 class Visitor:
     """
@@ -51,7 +51,7 @@ class Visitor:
             ast_node_class = getattr(self_class_real_element, "ast_node_class")
             self.node_method_map[ast_node_class] = self_class_real_element
 
-    @colony_print.dispatch_visit()
+    @dispatch_visit()
     def visit(self, node):
         print "unrecognized element node of type " + node.__class__.__name__
 
@@ -62,34 +62,34 @@ class Visitor:
     def after_visit(self, node):
         pass
 
-    @colony_print.visit(ast.AstNode)
+    @visit(ast.AstNode)
     def visit_ast_node(self, node):
         print "AstNode: " + str(node)
 
-    @colony_print.visit(ast.GenericElement)
+    @visit(ast.GenericElement)
     def visit_generic_element(self, node):
         print "GenericElement: " + str(node)
 
-    @colony_print.visit(ast.PrintingDocument)
+    @visit(ast.PrintingDocument)
     def visit_printing_document(self, node):
         print "PrintingDocument: " + str(node)
 
-    @colony_print.visit(ast.Block)
+    @visit(ast.Block)
     def visit_block(self, node):
         print "Block: " + str(node)
 
-    @colony_print.visit(ast.Paragraph)
+    @visit(ast.Paragraph)
     def visit_paragraph(self, node):
         print "Paragraph: " + str(node)
 
-    @colony_print.visit(ast.Line)
+    @visit(ast.Line)
     def visit_line(self, node):
         print "Line: " + str(node)
 
-    @colony_print.visit(ast.Text)
+    @visit(ast.Text)
     def visit_text(self, node):
         print "Text: " + str(node)
 
-    @colony_print.visit(ast.Image)
+    @visit(ast.Image)
     def visit_image(self, node):
         print "Image: " + str(node)
