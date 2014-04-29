@@ -27,7 +27,6 @@ message using the xml printing language """
 
 class BaseController(appier.Controller):
 
-    @appier.controller("BaseController")
     def __init__(self, owner, *args, **kwargs):
         appier.Controller.__init__(self, owner, *args, **kwargs)
         self.manager = None
