@@ -3,11 +3,11 @@
 
 import struct
 import base64
-import cStringIO
+import appier
 
 import PIL.Image
 
-import exceptions
+from colony_print.printing.binie import exceptions
 
 from colony_print.printing.common.base import *
 from colony_print.printing.manager.ast import *
@@ -137,7 +137,7 @@ class Visitor:
 
     @dispatch_visit()
     def visit(self, node):
-        print "unrecognized element node of type " + node.__class__.__name__
+        print("unrecognized element node of type " + node.__class__.__name__)
 
     def before_visit(self, node):
         self.visit_childs = True
@@ -384,7 +384,7 @@ class Visitor:
                 # creates the image buffer then writes the decoded
                 # image into it and opens the file object with the
                 # created buffer (image loading into structure)
-                image_source_buffer = cStringIO.StringIO()
+                image_source_buffer = appier.legacy.StringIO()
                 image_source_buffer.write(image_source_decoded)
                 image_source_buffer.seek(0)
                 bitmap_image = PIL.Image.open(image_source_buffer)
@@ -415,7 +415,7 @@ class Visitor:
             real_bitmap_image_height = bitmap_image_height
 
             # creates a new string buffer for the image
-            string_buffer = cStringIO.StringIO()
+            string_buffer = appier.legacy.StringIO()
 
             # saves the new image into the string buffer and then
             # retrieve the buffer data

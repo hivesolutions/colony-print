@@ -1,10 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import controllers
-import printing
-import main
+from . import controllers
+from . import printing
+from . import main
 
-from controllers import *
-from printing import *
-from main import *
+from .controllers import *
+from .printing import *
+from .main import ColonyPrintApp

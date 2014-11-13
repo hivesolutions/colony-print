@@ -1,14 +1,14 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import ast
-import exceptions
-import parser
-import system
-import visitor
+from . import ast
+from . import exceptions
+from . import parser
+from . import system
+from . import visitor
 
-from ast import *
-from exceptions import *
-from parser import *
-from system import *
-from visitor import *
+from .ast import *
+from .exceptions import *
+from .parser import *
+from .system import *
+from .visitor import *

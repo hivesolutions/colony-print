@@ -3,8 +3,8 @@
 
 import os
 
-import parser
-import exceptions
+from colony_print.printing.manager import parser
+from colony_print.printing.manager import exceptions
 
 import colony_print
 

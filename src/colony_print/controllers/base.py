@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import base64
-import cStringIO
 
 import appier
 
@@ -58,7 +57,7 @@ class BaseController(appier.Controller):
         manager = self.get_manager()
 
         data = data
-        file = cStringIO.StringIO()
+        file = appier.legacy.StringIO()
         options = dict(
             name = format,
             file = file,

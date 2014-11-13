@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+import appier
 import base64
-import cStringIO
 
 import PIL.Image
 
@@ -13,7 +13,7 @@ import reportlab.pdfgen.canvas
 import reportlab.pdfbase.ttfonts
 import reportlab.pdfbase.pdfmetrics
 
-import exceptions
+from colony_print.printing.pdf import exceptions
 
 from colony_print.printing.common.base import *
 from colony_print.printing.manager.ast import *
@@ -199,7 +199,7 @@ class Visitor:
 
     @dispatch_visit()
     def visit(self, node):
-        print "unrecognized element node of type " + node.__class__.__name__
+        print("unrecognized element node of type " + node.__class__.__name__)
 
     def before_visit(self, node):
         self.visit_childs = True
@@ -438,7 +438,7 @@ class Visitor:
                 # creates the image buffer then writes the decoded
                 # image into it and opens the file object with the
                 # created buffer (image loading into structure)
-                image_source_buffer = cStringIO.StringIO()
+                image_source_buffer = appier.legacy.StringIO()
                 image_source_buffer.write(image_source_decoded)
                 image_source_buffer.seek(0)
                 bitmap_image = PIL.Image.open(image_source_buffer)
