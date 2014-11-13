@@ -3,4 +3,4 @@
 
 from . import base
 
-from .base import *
+from .base import visited, dispatch_visit

@@ -91,7 +91,7 @@ FONT_PATHS = ("", "~/.fonts/", "/usr/share/fonts/truetype/")
 """ The set of base paths to be used for searching
 for fonts on the current system """
 
-class Visitor:
+class Visitor(object):
     """
     The visitor class for the pdf printing infra-structure
     this visitor should be able to generate a pdf file

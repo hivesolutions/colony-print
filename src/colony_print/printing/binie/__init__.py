@@ -7,4 +7,4 @@ from . import visitor
 
 from .exceptions import PrintingBinieException, InvalidContextInformationName
 from .system import PrintingBinie
-from .visitor import *
+from .visitor import Visitor

@@ -46,7 +46,7 @@ import ast
 DEFAULT_CHARSET = "utf-8"
 """ The default charset """
 
-class Parser:
+class Parser(object):
     """
     The abstract parser class
     """

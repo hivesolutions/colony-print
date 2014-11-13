@@ -5,7 +5,7 @@ from colony_print.printing.manager import ast
 
 from colony_print.printing.common.base import *
 
-class Visitor:
+class Visitor(object):
     """
     The visitor class.
     """
