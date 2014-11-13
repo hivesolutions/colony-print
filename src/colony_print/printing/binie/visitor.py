@@ -179,10 +179,15 @@ class Visitor(object):
             printing_document_width = hasattr(node, "width") and int(node.width) or 0
             printing_document_height = hasattr(node, "height") and int(node.height) or 0
 
+            # ensures that a proper byte based representation exists
+            # for the current printing document name (as expected)
+            printing_document_name = str(printing_document_name)
+            printing_document_name = appier.legacy.bytes(printing_document_name)
+
             # packs the header value as a binary string
             header = struct.pack(
                 "<256sIII",
-                str(printing_document_name),
+                printing_document_name,
                 printing_document_width,
                 printing_document_height,
                 len(self.elements_list)
@@ -285,6 +290,11 @@ class Visitor(object):
             block_width = int(self.get_context("width", "0"))
             block_height = int(self.get_context("height", "0"))
 
+            # ensures that the string text values are represented as
+            # byte oriented objects as expected by specification
+            font_name = appier.legacy.bytes(font_name)
+            font_name = appier.legacy.bytes(font_name)
+
             # sets the default values for the text weight and for
             # the italic enumeration
             text_weight_int = 0
@@ -329,7 +339,7 @@ class Visitor(object):
                 len(text_encoded) + 1
             )
             element += text_encoded
-            element += "\0"
+            element += b"\0"
             self.elements_list.append((1, element))
 
             # in case the current text height is bigger than the current

@@ -57,7 +57,7 @@ class BaseController(appier.Controller):
         manager = self.get_manager()
 
         data = data
-        file = appier.legacy.StringIO()
+        file = appier.legacy.BytesIO()
         options = dict(
             name = format,
             file = file,
