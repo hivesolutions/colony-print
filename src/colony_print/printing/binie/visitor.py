@@ -316,7 +316,7 @@ class Visitor(object):
             elif text_align == "center": text_align_int = 3
 
             # calculates the text height from the font scale factor
-            text_height = font_size * FONT_SCALE_FACTOR;
+            text_height = font_size * FONT_SCALE_FACTOR
 
             # packs the element text element structure containing all the meta
             # information that makes part of it then adds the "just" created

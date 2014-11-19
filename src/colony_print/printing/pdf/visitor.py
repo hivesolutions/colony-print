@@ -359,7 +359,7 @@ class Visitor(object):
             # calculates the text height from the font scale factor
             # and measures the text width using the underlying rendering
             # infra-structure (avoids possible problems)
-            text_height = font_size * FONT_SCALE_FACTOR;
+            text_height = font_size * FONT_SCALE_FACTOR
             text_width = self.canvas.stringWidth(text_encoded)
 
             # initializes the text x coordinate with the margin defined
