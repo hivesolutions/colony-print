@@ -448,6 +448,11 @@ class Visitor(object):
             if biggest_height < text_height:
                 self.put_context("biggest_height", text_height)
 
+        # in case it's the second visit
+        elif self.visit_index == 1:
+            # removes the context information
+            self.remove_context(node)
+
     @visited(Image)
     def visit_image(self, node):
         if self.visit_index == 0:
