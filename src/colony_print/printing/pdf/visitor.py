@@ -226,8 +226,6 @@ class Visitor(object):
         if self.visit_index == 0:
             # adds the node as the context information
             self.add_context(node)
-            
-            print("DOCUMENT")
 
             # retrieves both the file (buffer) to be used for the output
             # of the pdf file contents and the expected size for the pdf
