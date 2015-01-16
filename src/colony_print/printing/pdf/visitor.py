@@ -133,6 +133,11 @@ class Visitor(object):
     """ The height of the document to be printed, this
     is the height measured in pdf points """
 
+    single = False
+    """ If the document to be parsed is considered to be
+    single page only or multi page, this is relevant for
+    the fixed/absolute positioning using blocks  """
+
     current_position = None
     """ The current position in the document measured
     as pdf points """
@@ -154,6 +159,7 @@ class Visitor(object):
         self.canvas = None
         self.width = 0
         self.height = 0
+        self.single = False
         self.current_position = None
         self.fonts = {}
         self.context_map = {}
@@ -230,8 +236,24 @@ class Visitor(object):
             # retrieves both the file (buffer) to be used for the output
             # of the pdf file contents and the expected size for the pdf
             # document, in case no size is provided a default one is used
-            file = self.options["file"]
-            size = self.options.get("size", PAPER_SIZE)
+            file = self.printing_options["file"]
+            size = self.printing_options.get("size", PAPER_SIZE)
+
+            # tries to retrieve the document width and height values and
+            # converts them into the proper integer values, these values
+            # are mostly available for single page operations
+            printing_document_width = hasattr(node, "width") and int(node.width) or 0
+            printing_document_height = hasattr(node, "height") and int(node.height) or 0
+
+            # in case both the printing document with and height values are
+            # available the size tuple for the current document is defined
+            # using their values, note that these values are defined as tenth
+            # of the millimeter values (100 units equals 1 centimeter)
+            if not printing_document_width == 0 and not printing_document_height == 0:
+                size = (
+                    printing_document_width / 100 * SCALE,
+                    printing_document_height / 100 * SCALE
+                )
 
             # unpacks the size tuple into the width and height
             # components and sets the tuple containing both values
@@ -361,6 +383,7 @@ class Visitor(object):
             # verifies if the current mode is block and if that's the case
             # re-calculates the new clip (box) value taking that into account
             if is_block:
+                self.single = True
                 clip_left = position_x
                 clip_top = position_y * -1
                 clip_right = position_x + block_width
@@ -394,6 +417,7 @@ class Visitor(object):
             # and measures the text width using the underlying rendering
             # infra-structure (avoids possible problems)
             text_height = font_size * FONT_SCALE_FACTOR
+            text_height_r = font_size_r * FONT_SCALE_FACTOR
             text_width = self.canvas.stringWidth(text_encoded)
 
             # initializes the text x coordinate with the margin defined
@@ -409,7 +433,7 @@ class Visitor(object):
 
             # sets the text y as the current position context y
             # default position for the text is the current position
-            text_y = clip_top + current_position_y - text_height
+            text_y = clip_top + current_position_y - text_height_r
             text_y = self.ensure_y(text_y, offset = text_height)
 
             # updates the fill color to a white color and then uses
@@ -472,6 +496,37 @@ class Visitor(object):
             # retrieves the complete set of attributes for the current
             # context to be used for the processing of the node
             text_align = self.get_context("text_align")
+            position_x = int(self.get_context("x", "0"))
+            position_y = int(self.get_context("y", "0"))
+            block_width = int(self.get_context("width", "0"))
+            block_height = int(self.get_context("height", "0"))
+
+            # converts the various block related values from their original
+            # twip based value into the pdf point value to be used in print
+            position_x = int(position_x * TWIP_SCALE * SCALE)
+            position_y = int(position_y * TWIP_SCALE * SCALE)
+            block_width = int(block_width * TWIP_SCALE * SCALE)
+            block_height = int(block_height * TWIP_SCALE * SCALE)
+
+            # verifies if the current context is of type block, so that
+            # the proper absolute positions are going to be used instead
+            is_block = not block_width == 0 and not block_height == 0
+
+            # sets the initial clip (box) value that will be applied in
+            # case the current execution mode is not block based
+            clip_left = 0
+            clip_top = 0
+            clip_right = self.width
+            _clip_bottom = self.height
+
+            # verifies if the current mode is block and if that's the case
+            # re-calculates the new clip (box) value taking that into account
+            if is_block:
+                self.single = True
+                clip_left = position_x
+                clip_top = position_y * -1
+                clip_right = position_x + block_width
+                _clip_bottom = (position_y + block_height) * -1
 
             # in case the image path is defined must load the
             # image data from the file system
@@ -513,16 +568,17 @@ class Visitor(object):
 
             # calculates the appropriate bitmap position according to the
             # "requested" horizontal text alignment
-            if text_align == "left": real_bitmap_x = 0
+            if text_align == "left": real_bitmap_x = clip_left
             elif text_align == "right":
-                real_bitmap_x = self.width - bitmap_image_width * IMAGE_SCALE_FACTOR
+                real_bitmap_x = clip_right - bitmap_image_width * IMAGE_SCALE_FACTOR
             elif text_align == "center":
-                real_bitmap_x = int(self.width / 2) - int(bitmap_image_width * IMAGE_SCALE_FACTOR / 2)
+                real_bitmap_x = clip_left + int((clip_right - clip_left) / 2) -\
+                    int(bitmap_image_width * IMAGE_SCALE_FACTOR / 2)
 
             # calculates the real bitmap vertical position from the current
             # vertical position minus the height of the image and ensures the
             # position, recalculating a new y position in case the page overflows
-            real_bitmap_y = current_position_y - (bitmap_image_height * IMAGE_SCALE_FACTOR)
+            real_bitmap_y = clip_top + current_position_y - (bitmap_image_height * IMAGE_SCALE_FACTOR)
             real_bitmap_y = self.ensure_y(
                 real_bitmap_y,
                 offset = bitmap_image_height * IMAGE_SCALE_FACTOR
@@ -568,6 +624,11 @@ class Visitor(object):
         @return: The resulting vertical position taking into account
         creation of new pages.
         """
+
+        # in case the current document in parsing has been marked
+        # as single page oriented (absolute positioning), there's
+        # no need to verify for new page creation
+        if self.single: return y_position
 
         # verifies if the current vertical position "overflows"
         # the page value (lower than zero) in case it does not
