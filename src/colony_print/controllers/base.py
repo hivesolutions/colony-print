@@ -48,9 +48,9 @@ class BaseController(appier.Controller):
         # retrieves the various optional fields for printing
         # and then parses them creating the composite values
         # (should include the size tuple)
-        b64 = self.get_field("base64", False)
-        width = float(self.get_field("width", 0.0))
-        height = float(self.get_field("height", 0.0))
+        b64 = self.field("base64", False)
+        width = self.field("width", 0.0, cast = float)
+        height = self.field("height", 0.0, cast = float)
         has_size = width > 0.0 and width > 0.0
 
         mime = self.get_mime(format, b64 = base64)
