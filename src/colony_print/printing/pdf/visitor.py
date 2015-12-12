@@ -236,8 +236,8 @@ class Visitor(object):
             # retrieves both the file (buffer) to be used for the output
             # of the pdf file contents and the expected size for the pdf
             # document, in case no size is provided a default one is used
-            file = self.printing_options["file"]
-            size = self.printing_options.get("size", PAPER_SIZE)
+            file = self.options["file"]
+            size = self.options.get("size", PAPER_SIZE)
 
             # tries to retrieve the document width and height values and
             # converts them into the proper integer values, these values
