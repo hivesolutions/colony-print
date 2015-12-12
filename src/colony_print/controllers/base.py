@@ -51,18 +51,15 @@ class BaseController(appier.Controller):
         b64 = self.get_field("base64", False)
         width = float(self.get_field("width", 0.0))
         height = float(self.get_field("height", 0.0))
-        size = (width, height)
+        has_size = width > 0.0 and width > 0.0
 
         mime = self.get_mime(format, b64 = base64)
         manager = self.get_manager()
 
         data = data
         file = appier.legacy.BytesIO()
-        options = dict(
-            name = format,
-            file = file,
-            size = size
-        )
+        options = dict(name = format, file = file)
+        if has_size: options["size"] = (width, height)
 
         manager.print_language(data, options)
         value = file.getvalue()
