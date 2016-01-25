@@ -1,24 +1,24 @@
 var BASE_URL = "http://print.bemisc.com/"
 
 jQuery(document).ready(function() {
-            var body = jQuery("body");
-            var file = jQuery("#file", body);
+    var body = jQuery("body");
+    var file = jQuery("#file", body);
 
-            file.bind("change", function() {
-                        var element = jQuery(this);
-                        var _file = element[0];
-                        var reference = _file.files[0];
+    file.bind("change", function() {
+        var element = jQuery(this);
+        var _file = element[0];
+        var reference = _file.files[0];
 
-                        var reader = new FileReader();
-                        reader.onload = function(event) {
-                            var result = event.target.result;
-                            var gateway = document.getElementById("colony-gateway");
-                            print(gateway, result);
-                        };
+        var reader = new FileReader();
+        reader.onload = function(event) {
+            var result = event.target.result;
+            var gateway = document.getElementById("colony-gateway");
+            print(gateway, result);
+        };
 
-                        reader.readAsText(reference);
-                    });
-        });
+        reader.readAsText(reference);
+    });
+});
 
 var print = function(gateway, result) {
     // uses the gateway refernce to retrieve the format to be used
@@ -26,7 +26,7 @@ var print = function(gateway, result) {
     // 64 reference set to valid so that is safe to handle data
     var format = gateway.pformat();
     var data = {
-        base64 : 1
+        base64: 1
     };
 
     // in case the target format is pdf extra values must be added
@@ -48,17 +48,17 @@ var print = function(gateway, result) {
     // binie/pdf code that is going to be used for printing
     var url = BASE_URL + "print." + format + extra;
     jQuery.ajax({
-                url : url,
-                type : "post",
-                data : result,
-                contentType : "text/xml",
-                success : function(data) {
-                    gateway.print(false, data);
-                },
-                error : function() {
-                    alert("Problem with file submission")
-                }
-            });
+        url: url,
+        type: "post",
+        data: result,
+        contentType: "text/xml",
+        success: function(data) {
+            gateway.print(false, data);
+        },
+        error: function() {
+            alert("Problem with file submission")
+        }
+    });
 };
 
 var sizes = function(gateway, data) {
