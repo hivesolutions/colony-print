@@ -30,4 +30,6 @@ be exported to an UNIX machine as it is used by mani colony generated documents.
 
 ## Running
 
-    PORT=8686 PYTHONPATH=$BASE_PATH/colony_print/src python $BASE_PATH/colony_print/src/colony_print/main.py
+```bash
+PORT=8686 PYTHONPATH=$BASE_PATH/colony_print/src python $BASE_PATH/colony_print/src/colony_print/main.py
+```
