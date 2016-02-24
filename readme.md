@@ -12,13 +12,8 @@ This project includes two main components:
 ### Pre-requisites
 
 ```bash
-apt-get install gcc
-apt-get install python-dev
-
-pip install appier
-pip install netius
-pip install pillow
-pip install reportlab
+apt-get install gcc python-dev
+pip install --upgrade appier netius pillow reportlab
 ```
 
 ### Fonts
