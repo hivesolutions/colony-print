@@ -3,13 +3,14 @@
 
 import appier
 
-class ColonyPrintApp(appier.App):
+class ColonyPrintApp(appier.APIApp):
 
-    def __init__(self):
-        appier.App.__init__(
+    def __init__(self, *args, **kwargs):
+        appier.APIApp.__init__(
             self,
             name = "colony_print",
-            service = True
+            service = True,
+            *args, **kwargs
         )
 
 if __name__ == "__main__":
