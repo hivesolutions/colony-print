@@ -7,9 +7,11 @@ import base64
 
 import PIL.Image
 
-import reportlab.lib
-import reportlab.pdfgen
-import reportlab.pdfbase
+import reportlab.lib.utils
+import reportlab.lib.units
+import reportlab.pdfgen.canvas
+import reportlab.pdfbase.ttfonts
+import reportlab.pdfbase.pdfmetrics
 
 from colony_print.printing.pdf import exceptions
 
