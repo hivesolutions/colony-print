@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from colony_print.printing.pdf import visitor
+from . import visitor
 
 PRINTING_NAME = "pdf"
 """ The printing name, for the current pdf

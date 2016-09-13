@@ -5,7 +5,7 @@ import appier
 
 import xml.dom.minidom
 
-from colony_print.printing.manager import ast
+from . import ast
 
 DEFAULT_CHARSET = "utf-8"
 """ The default charset """

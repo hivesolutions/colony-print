@@ -13,7 +13,7 @@ import reportlab.pdfgen.canvas
 import reportlab.pdfbase.ttfonts
 import reportlab.pdfbase.pdfmetrics
 
-from colony_print.printing.pdf import exceptions
+from . import exceptions
 
 from colony_print.printing.common.base import *
 from colony_print.printing.manager.ast import *

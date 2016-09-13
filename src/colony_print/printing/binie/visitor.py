@@ -7,7 +7,7 @@ import appier
 
 import PIL.Image
 
-from colony_print.printing.binie import exceptions
+from . import exceptions
 
 from colony_print.printing.common.base import *
 from colony_print.printing.manager.ast import *

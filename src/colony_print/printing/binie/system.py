@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from colony_print.printing.binie import visitor
+from . import visitor
 
 PRINTING_NAME = "binie"
 """ The printing name """

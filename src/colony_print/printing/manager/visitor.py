@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from colony_print.printing.manager import ast
+from . import ast
 
 from colony_print.printing.common.base import *
 
