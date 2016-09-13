@@ -13,7 +13,7 @@ class ColonyPrintApp(appier.APIApp):
             *args, **kwargs
         )
         self.nodes = dict()
-        self.documents = dict()
+        self.jobs = dict()
 
 if __name__ == "__main__":
     app = ColonyPrintApp()

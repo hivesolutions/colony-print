@@ -1,29 +1,48 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import json
+
 import appier
 
 class NodeController(appier.Controller):
 
     @appier.route("/nodes", "GET", json = True)
     def list(self):
-        return []
+        return self.owner.nodes
 
     @appier.route("/nodes/<str:id>", "GET", json = True)
     def show(self, id, printer):
-        pass
+        return self.owner.nodes[id]
 
     @appier.route("/nodes/<str:id>/register", "POST", json = True)
     def register(self, id):
-        pass
+        node = appier.get_object()
+        self.owner.nodes[id] = node
 
     @appier.route("/nodes/<str:id>/jobs", "GET", json = True)
     def jobs(self, id):
-        pass
+        self.request.set_content_type("application/json")
+        yield -1
+        yield appier.ensure_async(self.gen_wait_jobs(id))
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", ("GET", "POST"), json = True)
     def print_document(self, id, printer):
-        #@todo must enqueu the document for printing
-        #data_b64 = self.field("data_b64")
-        #self.npcolony.print_printer_base64(printer, data_b64)
-        pass
+        job = appier.get_object()
+        job["printer"] = printer
+        jobs = self.owner.jobs.get(id, [])
+        jobs.append(job)
+        self.owner.jobs[id] = jobs
+
+    def gen_wait_jobs(self, id):
+
+        @appier.coroutine
+        def wait_jobs(future):
+            while True:
+                jobs = self.owner.jobs.pop(id, [])
+                if jobs: break
+                for value in appier.sleep(1.0): yield value
+            jobs_s = json.dumps(jobs)
+            future.set_result(jobs_s)
+
+        return wait_jobs
