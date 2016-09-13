@@ -3,6 +3,8 @@
 
 import os
 
+import appier
+
 from colony_print.printing.manager import parser
 from colony_print.printing.manager import exceptions
 
@@ -33,7 +35,7 @@ class PrintingManager(object):
         self.load_handler(binie_handler)
 
     def unload(self):
-        for _name, handler in self.handlers_map.items():
+        for _name, handler in appier.legacy.items(self.handlers_map):
             self.unload_handler(handler)
 
     def print_test(self, options = {}):
