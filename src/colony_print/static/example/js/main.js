@@ -1,4 +1,4 @@
-var BASE_URL = "http://print.bemisc.com/"
+var BASE_URL = "http://print.bemisc.com/";
 
 jQuery(document).ready(function() {
     var body = jQuery("body");
@@ -56,7 +56,7 @@ var print = function(gateway, result) {
             gateway.print(false, data);
         },
         error: function() {
-            alert("Problem with file submission")
+            alert("Problem with file submission");
         }
     });
 };
@@ -87,18 +87,18 @@ var sizes = function(gateway, data) {
 
     // updates the data structure with the device with and length
     // for the defined paper size
-    data["width"] = defaultDevice["width"];
-    data["height"] = defaultDevice["length"];
+    data.width = defaultDevice.width;
+    data.height = defaultDevice.length;
 };
 
 var serialize = function(data) {
     var buffer = ["?"];
     var isFirst = true;
 
-    for (key in data) {
+    for (var key in data) {
         var value = data[key];
         if (isFirst) {
-            isFirst = false
+            isFirst = false;
         } else {
             buffer.push("&");
         }
@@ -107,6 +107,6 @@ var serialize = function(data) {
         buffer.push(keyS + "=" + valueS);
     }
 
-    var value = buffer.join("");
-    return value;
+    var result = buffer.join("");
+    return result;
 };
