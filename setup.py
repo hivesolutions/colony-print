@@ -23,6 +23,7 @@ setuptools.setup(
         "colony_print.printing.manager",
         "colony_print.printing.pdf"
     ],
+    test_suite = "colony_print.test",
     package_dir = {
         "" : os.path.normpath("src")
     },

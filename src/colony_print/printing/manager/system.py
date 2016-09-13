@@ -33,7 +33,7 @@ class PrintingManager(object):
         self.load_handler(binie_handler)
 
     def unload(self):
-        for _name, handler in self.handlers_map:
+        for _name, handler in self.handlers_map.items():
             self.unload_handler(handler)
 
     def print_test(self, options = {}):
