@@ -15,8 +15,8 @@ import reportlab.pdfbase.pdfmetrics
 
 from . import exceptions
 
-from colony_print.printing.common.base import *
-from colony_print.printing.manager.ast import *
+from ..common.base import *
+from ..manager.ast import *
 
 FONT_SCALE_FACTOR = 1
 """ The font scale factor """
