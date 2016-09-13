@@ -16,10 +16,11 @@ apt-get install gcc python-dev
 pip install --upgrade appier netius pillow reportlab
 ```
 
-### Pip
+### Run
 
 ```bash
 pip install colony_print
+python -m colony_print.main
 ```
 
 ### Fonts
