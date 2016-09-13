@@ -13,9 +13,13 @@ class ColonyPrintNode(object):
         logging.basicConfig(level = logging.DEBUG)
 
         base_url = appier.conf("BASE_URL", BASE_URL)
+        secret_key = appier.conf("SECRET_KEY", None)
         node_id = appier.conf("NODE_ID", "node")
         node_name = appier.conf("NODE_NAME", "node")
         node_location = appier.conf("NODE_LOCATION", "undefined")
+
+        headers = dict()
+        if secret_key: headers["X-Secret-Key"] = secret_key
 
         while True:
             logging.info("Submitting node information")
@@ -24,10 +28,14 @@ class ColonyPrintNode(object):
                 data_j = dict(
                     name = node_name,
                     location = node_location
-                )
+                ),
+                headers = headers
             )
             logging.info("Retrieving jobs for node '%s'" % node_id)
-            jobs = appier.get(base_url + "nodes/%s/jobs" % node_id)
+            jobs = appier.get(
+                base_url + "nodes/%s/jobs" % node_id,
+                headers = headers
+            )
             logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
             for job in jobs: self.print_job(job)
 

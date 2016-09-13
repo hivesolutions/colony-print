@@ -33,19 +33,35 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
     def print_default(self, id):
-        job = appier.get_object()
+        data_b64 = self.field("data_b64", mandatory = True, not_empty = True)
+        name = self.field("name", None)
+        job = dict(data_b64 = data_b64)
+        if name: job["name"] = name
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
 
+    @appier.route("/nodes/<str:id>/print", "OPTIONS")
+    def print_default_o(self, id):
+        return ""
+
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
     def print_printer(self, id, printer):
-        job = appier.get_object()
-        job["printer"] = printer
+        data_b64 = self.field("data_b64", mandatory = True, not_empty = True)
+        name = self.field("name", None)
+        job = dict(
+            data_b64 = data_b64,
+            printer = printer
+        )
+        if name: job["name"] = name
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
+
+    @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
+    def print_printer_o(self, id, printer):
+        return ""
 
     def gen_wait_jobs(self, id):
 
