@@ -5,8 +5,6 @@ import base64
 
 import appier
 
-import colony_print
-
 MIME = dict(
     binie = "text/x-binie",
     pdf = "application/pdf"
@@ -74,6 +72,7 @@ class DocumentController(appier.Controller):
         return mime
 
     def get_manager(self):
+        import colony_print
         if self.manager: return self.manager
         self.manager = colony_print.PrintingManager()
         self.manager.load()
