@@ -5,15 +5,15 @@ import appier
 
 class PrinterController(appier.Controller):
 
-    @appier.route("/printers.json", "GET", json = True)
+    @appier.route("/printers", "GET", json = True)
     def list(self):
         return self.npcolony.get_devices()
 
-    @appier.route("/printers/hello.json", "GET", json = True)
+    @appier.route("/printers/hello", "GET", json = True)
     def hello(self):
         self.npcolony.print_hello()
 
-    @appier.route("/printers/<str:printer>/print.json", ("GET", "POST"), json = True)
+    @appier.route("/printers/<str:printer>/print", ("GET", "POST"), json = True)
     def print_document(self, printer):
         data_b64 = self.field("data_b64")
         self.npcolony.print_printer_base64(printer, data_b64)
