@@ -8,25 +8,30 @@ import appier
 class NodeController(appier.Controller):
 
     @appier.route("/nodes", "GET", json = True)
+    @appier.ensure(token = "admin")
     def list(self):
         return self.owner.nodes
 
     @appier.route("/nodes/<str:id>", "POST", json = True)
+    @appier.ensure(token = "admin")
     def create(self, id):
         node = appier.get_object()
         self.owner.nodes[id] = node
 
     @appier.route("/nodes/<str:id>", "GET", json = True)
+    @appier.ensure(token = "admin")
     def show(self, id, printer):
         return self.owner.nodes[id]
 
     @appier.route("/nodes/<str:id>/jobs", "GET", json = True)
+    @appier.ensure(token = "admin")
     def jobs(self, id):
         self.request.set_content_type("application/json")
         yield -1
         yield appier.ensure_async(self.gen_wait_jobs(id))
 
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json = True)
+    @appier.ensure(token = "admin")
     def print_default(self, id):
         job = appier.get_object()
         jobs = self.owner.jobs.get(id, [])
@@ -34,6 +39,7 @@ class NodeController(appier.Controller):
         self.owner.jobs[id] = jobs
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", ("GET", "POST"), json = True)
+    @appier.ensure(token = "admin")
     def print_printer(self, id, printer):
         job = appier.get_object()
         job["printer"] = printer
