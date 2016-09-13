@@ -3,7 +3,7 @@
 
 from . import ast
 
-from colony_print.printing.common.base import *
+from ..common.base import *
 
 class Visitor(object):
     """
