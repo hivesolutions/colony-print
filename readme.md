@@ -16,6 +16,13 @@ apt-get install gcc python-dev
 pip install --upgrade appier netius pillow reportlab
 ```
 
+### Run
+
+```bash
+pip install colony_print
+python -m colony_print.main
+```
+
 ### Fonts
 
 To be able to use new fonts (other than the ones provided by the system) one must install them
