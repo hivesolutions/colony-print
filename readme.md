@@ -1,6 +1,6 @@
-# Colony Print Infra-structure
+# [Colony Print Infra-structure](http://colony_print.hive.pt)
 
-Small web app for printing of colony based documents.
+Small web app for printing of Colony based documents.
 
 This project includes two main components:
 
