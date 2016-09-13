@@ -26,8 +26,15 @@ class NodeController(appier.Controller):
         yield -1
         yield appier.ensure_async(self.gen_wait_jobs(id))
 
+    @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json = True)
+    def print_default(self, id):
+        job = appier.get_object()
+        jobs = self.owner.jobs.get(id, [])
+        jobs.append(job)
+        self.owner.jobs[id] = jobs
+
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", ("GET", "POST"), json = True)
-    def print_document(self, id, printer):
+    def print_printer(self, id, printer):
         job = appier.get_object()
         job["printer"] = printer
         jobs = self.owner.jobs.get(id, [])
