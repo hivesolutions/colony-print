@@ -35,6 +35,7 @@ setuptools.setup(
     },
     install_requires = [
         "appier",
+        "jinja2",
         "pillow",
         "reportlab"
     ],
