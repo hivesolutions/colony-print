@@ -30,3 +30,13 @@ PORT=8686 \
 PYTHONPATH=$BASE_PATH/colony_print/src python \
 $BASE_PATH/colony_print/src/colony_print/main.py
 ```
+
+## License
+
+Colony Print Infra-structure is currently licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/).
+
+## Build Automation
+
+[![Build Status](https://travis-ci.org/hivesolutions/colony_print.svg?branch=master)](https://travis-ci.org/hivesolutions/colony_print)
+[![Coverage Status](https://coveralls.io/repos/hivesolutions/colony_print/badge.svg?branch=master)](https://coveralls.io/r/hivesolutions/colony_print?branch=master)
+[![PyPi Status](https://img.shields.io/pypi/v/colony_print.svg)](https://pypi.python.org/pypi/colony_print)
