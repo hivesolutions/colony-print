@@ -11,14 +11,14 @@ class NodeController(appier.Controller):
     def list(self):
         return self.owner.nodes
 
+    @appier.route("/nodes/<str:id>", "POST", json = True)
+    def create(self, id):
+        node = appier.get_object()
+        self.owner.nodes[id] = node
+
     @appier.route("/nodes/<str:id>", "GET", json = True)
     def show(self, id, printer):
         return self.owner.nodes[id]
-
-    @appier.route("/nodes/<str:id>/register", "POST", json = True)
-    def register(self, id):
-        node = appier.get_object()
-        self.owner.nodes[id] = node
 
     @appier.route("/nodes/<str:id>/jobs", "GET", json = True)
     def jobs(self, id):
