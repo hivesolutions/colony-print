@@ -10,6 +10,7 @@ ENV HOST 0.0.0.0
 ENV PORT 8080
 
 ADD requirements.txt /
+ADD extra.txt /
 ADD src /src
 ADD assets/fonts/* /usr/share/fonts/truetype/
 
