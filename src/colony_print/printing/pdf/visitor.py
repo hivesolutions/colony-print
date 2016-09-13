@@ -15,11 +15,11 @@ from ..manager.ast import *
 try:
     import reportlab.lib.units
 except:
-    INCH = reportlab.lib.units.inch
-    CM = reportlab.lib.units.cm
-else:
     INCH = 72.0
     CM = INCH / 2.54
+else:
+    INCH = reportlab.lib.units.inch
+    CM = reportlab.lib.units.cm
 
 FONT_SCALE_FACTOR = 1
 """ The font scale factor """
