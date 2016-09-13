@@ -5,7 +5,7 @@ import logging
 
 import appier
 
-BASE_URL = "https://colony_print.bemisc.com/"
+BASE_URL = "https://print.bemisc.com/"
 
 def loop():
     logging.basicConfig(level = logging.DEBUG)
