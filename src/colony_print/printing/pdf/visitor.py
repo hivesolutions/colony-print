@@ -7,16 +7,19 @@ import base64
 
 import PIL.Image
 
-import reportlab.lib.utils
-import reportlab.lib.units
-import reportlab.pdfgen.canvas
-import reportlab.pdfbase.ttfonts
-import reportlab.pdfbase.pdfmetrics
-
 from . import exceptions
 
 from ..common.base import *
 from ..manager.ast import *
+
+try:
+    import reportlab.lib.units
+except:
+    INCH = reportlab.lib.units.inch
+    CM = reportlab.lib.units.cm
+else:
+    INCH = 72.0
+    CM = INCH / 2.54
 
 FONT_SCALE_FACTOR = 1
 """ The font scale factor """
@@ -69,7 +72,7 @@ to created the full font name """
 DEFAULT_ENCODER = "utf-8"
 """ The default encoder """
 
-SCALE = reportlab.lib.units.cm
+SCALE = CM
 """ The scale value to be used in the conversion
 of the centimeter value into the pdf point """
 
@@ -228,6 +231,8 @@ class Visitor(object):
 
     @visited(PrintingDocument)
     def visit_printing_document(self, node):
+        import reportlab.pdfgen.canvas
+
         # in case it's the first visit
         if self.visit_index == 0:
             # adds the node as the context information
@@ -479,6 +484,8 @@ class Visitor(object):
 
     @visited(Image)
     def visit_image(self, node):
+        import reportlab.lib.utils
+
         if self.visit_index == 0:
             # adds the node as the context information
             self.add_context(node)
@@ -673,6 +680,9 @@ class Visitor(object):
         that should be loaded for the font (may be a relative
         or absolute path)
         """
+
+        import reportlab.pdfbase.ttfonts
+        import reportlab.pdfbase.pdfmetrics
 
         # in case the font is already present in the fonts
         # map it's considered to be loaded and so the control
