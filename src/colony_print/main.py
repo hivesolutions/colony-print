@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import appier
+import appier_extras
 
 class ColonyPrintApp(appier.APIApp):
 
@@ -9,7 +10,9 @@ class ColonyPrintApp(appier.APIApp):
         appier.APIApp.__init__(
             self,
             name = "colony_print",
-            service = True,
+            parts = (
+                appier_extras.AdminPart,
+            ),
             *args, **kwargs
         )
         self.nodes = dict()
