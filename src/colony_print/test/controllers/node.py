@@ -20,5 +20,6 @@ class NodeControllerTest(unittest.TestCase):
 
     def test_print_default_o(self):
         response = self.app.get("/nodes/name/print")
+        self.assertEqual(response.code, "403 Forbidden")
         self.assertEqual(response.headers["Access-Control-Allow-Origin"].startswith("*"), True)
         self.assertEqual(response.headers["Access-Control-Allow-Headers"].startswith("*"), True)
