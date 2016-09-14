@@ -40,6 +40,7 @@ class NodeController(appier.Controller):
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
+        appier.notify("jobs:%s" % id)
 
     @appier.route("/nodes/<str:id>/print", "OPTIONS")
     def print_default_o(self, id):
@@ -58,6 +59,7 @@ class NodeController(appier.Controller):
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
+        appier.notify("jobs:%s" % id)
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
     def print_printer_o(self, id, printer):
@@ -70,7 +72,7 @@ class NodeController(appier.Controller):
             while True:
                 jobs = self.owner.jobs.pop(id, [])
                 if jobs: break
-                for value in appier.sleep(1.0): yield value
+                for value in appier.wait("jobs:%s" % id): yield value
             jobs_s = json.dumps(jobs)
             future.set_result(jobs_s)
 
