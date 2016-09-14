@@ -1,13 +1,19 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import time
 import logging
 
 import appier
 
 BASE_URL = "https://print.bemisc.com/"
 
+SLEEP_TIME = 3.0
+
 class ColonyPrintNode(object):
+
+    def __init__(self, sleep_time = SLEEP_TIME):
+        self.sleep_time = sleep_time
 
     def loop(self):
         logging.basicConfig(level = logging.DEBUG)
@@ -22,22 +28,27 @@ class ColonyPrintNode(object):
         if secret_key: headers["X-Secret-Key"] = secret_key
 
         while True:
-            logging.info("Submitting node information")
-            appier.post(
-                base_url + "nodes/%s" % node_id,
-                data_j = dict(
-                    name = node_name,
-                    location = node_location
-                ),
-                headers = headers
-            )
-            logging.info("Retrieving jobs for node '%s'" % node_id)
-            jobs = appier.get(
-                base_url + "nodes/%s/jobs" % node_id,
-                headers = headers
-            )
-            logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
-            for job in jobs: self.print_job(job)
+            try:
+                logging.info("Submitting node information")
+                appier.post(
+                    base_url + "nodes/%s" % node_id,
+                    data_j = dict(
+                        name = node_name,
+                        location = node_location
+                    ),
+                    headers = headers
+                )
+                logging.info("Retrieving jobs for node '%s'" % node_id)
+                jobs = appier.get(
+                    base_url + "nodes/%s/jobs" % node_id,
+                    headers = headers
+                )
+                logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
+                for job in jobs: self.print_job(job)
+            except BaseException as exception:
+                logging.info("Exception while looping '%s'" % str(exception))
+                logging.info("Sleeping for %.2f seconds" % self.sleep_time)
+                time.sleep(self.sleep_time)
 
     def print_job(self, job):
         data_b64 = job["data_b64"]
