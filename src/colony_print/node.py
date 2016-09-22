@@ -41,7 +41,8 @@ class ColonyPrintNode(object):
                 logging.info("Retrieving jobs for node '%s'" % node_id)
                 jobs = appier.get(
                     base_url + "nodes/%s/jobs" % node_id,
-                    headers = headers
+                    headers = headers,
+                    timeout = 600
                 )
                 logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
                 for job in jobs: self.print_job(job)
