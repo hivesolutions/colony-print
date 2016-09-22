@@ -16,11 +16,23 @@ apt-get install gcc python-dev
 pip install --upgrade appier netius pillow reportlab
 ```
 
-### Run
+### Run Server
 
 ```bash
 pip install colony_print
 python -m colony_print.main
+```
+
+### Run Node
+
+```bash
+pip install colony_print
+BASE_URL=$BASE_URL \
+SECRET_KEY=$SECRET_KEY \
+NODE_ID=$NODE_ID \
+NODE_NAME=$NODE_NAME \
+NODE_LOCATION=$NODE_LOCATION \
+python -m colony_print.node
 ```
 
 ### Fonts
