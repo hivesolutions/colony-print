@@ -20,7 +20,7 @@ class NodeController(appier.Controller):
 
     @appier.route("/nodes/<str:id>", "GET", json = True)
     @appier.ensure(token = "admin")
-    def show(self, id, printer):
+    def show(self, id):
         return self.owner.nodes[id]
 
     @appier.route("/nodes/<str:id>/jobs", "GET", json = True)
