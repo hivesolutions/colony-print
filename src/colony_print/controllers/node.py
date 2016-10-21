@@ -73,6 +73,7 @@ class NodeController(appier.Controller):
                 jobs = self.owner.jobs.pop(id, [])
                 if jobs: break
                 for value in appier.wait("jobs:%s" % id): yield value
+                if future.closed: return future.cancel()
             jobs_s = json.dumps(jobs)
             future.set_result(jobs_s)
 
