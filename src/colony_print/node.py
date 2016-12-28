@@ -68,3 +68,5 @@ class ColonyPrintNode(object):
 if __name__ == "__main__":
     node = ColonyPrintNode()
     node.loop()
+else:
+    __path__ = []

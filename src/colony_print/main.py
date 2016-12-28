@@ -21,3 +21,5 @@ class ColonyPrintApp(appier.APIApp):
 if __name__ == "__main__":
     app = ColonyPrintApp()
     app.serve()
+else:
+    __path__ = []
