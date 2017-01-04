@@ -27,8 +27,8 @@ class NodeController(appier.Controller):
     @appier.ensure(token = "admin")
     def jobs(self, id):
         self.request.set_content_type("application/json")
-        yield -1
-        yield appier.ensure_async(self.gen_wait_jobs(id))
+        for value in appier.header_a(): yield value
+        for value in appier.ensure_a(self.gen_wait_jobs(id)): yield value
 
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
