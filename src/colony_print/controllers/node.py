@@ -28,7 +28,7 @@ class NodeController(appier.Controller):
     def jobs(self, id):
         self.request.set_content_type("application/json")
         for value in appier.header_a(): yield value
-        for value in appier.ensure_a(self.gen_wait_jobs(id)): yield value
+        for value in self.gen_wait_jobs(id): yield value
 
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
@@ -68,12 +68,11 @@ class NodeController(appier.Controller):
     def gen_wait_jobs(self, id):
 
         @appier.coroutine
-        def wait_jobs(future):
+        def wait_jobs():
             while True:
                 jobs = self.owner.jobs.pop(id, [])
                 if jobs: break
                 for value in appier.wait("jobs:%s" % id): yield value
-            jobs_s = json.dumps(jobs)
-            future.set_result(jobs_s)
+            yield json.dumps(jobs)
 
         return wait_jobs
