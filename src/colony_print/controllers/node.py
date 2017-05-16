@@ -30,6 +30,12 @@ class NodeController(appier.Controller):
         for value in appier.header_a(): yield value
         for value in self.wait_jobs(id): yield value
 
+    @appier.route("/nodes/<str:id>/jobs_peek", "GET", json = True)
+    @appier.ensure(token = "admin")
+    def jobs_peek(self, id):
+        jobs = self.owner.jobs.get(id, [])
+        return jobs
+
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
     def print_default(self, id):
