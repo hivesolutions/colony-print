@@ -16,7 +16,10 @@ class ColonyPrintNode(object):
         self.sleep_time = sleep_time
 
     def loop(self):
-        logging.basicConfig(level = logging.DEBUG)
+        logging.basicConfig(
+            format = "%(asctime)s [%(levelname)s] %(message)s",
+            level = logging.DEBUG
+        )
 
         base_url = appier.conf("BASE_URL", BASE_URL)
         secret_key = appier.conf("SECRET_KEY", None)
