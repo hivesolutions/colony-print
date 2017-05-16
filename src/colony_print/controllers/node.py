@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import uuid
 
 import appier
 
@@ -53,6 +54,7 @@ class NodeController(appier.Controller):
     def print_default(self, id):
         data_b64 = self.field("data_b64", mandatory = True, not_empty = True)
         name = self.field("name", None)
+        name = name or str(uuid.uuid4())
         job = dict(data_b64 = data_b64)
         if name: job["name"] = name
         jobs = self.owner.jobs.get(id, [])
@@ -76,6 +78,7 @@ class NodeController(appier.Controller):
     def print_printer(self, id, printer):
         data_b64 = self.field("data_b64", mandatory = True, not_empty = True)
         name = self.field("name", None)
+        name = name or str(uuid.uuid4())
         job = dict(
             data_b64 = data_b64,
             printer = printer
