@@ -5,6 +5,18 @@ import json
 
 import appier
 
+HELLO_WORLD_B64 = "SGVsbG8gV29ybGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAEAAABAAQAAAA\
+AAAAAAAABDYWxpYnJpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+AAAAAAAAAwAAABIZWxsbyBXb3JsZAA="
+
 class NodeController(appier.Controller):
 
     @appier.route("/nodes", "GET", json = True)
@@ -52,6 +64,12 @@ class NodeController(appier.Controller):
     def print_default_o(self, id):
         return ""
 
+    @appier.route("/nodes/<str:id>/print_hello", ("GET", "POST"), json = True)
+    @appier.ensure(token = "admin")
+    def print_hello_default(self, id):
+        self.set_field("data_b64", HELLO_WORLD_B64)
+        self.print_default(id)
+
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
     def print_printer(self, id, printer):
@@ -70,6 +88,12 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
     def print_printer_o(self, id, printer):
         return ""
+
+    @appier.route("/nodes/<str:id>/printers/<str:printer>/print_hello", ("GET", "POST"), json = True)
+    @appier.ensure(token = "admin")
+    def print_hello_printer(self, id, printer):
+        self.set_field("data_b64", HELLO_WORLD_B64)
+        self.print_printer(id, printer)
 
     @appier.coroutine
     def wait_jobs(self, id):
