@@ -25,7 +25,7 @@ class PrintingManagerTest(unittest.TestCase):
     def tearDown(self):
         self.manager.unload()
 
-    def test_base(self):
+    def test_basic(self):
         file = appier.legacy.BytesIO()
         options = dict(name = "binie", file = file)
         self.manager.print_language(EXAMPLE, options)
