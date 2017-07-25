@@ -59,4 +59,4 @@ Colony Print Infra-structure is currently licensed under the [Apache License, Ve
 [![Build Status](https://travis-ci.org/hivesolutions/colony_print.svg?branch=master)](https://travis-ci.org/hivesolutions/colony_print)
 [![Coverage Status](https://coveralls.io/repos/hivesolutions/colony_print/badge.svg?branch=master)](https://coveralls.io/r/hivesolutions/colony_print?branch=master)
 [![PyPi Status](https://img.shields.io/pypi/v/colony_print.svg)](https://pypi.python.org/pypi/colony_print)
-[![License](http://img.shields.io/badge/license-Apache%202.0-blue.svg)](http://www.apache.org/licenses/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](http://www.apache.org/licenses/)
