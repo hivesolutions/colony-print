@@ -32,7 +32,7 @@ var print = function(gateway, result) {
     // in case the target format is pdf extra values must be added
     // to the data map containin the size of the paper provided by
     // the default printer (for correct pdf generation)
-    if (format == "pdf") {
+    if (format === "pdf") {
         sizes(gateway, data);
     }
 
