@@ -15,6 +15,12 @@ class PrinterController(appier.Controller):
     def hello(self):
         self.npcolony.print_hello()
 
+    @appier.route("/printers/print", "GET", json = True)
+    @appier.ensure(token = "admin")
+    def print_document_f(self):
+        printer = self.field("printer")
+        return self.print_document(printer)
+
     @appier.route("/printers/<str:printer>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
     def print_document(self, printer):

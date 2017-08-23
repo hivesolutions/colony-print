@@ -73,6 +73,24 @@ class NodeController(appier.Controller):
         self.set_field("name", "hello_world")
         self.print_default(id)
 
+    @appier.route("/nodes/<str:id>/printers/print", ("GET", "POST"), json = True)
+    @appier.ensure(token = "admin")
+    def print_printer_f(self, id):
+        printer = self.field("printer")
+        return self.print_printer(id, printer)
+
+    @appier.route("/nodes/<str:id>/printers/print", "OPTIONS")
+    @appier.ensure(token = "admin")
+    def print_printer_of(self, id):
+        printer = self.field("printer")
+        return self.print_printer_o(id, printer)
+
+    @appier.route("/nodes/<str:id>/printers/print_hello", ("GET", "POST"), json = True)
+    @appier.ensure(token = "admin")
+    def print_hello_printer_f(self, id):
+        printer = self.field("printer")
+        return self.print_hello_printer(id, printer)
+
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", ("GET", "POST"), json = True)
     @appier.ensure(token = "admin")
     def print_printer(self, id, printer):
