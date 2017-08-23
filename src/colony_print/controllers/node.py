@@ -80,7 +80,6 @@ class NodeController(appier.Controller):
         return self.print_printer(id, printer)
 
     @appier.route("/nodes/<str:id>/printers/print", "OPTIONS")
-    @appier.ensure(token = "admin")
     def print_printer_of(self, id):
         printer = self.field("printer")
         return self.print_printer_o(id, printer)
