@@ -119,8 +119,8 @@ class Visitor(object):
         """
         Retrieves the printing options.
 
-        @rtype: Dictionary
-        @return: The printing options.
+        :rtype: Dictionary
+        :return: The printing options.
         """
 
         return self.options
@@ -129,8 +129,8 @@ class Visitor(object):
         """
         Sets the printing options.
 
-        @type options: Dictionary.
-        @param options: The printing options.
+        :type options: Dictionary.
+        :param options: The printing options.
         """
 
         self.options = options
@@ -461,8 +461,8 @@ class Visitor(object):
         Retrieves the current position based on the current
         context information.
 
-        @rtype: Tuple
-        @return: The current position base on the current context information
+        :rtype: Tuple
+        :return: The current position base on the current context information
         and applied with the font scale factor.
         """
 
@@ -526,11 +526,11 @@ class Visitor(object):
         Puts the given context information in the context
         information map.
 
-        @type context_name: String
-        @param context_name: The name of the context information
+        :type context_name: String
+        :param context_name: The name of the context information
         to be put in the context information map.
-        @type context_value: Object
-        @param context_value: The value of the context information to be put
+        :type context_value: Object
+        :param context_value: The value of the context information to be put
         in the context information map.
         """
 
@@ -546,11 +546,11 @@ class Visitor(object):
         Tests if the given context information name exists
         in the current context information map.
 
-        @type context_name: String
-        @param context_name: The context information name
+        :type context_name: String
+        :param context_name: The context information name
         to be tested against the current context information map.
-        @rtype: bool
-        @return: If the context information name exists in the
+        :rtype: bool
+        :return: If the context information name exists in the
         current context information map (and is valid).
         """
 

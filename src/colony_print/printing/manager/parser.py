@@ -33,8 +33,8 @@ class Parser(object):
         """
         Retrieves the result of the parse
 
-        @rtype: Object
-        @return: The result of the parse
+        :rtype: Object
+        :return: The result of the parse
         """
 
         pass
@@ -221,10 +221,10 @@ def valid_node(node):
     """
     Gets if a node is valid or not for parsing.
 
-    @type node: Node
-    @param node: The Xml node to be validated.
-    @rtype: bool
-    @return: The valid or not valid value.
+    :type node: Node
+    :param node: The Xml node to be validated.
+    :rtype: bool
+    :return: The valid or not valid value.
     """
 
     # in case the node is of type element

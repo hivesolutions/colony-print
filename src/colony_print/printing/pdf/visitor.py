@@ -194,8 +194,8 @@ class Visitor(object):
         """
         Retrieves the printing options.
 
-        @rtype: Dictionary
-        @return: The printing options.
+        :rtype: Dictionary
+        :return: The printing options.
         """
 
         return self.options
@@ -204,8 +204,8 @@ class Visitor(object):
         """
         Sets the printing options.
 
-        @type options: Dictionary.
-        @param options: The printing options.
+        :type options: Dictionary.
+        :param options: The printing options.
         """
 
         self.options = options
@@ -621,14 +621,14 @@ class Visitor(object):
         The calculation of the new vertical position takes into
         account the provided offset value.
 
-        @type y_position: float
-        @param y_position: The vertical position as a pdf point value
+        :type y_position: float
+        :param y_position: The vertical position as a pdf point value
         to be validated against the current page metrics.
-        @type offset: float
-        @param offset: The vertical offset to be applied to the new's
+        :type offset: float
+        :param offset: The vertical offset to be applied to the new's
         page vertical value in case a new page is created.
-        @rtype: float
-        @return: The resulting vertical position taking into account
+        :rtype: float
+        :return: The resulting vertical position taking into account
         creation of new pages.
         """
 
@@ -672,11 +672,11 @@ class Visitor(object):
         or a relative (file name) to the system's default
         font directory.
 
-        @type font_name: String
-        @param font_name: The name of the font to be ensured
+        :type font_name: String
+        :param font_name: The name of the font to be ensured
         to be loaded in the current context.
-        @type file_path: String
-        @param file_path: The path to the true type font file
+        :type file_path: String
+        :param file_path: The path to the true type font file
         that should be loaded for the font (may be a relative
         or absolute path)
         """
@@ -736,8 +736,8 @@ class Visitor(object):
         Retrieves the current position based on the current
         context information.
 
-        @rtype: Tuple
-        @return: The current position base on the current context information
+        :rtype: Tuple
+        :return: The current position base on the current context information
         and applied with the font scale factor.
         """
 
@@ -801,11 +801,11 @@ class Visitor(object):
         Puts the given context information in the context
         information map.
 
-        @type context_name: String
-        @param context_name: The name of the context information
+        :type context_name: String
+        :param context_name: The name of the context information
         to be put in the context information map.
-        @type context_value: Object
-        @param context_value: The value of the context information to be put
+        :type context_value: Object
+        :param context_value: The value of the context information to be put
         in the context information map.
         """
 
@@ -821,11 +821,11 @@ class Visitor(object):
         Tests if the given context information name exists
         in the current context information map.
 
-        @type context_name: String
-        @param context_name: The context information name
+        :type context_name: String
+        :param context_name: The context information name
         to be tested against the current context information map.
-        @rtype: bool
-        @return: If the context information name exists in the
+        :rtype: bool
+        :return: If the context information name exists in the
         current context information map (and is valid).
         """
 
