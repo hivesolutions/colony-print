@@ -4,13 +4,13 @@
 from . import visitor
 
 PRINTING_NAME = "pdf"
-""" The printing name, for the current pdf
+""" The printing name, for the current PDF
 infra-structure (as defined in spec) """
 
 class PrintingPDF(object):
     """
-    The printing pdf class, that is responsible for
-    the handling of the logic for the printing of pdf
+    The printing PDF class, that is responsible for
+    the handling of the logic for the printing of PDF
     files based on the xml template language.
     """
 
@@ -24,7 +24,7 @@ class PrintingPDF(object):
         pass
 
     def print_language(self, printing_document, options = {}):
-        # creates the pdf printing visitor then sets the
+        # creates the PDF printing visitor then sets the
         # provided printing options in the visitor
         _visitor = visitor.Visitor()
         _visitor.set_options(options)

@@ -22,7 +22,7 @@ class PrintingBinie(object):
         pass
 
     def print_language(self, printing_document, options = {}):
-        # creates the pdf printing visitor then sets the
+        # creates the PDF printing visitor then sets the
         # provided printing options in the visitor
         _visitor = visitor.Visitor()
         _visitor.set_options(options)

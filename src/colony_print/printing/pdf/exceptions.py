@@ -3,7 +3,7 @@
 
 class PrintingPdfException(Exception):
     """
-    The printing pdf exception class.
+    The printing PDF exception class.
     """
 
     message = None
