@@ -19,7 +19,7 @@ services: mongodb
 before_install:
   - if [[ $TRAVIS_PYTHON_VERSION != "3.2" ]] && [[ $TRAVIS_PYTHON_VERSION != "3.3" ]] && [[ $TRAVIS_PYTHON_VERSION != "pypy3-2.4.0" ]]; then pip install --upgrade pip setuptools; fi
   - if [[ $TRAVIS_PYTHON_VERSION == "3.2" ]]; then pip install --upgrade "pip<8.0" "setuptools<20.0"; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == "3.3" ]] || [[ $TRAVIS_PYTHON_VERSION == "pypy3-2.4.0" ]]; then pip install --upgrade "pip<10.0" "setuptools<24.0"; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == "2.6" ]] || [[ $TRAVIS_PYTHON_VERSION == "3.3" ]] || [[ $TRAVIS_PYTHON_VERSION == "pypy3-2.4.0" ]]; then pip install --upgrade "pip<10.0" "setuptools<24.0"; fi
 install:
   - if [[ $TRAVIS_PYTHON_VERSION == "3.2" ]]; then pip install "pymongo<3.3"; fi
   - if [[ $TRAVIS_PYTHON_VERSION == "2.6" ]]; then pip install "pillow<4.0"; fi
@@ -28,8 +28,8 @@ install:
   - pip install -r extra.txt
   - pip install coveralls
   - pip install twine
-script: if [[ $TRAVIS_PYTHON_VERSION != "2.6" ]] && [[ $TRAVIS_PYTHON_VERSION != "3.2" ]]; then coverage run --source=colony_print setup.py test; else python setup.py test; fi
-after_success: if [[ $TRAVIS_PYTHON_VERSION != "2.6" ]] && [[ $TRAVIS_PYTHON_VERSION != "3.2" ]]; then coveralls; fi
+script: if [[ $TRAVIS_PYTHON_VERSION != "3.2" ]]; then coverage run --source=colony_print setup.py test; else python setup.py test; fi
+after_success: if [[ $TRAVIS_PYTHON_VERSION != "3.2" ]]; then coveralls; fi
 deploy:
   provider: pypi
   user: joamag
