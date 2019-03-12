@@ -14,7 +14,7 @@ from ..manager.ast import *
 
 try:
     import reportlab.lib.units
-except:
+except ImportError:
     INCH = 72.0
     CM = INCH / 2.54
 else:
@@ -716,8 +716,11 @@ class Visitor(object):
                 # metrics (to be used in further operations)
                 font = reportlab.pdfbase.ttfonts.TTFont(font_name, file_path_f)
                 reportlab.pdfbase.pdfmetrics.registerFont(font)
-            except: continue
-            else: error = False; break
+            except Exception:
+                continue
+            else:
+                error = False
+                break
 
         # in case the error flag is set raises the invalid font
         # exception, indicating that it was not possible to load
