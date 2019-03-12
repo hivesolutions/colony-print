@@ -49,7 +49,7 @@ class ColonyPrintNode(object):
                 )
                 logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
                 for job in jobs: self.print_job(job)
-            except BaseException as exception:
+            except Exception as exception:
                 logging.info("Exception while looping '%s'" % str(exception))
                 logging.info("Sleeping for %.2f seconds" % self.sleep_time)
                 time.sleep(self.sleep_time)
