@@ -36,7 +36,7 @@ class DocumentController(appier.Controller):
     def convert(self, format):
         # retrieves the current request reference and then
         # uses it to retrieve its "raw" data, that should
-        # contain the xml string for the generation of the
+        # contain the XML string for the generation of the
         # of binie result and then sends the value for print
         request = self.get_request()
         data = request.get_data()
