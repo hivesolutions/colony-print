@@ -11,7 +11,7 @@ class PrintingPDF(object):
     """
     The printing PDF class, that is responsible for
     the handling of the logic for the printing of PDF
-    files based on the xml template language.
+    files based on the XML template language.
     """
 
     def get_name(self):

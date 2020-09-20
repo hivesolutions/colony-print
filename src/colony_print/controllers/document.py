@@ -19,8 +19,8 @@ EXAMPLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
             <line><text>Hello World</text></line>\
         </paragraph>\
     </printing_document>"
-""" Example xml string that should display an hello world
-message using the xml printing language """
+""" Example XML string that should display an hello world
+message using the XML printing language """
 
 class DocumentController(appier.Controller):
 

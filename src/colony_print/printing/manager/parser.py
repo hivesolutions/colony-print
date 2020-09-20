@@ -80,13 +80,13 @@ class PrintingLanguageParser(Parser):
         return self.printing_document
 
     def load_printing_language_file(self, file):
-        # creates the xml document DOM object
+        # creates the XML document DOM object
         xml_document = xml.dom.minidom.parse(file)
 
         self.load_printing_language(xml_document)
 
     def load_printing_language_string(self, string):
-        # creates the xml document DOM object, the provided
+        # creates the XML document DOM object, the provided
         # string is encoded to avoid possible parsing problems
         string = type(string) == appier.legacy.UNICODE and string.encode(DEFAULT_CHARSET) or string
         xml_document = xml.dom.minidom.parseString(string)
