@@ -46,7 +46,7 @@ class DocumentController(appier.Controller):
         # retrieves the various optional fields for printing
         # and then parses them creating the composite values
         # (should include the size tuple)
-        b64 = self.field("base64", False)
+        b64 = self.field("base64", False, cast = bool)
         width = self.field("width", 0.0, cast = float)
         height = self.field("height", 0.0, cast = float)
         has_size = width > 0.0 and width > 0.0
