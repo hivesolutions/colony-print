@@ -552,7 +552,7 @@ class Visitor(object):
                 # creates the image buffer then writes the decoded
                 # image into it and opens the file object with the
                 # created buffer (image loading into structure)
-                image_source_buffer = appier.legacy.StringIO()
+                image_source_buffer = appier.legacy.BytesIO()
                 image_source_buffer.write(image_source_decoded)
                 image_source_buffer.seek(0)
                 bitmap_image = PIL.Image.open(image_source_buffer)
