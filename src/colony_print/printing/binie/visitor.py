@@ -425,7 +425,7 @@ class Visitor(object):
             real_bitmap_image_height = bitmap_image_height
 
             # creates a new string buffer for the image
-            string_buffer = appier.legacy.StringIO()
+            string_buffer = appier.legacy.BytesIO()
 
             # saves the new image into the string buffer and then
             # retrieve the buffer data
