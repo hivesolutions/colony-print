@@ -3,8 +3,8 @@
 
 class AstNode(object):
     """
-    The ast node class, that represents a generic node
-    to be percolated as part of the ast (abstract syntax tree).
+    The AST node class, that represents a generic node
+    to be percolated as part of the AST (abstract syntax tree).
     """
 
     value = None
