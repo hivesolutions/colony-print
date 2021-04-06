@@ -2,4 +2,4 @@ appier
 appier_extras
 jinja2
 reportlab
-pillow
+pillow<7
