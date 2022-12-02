@@ -1,5 +1,5 @@
 appier
-appier_extras
+appier-extras
 jinja2
 reportlab
 pillow<7

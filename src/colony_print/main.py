@@ -9,7 +9,7 @@ class ColonyPrintApp(appier.APIApp):
     def __init__(self, *args, **kwargs):
         appier.APIApp.__init__(
             self,
-            name = "colony_print",
+            name = "colony-print",
             parts = (
                 appier_extras.AdminPart,
             ),

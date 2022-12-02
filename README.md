@@ -4,7 +4,7 @@ Small web app for printing of Colony based documents.
 
 This project includes two main components:
 
-* The web app end point that allows for XML to Binie converstion `colony_print.controllers`
+* The web app end point that allows for XML to Binie conversion `colony_print.controllers`
 * The structure conversion infra-structure (visitors, ast, etc.) `colony_print.printing`
 
 ## Installation
@@ -56,7 +56,7 @@ Colony Print Infra-structure is currently licensed under the [Apache License, Ve
 
 ## Build Automation
 
-[![Build Status](https://app.travis-ci.com/hivesolutions/colony_print.svg?branch=master)](https://travis-ci.com/github/hivesolutions/colony_print)
-[![Coverage Status](https://coveralls.io/repos/hivesolutions/colony_print/badge.svg?branch=master)](https://coveralls.io/r/hivesolutions/colony_print?branch=master)
-[![PyPi Status](https://img.shields.io/pypi/v/colony_print.svg)](https://pypi.python.org/pypi/colony_print)
+[![Build Status](https://app.travis-ci.com/hivesolutions/colony-print.svg?branch=master)](https://travis-ci.com/github/hivesolutions/colony-print)
+[![Coverage Status](https://coveralls.io/repos/hivesolutions/colony-print/badge.svg?branch=master)](https://coveralls.io/r/hivesolutions/colony-print?branch=master)
+[![PyPi Status](https://img.shields.io/pypi/v/colony-print.svg)](https://pypi.python.org/pypi/colony-print)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/)
