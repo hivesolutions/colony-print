@@ -9,12 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+*
+
+### Changed
+
+*
+
+### Fixed
+
+*
+
+## [0.2.0] - 2023-05-07
+
+### Added
+
 * Support for GitHub Actions
 
 ### Changed
 
 * Repo name to `colony-print`
-
-### Fixed
-
-*
