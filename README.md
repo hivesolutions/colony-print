@@ -4,8 +4,8 @@ Small web app for printing of Colony based documents.
 
 This project includes two main components:
 
-* The web app end point that allows for XML to Binie conversion `colony_print.controllers`
-* The structure conversion infra-structure (visitors, ast, etc.) `colony_print.printing`
+* The Web App end-point that provides XML to Binie conversion `colony_print.controllers`
+* The structure conversion infra-structure (Visitors, AST, etc.) `colony_print.printing`
 
 ## Installation
 
