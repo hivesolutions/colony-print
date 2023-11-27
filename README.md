@@ -1,11 +1,18 @@
 # [Colony Print Infra-structure](http://colony-print.hive.pt)
 
-Small web app for printing of Colony based documents.
+Small Web App for printing of Colony based documents.
 
 This project includes two main components:
 
 * The Web App end-point that provides XML to Binie conversion `colony_print.controllers`
 * The structure conversion infra-structure (Visitors, AST, etc.) `colony_print.printing`
+
+## Features
+
+* XML to Binie conversion
+* PDF generation, with custom fonts and images
+* Native GDI printing (Windows)
+* CUPS printing (Linux)
 
 ## Installation
 
