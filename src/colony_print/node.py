@@ -7,8 +7,12 @@ import logging
 import appier
 
 BASE_URL = "https://print.bemisc.com/"
+""" The default base URL to be used for the communication with the
+Colony Print server """
 
 SLEEP_TIME = 3.0
+""" The default time to sleep between each iteration, this value
+is used to avoid overloading the server with requests """
 
 class ColonyPrintNode(object):
 

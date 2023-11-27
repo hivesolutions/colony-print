@@ -11,8 +11,8 @@ This project includes two main components:
 
 * XML to Binie conversion
 * PDF generation, with custom fonts and images
-* Native GDI printing (Windows)
-* CUPS printing (Linux)
+* Native GDI printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
+* CUPS printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 
 ## Installation
 
