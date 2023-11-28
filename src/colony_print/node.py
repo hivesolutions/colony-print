@@ -69,8 +69,8 @@ class ColonyPrintNode(object):
         # system, this is required to avoid problems with the printing of the
         # data in printers of the current system
         if format and hasattr(self.npcolony, "get_format") and\
-            not format == self.npcolony.get_format:
-            raise appier.OperationalError("Format '%s' not compatible with current system" % format)
+            not format == self.npcolony.get_format():
+            raise appier.OperationalError("Format '%s' not compatible with system" % format)
 
         logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
         if printer: self.npcolony.print_printer_base64(printer, data_b64)
