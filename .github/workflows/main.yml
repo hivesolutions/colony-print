@@ -16,11 +16,11 @@ jobs:
           "3.7-buster",
           "3.8-buster",
           "3.9-buster",
-          "3.10-bookworm",
-          "3.11-bookworm",
+          "3.10-buster",
+          "3.11-buster",
           "3.12-bookworm",
           "latest-bookworm",
-          "rc-bookworm"
+          "rc-buster"
         ]
     runs-on: ubuntu-latest
     container: python:${{ matrix.python-version }}
