@@ -10,17 +10,17 @@ jobs:
     strategy:
       matrix:
         python-version: [
-          2.7,
-          3.5,
-          3.6,
-          3.7,
-          3.8,
-          3.9,
-          "3.10",
-          "3.11",
-          "3.12",
-          latest,
-          rc
+          "2.7-buster",
+          "3.5-buster",
+          "3.6-buster",
+          "3.7-buster",
+          "3.8-buster",
+          "3.9-buster",
+          "3.10-bookworm",
+          "3.11-bookworm",
+          "3.12-bookworm",
+          "latest-bookworm",
+          "rc-bookworm"
         ]
     runs-on: ubuntu-latest
     container: python:${{ matrix.python-version }}

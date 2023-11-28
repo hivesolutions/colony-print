@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        python-version: [2.7]
+        python-version: ["2.7-buster"]
     runs-on: ubuntu-latest
     container: python:${{ matrix.python-version }}
     steps:
