@@ -20,7 +20,7 @@ EXAMPLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
         </paragraph>\
     </printing_document>"
 """ Example XML string that should display an hello world
-message using the XML printing language """
+message using the XML printing language (XMPL) """
 
 class DocumentController(appier.Controller):
 
@@ -35,8 +35,8 @@ class DocumentController(appier.Controller):
     @appier.route("/documents.<format>", "POST")
     def convert(self, format):
         # retrieves the current request reference and then
-        # uses it to retrieve its "raw" data, that should
-        # contain the XML string for the generation of the
+        # uses it to retrieve its "raw" data, which should
+        # contain the XML string (XMPL) for the generation of the
         # of binie result and then sends the value for print
         request = self.get_request()
         data = request.get_data()
