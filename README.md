@@ -49,7 +49,9 @@ into the `/usr/share/fonts/truetype` directory so they are exposed and ready to
 be used by the PDF generation infra-structure. For example calibri is one type of font that should
 be exported to an UNIX machine as it is used by mani colony generated documents.
 
-## Running
+## Development
+
+To run a localhost development server use the following commands:
 
 ```bash
 PORT=8686 \
