@@ -62,7 +62,16 @@ class ColonyPrintNode(object):
         data_b64 = job["data_b64"]
         name = job.get("name", "undefined")
         printer = job.get("printer", None)
+        format = job.get("format", None)
         printer_s = printer if printer else "default"
+
+        # tries to make sure that the format is compatible with the current
+        # system, this is required to avoid problems with the printing of the
+        # data in printers of the current system
+        if format and hasattr(self.npcolony, "get_format") and\
+            not format == self.npcolony.get_format:
+            raise appier.OperationalError("Format '%s' not compatible with current system" % format)
+
         logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
         if printer: self.npcolony.print_printer_base64(printer, data_b64)
         else: self.npcolony.print_base64(data_b64)
