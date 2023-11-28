@@ -11,7 +11,7 @@ jobs:
       matrix:
         python-version: [2.7]
     runs-on: ubuntu-latest
-    container: python:${{ matrix.python-version }}-buster
+    container: python:${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v3
       - run: |
