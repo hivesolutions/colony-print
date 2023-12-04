@@ -10,19 +10,22 @@ This approach ensures that a single document file can be used across different p
 
 The Binie file consists of a document header followed by a series of elements. Each element can be either text or an image, each with its specific header and data.
 
-### Document Header
+Every integer in the Binie specification is encoded in Little Endian format.
 
-The document header is at the beginning of each Binie file, containing metadata about the document.
+### Binie Header
+
+Binie documents begin with a standard header that includes essential metadata about the document:
 
 | Offset (bytes) | Length (bytes) | Content                 |
 |----------------|----------------|-------------------------|
-| 0              | 256            | Title                   |
+| 0              | 256            | Document Title          |
 | 256            | 4              | Document width          |
 | 260            | 4              | Document height         |
 | 264            | 4              | Element count           |
 
 ### Element Header
 
+Following the header, Binie documents contain a series of elements, each with a defined structure.
 Each element in the document (text or image) starts with a standard header.
 
 | Offset (from element start) | Length (bytes) | Content            |
@@ -32,7 +35,8 @@ Each element in the document (text or image) starts with a standard header.
 
 ### Text Element
 
-Text elements have their specific header followed by the actual text. The element type for text elements is identified by the value `1`.
+Text elements have their specific header followed by the actual text. 
+The element type for text elements is identified by the value `1`.
 
 #### Text Element Header
 
@@ -49,7 +53,8 @@ Follows immediately after the text element header.
 
 ### Image Element
 
-Image elements contain image data and are identified by the element type value `2`.
+Image elements contain image data.
+The element type for image elements is identified by the value `2`.
 
 #### Image Element Header
 
@@ -66,10 +71,9 @@ Follows immediately after the image element header.
 ### Text Alignment
 
 Text alignment within the elements is specified using alignment values. These are:
-
-- `1` for Left alignment
-- `2` for Right alignment
-- `3` for Center alignment
+* `1` for Left alignment
+* `2` for Right alignment
+* `3` for Center alignment
 
 ## Validation and Compatibility
 
