@@ -8,86 +8,73 @@ This approach ensures that a single document file can be used across different p
 
 ## Specification
 
-Every integer in the Binie specification is encoded in Little Endian format.
+The Binie file consists of a document header followed by a series of elements. Each element can be either text or an image, each with its specific header and data.
 
-### Binie Header
+### Document Header
 
-Binie documents begin with a standard header that includes essential metadata about the document:
+The document header is at the beginning of each Binie file, containing metadata about the document.
 
-| Offset | Content                               |
-|--------|---------------------------------------|
-| 0      | Document title (256 bytes)            |
-| 256    | Document width (4 bytes)              |
-| 260    | Document height (4 bytes)             |
-| 264    | Element count (4 bytes)               |
+| Offset (bytes) | Length (bytes) | Content                 |
+|----------------|----------------|-------------------------|
+| 0              | 256            | Title                   |
+| 256            | 4              | Document width          |
+| 260            | 4              | Document height         |
+| 264            | 4              | Element count           |
 
-### Binie Elements
+### Element Header
 
-Following the header, Binie documents contain a series of elements, each with a defined structure.
+Each element in the document (text or image) starts with a standard header.
 
-#### Element Header
+| Offset (from element start) | Length (bytes) | Content            |
+|-----------------------------|----------------|--------------------|
+| 0                           | 4              | Element type       |
+| 4                           | 4              | Element data length|
 
-Each element, whether text or image, starts with a header:
+### Text Element
 
-| Offset | Content                               |
-|--------|---------------------------------------|
-| 0      | Element type (4 bytes)                |
-| 4      | Element data length (4 bytes)         |
+Text elements have their specific header followed by the actual text. The element type for text elements is identified by the value `1`.
 
-#### Text Elements
+#### Text Element Header
 
-Text elements are structured to include font and alignment details:
+| Offset (from text element start) | Length (bytes) | Content             |
+|----------------------------------|----------------|---------------------|
+| 0                                | 8              | Common header       |
+| 8                                | 8              | Position            |
+| 16                               | 256            | Font                |
+| ...                              | ...            | Additional settings |
 
-| Offset | Content                               |
-|--------|---------------------------------------|
-| 0      | Text Element Header                   |
-| ...    | Text Data                             |
+#### Text Data
 
-##### Text Element Header
+Follows immediately after the text element header.
 
-The header for a text element contains:
+### Image Element
 
-| Offset | Content                               |
-|--------|---------------------------------------|
-| 0      | Position (X, Y - 4 bytes each)        |
-| 8      | Font name (256 bytes)                 |
-| 264    | Font size (4 bytes)                   |
-| 268    | Text alignment (4 bytes)              |
+Image elements contain image data and are identified by the element type value `2`.
 
-#### Image Elements
+#### Image Element Header
 
-Image elements are formatted to specify layout and size:
+| Offset (from image element start) | Length (bytes) | Content            |
+|-----------------------------------|----------------|--------------------|
+| 0                                 | 8              | Common header      |
+| 8                                 | 8              | Position           |
+| ...                               | ...            | Additional settings|
 
-| Offset | Content                               |
-|--------|---------------------------------------|
-| 0      | Image Element Header                  |
-| ...    | Image Data                            |
+#### Image Data
 
-##### Image Element Header
+Follows immediately after the image element header.
 
-The header for an image element includes:
+### Text Alignment
 
-| Offset | Content                               |
-|--------|---------------------------------------|
-| 0      | Position (X, Y - 4 bytes each)        |
-| ...    | Additional settings                   |
+Text alignment within the elements is specified using alignment values. These are:
 
-### Constants and Element Types
-
-Binie specifies constants for element types and alignments to standardize document structure.
-
-| Name                        | Value | Description                    |
-|-----------------------------|-------|--------------------------------|
-| `TEXT_VALUE`                | 1     | Identifier for text elements   |
-| `IMAGE_VALUE`               | 2     | Identifier for image elements  |
-| `LEFT_TEXT_ALIGN_VALUE`     | 1     | Left text alignment            |
-| `RIGHT_TEXT_ALIGN_VALUE`    | 2     | Right text alignment           |
-| `CENTER_TEXT_ALIGN_VALUE`   | 3     | Center text alignment          |
+- `1` for Left alignment
+- `2` for Right alignment
+- `3` for Center alignment
 
 ## Validation and Compatibility
 
-Binie's design emphasizes robustness and adaptability. Implementations should gracefully handle unexpected content, prioritizing document integrity and readability. The specification anticipates future enhancements, ensuring that Binie documents remain compatible across different versions and implementations.
+The Binie file format is designed to be robust and flexible. Implementations should handle unexpected values gracefully, defaulting to sensible behavior where possible. For example, unknown element types should be ignored, and missing data should be handled without causing crashes or major issues.
 
 ## Future Extensions
 
-The Binie file format, with its modular design, is well-suited for future expansions. New element types or additional metadata fields can be seamlessly integrated, fostering an evolving standard that adapts to emerging requirements in document representation and printing technology.
+The structure of the Binie file format allows for future extensions, such as new element types or additional metadata in headers. Implementations should be designed to accommodate such changes, ensuring backward and forward compatibility.
