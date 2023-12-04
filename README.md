@@ -9,10 +9,14 @@ This project includes two main components:
 
 ## Features
 
-* XML to Binie conversion
+* XMPL to Binie conversion
 * PDF generation with custom fonts and images
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * [CUPS](https://en.wikipedia.org/wiki/CUPS) printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
+
+## XMPL Specification
+
+The XML Markup Language for Printing (XMPL) is integral to our document processing pipeline. For an in-depth understanding of the XMPL structure and its seamless convertibility to Binie, see the [XMPL File Format Specification](xmpl.md).
 
 ## Installation
 
