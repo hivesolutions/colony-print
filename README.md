@@ -14,6 +14,10 @@ This project includes two main components:
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * [CUPS](https://en.wikipedia.org/wiki/CUPS) printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 
+## Binie Specification
+
+For a detailed understanding of the Binie file format used in this project, refer to the [Binie File Format Specification](binie.md). This document outlines the structure and organization of the Binie file format, which is essential for developing compatible applications and tools.
+
 ## Installation
 
 ### Pre-requisites
