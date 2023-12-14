@@ -70,10 +70,13 @@ Follows immediately after the image element header.
 
 ### Text Alignment
 
-Text alignment within the elements is specified using alignment values. These are:
-* `1` for Left alignment
-* `2` for Right alignment
-* `3` for Center alignment
+Text alignment within the elements is specified using alignment values:
+
+| Text Alignment   | Value |
+|----------------- |------ |
+| Left alignment   | 1     |
+| Right alignment  | 2     |
+| Center alignment | 3     |
 
 ## Validation and Compatibility
 
