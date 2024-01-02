@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+
 class AstNode(object):
     """
     The AST node class, that represents a generic node
@@ -20,7 +21,10 @@ class AstNode(object):
         self.child_nodes = []
 
     def __repr__(self):
-        return "<ast_node indent:%s child_nodes:%s>" % (self.indent, len(self.child_nodes))
+        return "<ast_node indent:%s child_nodes:%s>" % (
+            self.indent,
+            len(self.child_nodes),
+        )
 
     def accept(self, visitor):
         visitor.visit(self)
@@ -59,40 +63,40 @@ class AstNode(object):
     def remove_child_node(self, child_node):
         self.child_nodes.remove(child_node)
 
-class GenericElement(AstNode):
 
+class GenericElement(AstNode):
     element_name = "none"
 
-    def __init__(self, element_name = "none"):
+    def __init__(self, element_name="none"):
         AstNode.__init__(self)
         self.element_name = element_name
 
-class PrintingDocument(AstNode):
 
+class PrintingDocument(AstNode):
     def __init__(self):
         AstNode.__init__(self)
+
 
 class Block(AstNode):
-
     def __init__(self):
         AstNode.__init__(self)
+
 
 class Paragraph(AstNode):
-
     def __init__(self):
         AstNode.__init__(self)
+
 
 class Line(AstNode):
-
     def __init__(self):
         AstNode.__init__(self)
+
 
 class Text(AstNode):
-
     def __init__(self):
         AstNode.__init__(self)
 
-class Image(AstNode):
 
+class Image(AstNode):
     def __init__(self):
         AstNode.__init__(self)

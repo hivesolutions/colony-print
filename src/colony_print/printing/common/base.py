@@ -1,18 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-def visited(ast_node_class):
 
+def visited(ast_node_class):
     def decorator(function, *args, **kwargs):
         function.ast_node_class = ast_node_class
         return function
 
     return decorator
 
-def dispatch_visit(map_name = "node_method_map"):
 
+def dispatch_visit(map_name="node_method_map"):
     def create_interceptor(function):
-
         def decorator_interceptor(*args, **kwargs):
             # unpacks the first two "unnamed" arguments as the self
             # instance reference and the node element to be visited
@@ -37,7 +36,8 @@ def dispatch_visit(map_name = "node_method_map"):
             for mro_item in mro:
                 # in case the current mro item class level is nor found
                 # skips the current iteration (cannot visit at this level)
-                if not mro_item in node_method_map: continue
+                if not mro_item in node_method_map:
+                    continue
 
                 # the current class level is valid and so the proper method
                 # is retrieved from the map and then called with the provided

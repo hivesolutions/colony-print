@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Small README.md content change
+* Changed code to make it Black compliant
 
 ### Fixed
 

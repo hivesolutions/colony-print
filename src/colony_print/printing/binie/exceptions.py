@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+
 class PrintingBinieException(Exception):
     """
     The printing binie exception class.
@@ -8,6 +9,7 @@ class PrintingBinieException(Exception):
 
     message = None
     """ The exception's message """
+
 
 class InvalidContextInformationName(PrintingBinieException):
     """

@@ -46,12 +46,13 @@ EXCLUSION_LIST = [
     "set_value",
     "indent",
     "value",
-    "child_nodes"
+    "child_nodes",
 ]
 """ The exclusion list """
 
 DEFAULT_ENCODER = "utf-8"
 """ The default encoder """
+
 
 class Visitor(object):
     """
@@ -108,7 +109,8 @@ class Visitor(object):
 
             # in case the current class real element does not contain
             # an AST node class reference must continue the loop
-            if not hasattr(self_class_real_element, "ast_node_class"): continue
+            if not hasattr(self_class_real_element, "ast_node_class"):
+                continue
 
             # retrieves the AST node class from the current class real element
             # and sets it in the node method map
@@ -168,9 +170,7 @@ class Visitor(object):
             self.elements_list = []
 
             # sets the initial position
-            self.current_position = (
-                0, 0
-            )
+            self.current_position = (0, 0)
         # in case it's the second visit
         elif self.visit_index == 1:
             # retrieves the printing document name and dimensions
@@ -190,7 +190,7 @@ class Visitor(object):
                 printing_document_name,
                 printing_document_width,
                 printing_document_height,
-                len(self.elements_list)
+                len(self.elements_list),
             )
             self.options["file"].write(header)
 
@@ -228,8 +228,10 @@ class Visitor(object):
 
     @visited(Paragraph)
     def visit_paragraph(self, node):
-        if self.visit_index == 0: self.add_context(node)
-        elif self.visit_index == 1: self.remove_context(node)
+        if self.visit_index == 0:
+            self.add_context(node)
+        elif self.visit_index == 1:
+            self.remove_context(node)
 
     @visited(Line)
     def visit_line(self, node):
@@ -246,7 +248,7 @@ class Visitor(object):
             current_position_x, current_position_y = self.current_position
             self.current_position = (
                 current_position_x,
-                current_position_y - margin_top * FONT_SCALE_FACTOR
+                current_position_y - margin_top * FONT_SCALE_FACTOR,
             )
 
         elif self.visit_index == 1:
@@ -261,7 +263,8 @@ class Visitor(object):
             # and then updates the current position
             current_position_x, current_position_y = self.current_position
             self.current_position = (
-                0, current_position_y - biggest_height - margin_bottom * FONT_SCALE_FACTOR
+                0,
+                current_position_y - biggest_height - margin_bottom * FONT_SCALE_FACTOR,
             )
 
             # removes the context information
@@ -311,9 +314,12 @@ class Visitor(object):
 
             # converts the provided text align value into the
             # appropriate integer value representing it
-            if text_align == "left": text_align_int = 1
-            elif text_align == "right": text_align_int = 2
-            elif text_align == "center": text_align_int = 3
+            if text_align == "left":
+                text_align_int = 1
+            elif text_align == "right":
+                text_align_int = 2
+            elif text_align == "center":
+                text_align_int = 3
 
             # calculates the text height from the font scale factor
             text_height = font_size * FONT_SCALE_FACTOR
@@ -336,7 +342,7 @@ class Visitor(object):
                 position_y,
                 block_width,
                 block_height,
-                len(text_encoded) + 1
+                len(text_encoded) + 1,
             )
             element += text_encoded
             element += b"\0"
@@ -366,8 +372,10 @@ class Visitor(object):
 
             # retrieves the path or source value to be used
             # in the retrieval (only one value is set)
-            if self.has_context("path"): image_path = self.get_context("path")
-            elif self.has_context("source"): image_source = self.get_context("source")
+            if self.has_context("path"):
+                image_path = self.get_context("path")
+            elif self.has_context("source"):
+                image_source = self.get_context("source")
 
             # retrieves the complete set of attributes for the current
             # context to be used for the processing of the node
@@ -405,9 +413,7 @@ class Visitor(object):
             # creates a new image without transparency settings, so that
             # no extra color is used ands copies the bitmap image into it
             other_image = PIL.Image.new(
-                "RGB",
-                (bitmap_image_width, bitmap_image_height),
-                color = "white"
+                "RGB", (bitmap_image_width, bitmap_image_height), color="white"
             )
             other_image.paste(bitmap_image, bitmap_image)
 
@@ -416,9 +422,12 @@ class Visitor(object):
 
             # converts the provided text align value into the
             # appropriate integer value representing it
-            if text_align == "left": text_align_int = 1
-            elif text_align == "right": text_align_int = 2
-            elif text_align == "center": text_align_int = 3
+            if text_align == "left":
+                text_align_int = 1
+            elif text_align == "right":
+                text_align_int = 2
+            elif text_align == "center":
+                text_align_int = 3
 
             # sets the real bitmap image height as the bitmap
             # image height (value copy)
@@ -444,14 +453,16 @@ class Visitor(object):
                 position_y,
                 block_width,
                 block_height,
-                len(buffer)
+                len(buffer),
             )
             element += buffer
             self.elements_list.append((2, element))
 
             biggest_height = self.get_context("biggest_height")
             if biggest_height < real_bitmap_image_height * IMAGE_SCALE_FACTOR:
-                self.put_context("biggest_height", real_bitmap_image_height * IMAGE_SCALE_FACTOR)
+                self.put_context(
+                    "biggest_height", real_bitmap_image_height * IMAGE_SCALE_FACTOR
+                )
 
         elif self.visit_index == 1:
             self.remove_context(node)
@@ -472,15 +483,16 @@ class Visitor(object):
         # converts the current position to context
         current_position_context = (
             FONT_SCALE_FACTOR * current_position_x,
-            -1 * FONT_SCALE_FACTOR * current_position_y
+            -1 * FONT_SCALE_FACTOR * current_position_y,
         )
 
         # returns the current position context
         return current_position_context
 
-    def get_context(self, context_name, default = None):
+    def get_context(self, context_name, default=None):
         if not self.has_context(context_name):
-            if not default == None: return default
+            if not default == None:
+                return default
             raise exceptions.InvalidContextInformationName(
                 "the context information name: " + context_name + " is invalid"
             )
@@ -488,13 +500,19 @@ class Visitor(object):
         return self.peek_context(context_name)
 
     def add_context(self, node):
-        valid_attributes = [(value, getattr(node, value)) for value in dir(node) if value not in EXCLUSION_LIST]
+        valid_attributes = [
+            (value, getattr(node, value))
+            for value in dir(node)
+            if value not in EXCLUSION_LIST
+        ]
 
         for valid_attribute_name, valid_attribute_value in valid_attributes:
             self.push_context(valid_attribute_name, valid_attribute_value)
 
     def remove_context(self, node):
-        valid_attribute_names = [value for value in dir(node) if value not in EXCLUSION_LIST]
+        valid_attribute_names = [
+            value for value in dir(node) if value not in EXCLUSION_LIST
+        ]
 
         for valid_attribute_name in valid_attribute_names:
             self.pop_context(valid_attribute_name)
@@ -556,6 +574,7 @@ class Visitor(object):
 
         # in case the context information name exists in the
         # context information map and is not invalid
-        if context_name in self.context_map and\
-            self.context_map[context_name]: return True
-        else: return False
+        if context_name in self.context_map and self.context_map[context_name]:
+            return True
+        else:
+            return False

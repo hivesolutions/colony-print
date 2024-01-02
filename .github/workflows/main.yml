@@ -41,6 +41,10 @@ jobs:
           pip install -r requirements.py2.txt
           pip install -r extra.py2.txt
         if: matrix.python-version == '2.7'
+      - run: |
+          pip install black
+          black . --check
+        if: matrix.python-version == '3.12-bookworm'
       - run: python setup.py test
   build-pypy:
     name: Build PyPy
@@ -67,4 +71,8 @@ jobs:
           pip install -r requirements.py2.txt
           pip install -r extra.py2.txt
         if: matrix.python-version == '2.7'
+      - run: |
+          pip install black
+          black . --check
+        if: matrix.python-version == '3.12'
       - run: pypy setup.py test

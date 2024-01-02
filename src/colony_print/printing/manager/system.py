@@ -12,6 +12,7 @@ TEST_IMAGE_PATH = "resources/test_logo.png"
 """ The test image relative path to the current
 file path (considered the base path) """
 
+
 class PrintingManager(object):
     """
     The printing manager class, that is responsible for the
@@ -28,6 +29,7 @@ class PrintingManager(object):
 
     def load(self):
         import colony_print
+
         pdf_handler = colony_print.PrintingPDF()
         binie_handler = colony_print.PrintingBinie()
         self.load_handler(pdf_handler)
@@ -37,13 +39,13 @@ class PrintingManager(object):
         for _name, handler in appier.legacy.items(self.handlers_map):
             self.unload_handler(handler)
 
-    def print_test(self, options = {}):
+    def print_test(self, options={}):
         # retrieves the proper handler using the provided map of options
         # and then uses the same options to run a test print operation
         handler = self._get_handler(options)
         handler.print_test(options)
 
-    def print_test_image(self, options = {}):
+    def print_test_image(self, options={}):
         # retrieves the complete path for the current file and then
         # retrieves it's directory path, to be used in the calculus
         # of the image path to be used
@@ -60,7 +62,7 @@ class PrintingManager(object):
         handler = self._get_handler(options)
         handler.print_test_image(image_path, options)
 
-    def print_language(self, data, options = {}):
+    def print_language(self, data, options={}):
         # creates a new printing language parser and sets the
         # proper data in it running then the parse string operation
         # that is going to be parsing the provided string
@@ -94,7 +96,8 @@ class PrintingManager(object):
         # retrieves the printing name (engine) from the printing options
         # this value is going to be used to select the proper handler
         printing_name = options.get("name", None)
-        if not printing_name: raise exceptions.PrintingPluginNotAvailable("missing name")
+        if not printing_name:
+            raise exceptions.PrintingPluginNotAvailable("missing name")
 
         # tries to retrieve the proper handler for the requested name that
         # exists in the handlers map in case it's not available raises an

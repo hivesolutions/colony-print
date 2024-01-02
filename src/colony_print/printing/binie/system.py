@@ -6,6 +6,7 @@ from . import visitor
 PRINTING_NAME = "binie"
 """ The printing name """
 
+
 class PrintingBinie(object):
     """
     The printing binie class, responsible for the handling
@@ -15,13 +16,13 @@ class PrintingBinie(object):
     def get_name(self):
         return PRINTING_NAME
 
-    def print_test(self, options = {}):
+    def print_test(self, options={}):
         pass
 
-    def print_test_image(self, image_path, options = {}):
+    def print_test_image(self, image_path, options={}):
         pass
 
-    def print_language(self, printing_document, options = {}):
+    def print_language(self, printing_document, options={}):
         # creates the PDF printing visitor then sets the
         # provided printing options in the visitor
         _visitor = visitor.Visitor()

@@ -8,10 +8,10 @@ import appier
 
 import colony_print
 
-class NodeControllerTest(unittest.TestCase):
 
+class NodeControllerTest(unittest.TestCase):
     def setUp(self):
-        self.app = colony_print.ColonyPrintApp(level = logging.ERROR)
+        self.app = colony_print.ColonyPrintApp(level=logging.ERROR)
 
     def tearDown(self):
         self.app.unload()
@@ -25,5 +25,9 @@ class NodeControllerTest(unittest.TestCase):
     def test_print_default_o(self):
         response = self.app.options("/nodes/name/print")
         self.assertEqual(response.code, 200)
-        self.assertEqual(response.headers["Access-Control-Allow-Origin"].startswith("*"), True)
-        self.assertEqual(response.headers["Access-Control-Allow-Headers"].startswith("*"), True)
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Origin"].startswith("*"), True
+        )
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Headers"].startswith("*"), True
+        )

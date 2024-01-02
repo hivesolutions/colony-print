@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+
 class PrintingManagerException(Exception):
     """
     The printing manager exception class.
@@ -8,6 +9,7 @@ class PrintingManagerException(Exception):
 
     message = None
     """ The exception's message """
+
 
 class PrintingPluginNotAvailable(PrintingManagerException):
     """

@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+
 class PrintingPdfException(Exception):
     """
     The printing PDF exception class.
@@ -8,6 +9,7 @@ class PrintingPdfException(Exception):
 
     message = None
     """ The exception's message """
+
 
 class InvalidContextInformationName(PrintingPdfException):
     """
@@ -34,6 +36,7 @@ class InvalidContextInformationName(PrintingPdfException):
         """
 
         return "Invalid context information name - %s" % self.message
+
 
 class InvalidFont(PrintingPdfException):
     """

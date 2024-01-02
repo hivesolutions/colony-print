@@ -7,6 +7,7 @@ PRINTING_NAME = "pdf"
 """ The printing name, for the current PDF
 infra-structure (as defined in spec) """
 
+
 class PrintingPDF(object):
     """
     The printing PDF class, that is responsible for
@@ -17,13 +18,13 @@ class PrintingPDF(object):
     def get_name(self):
         return PRINTING_NAME
 
-    def print_test(self, options = {}):
+    def print_test(self, options={}):
         pass
 
-    def print_test_image(self, image_path, options = {}):
+    def print_test_image(self, image_path, options={}):
         pass
 
-    def print_language(self, printing_document, options = {}):
+    def print_language(self, printing_document, options={}):
         # creates the PDF printing visitor then sets the
         # provided printing options in the visitor
         _visitor = visitor.Visitor()
