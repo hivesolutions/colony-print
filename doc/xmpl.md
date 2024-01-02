@@ -2,8 +2,8 @@
 
 ## Motivation
 
-XMPL is a file format specification developed to enable diverse applications to create and manipulate structured documents for printing purposes. 
-The design of XMPL facilitates its conversion into Binie format, making it a versatile intermediary for rendering structured, print-ready documents. 
+XMPL is a file format specification developed to enable diverse applications to create and manipulate structured documents for printing purposes.
+The design of XMPL facilitates its conversion into Binie format, making it a versatile intermediary for rendering structured, print-ready documents.
 XMPL appends additional, implementation-agnostic information about the document layout, allowing a single XML-based file to be transformed into a fully-featured, print-ready format.
 
 ## Specification
@@ -80,7 +80,7 @@ Elements in XMPL files may have various attributes defining their properties, su
 
 ### Convertibility to Binie
 
-The XMPL format has been designed for easy and efficient conversion to the Binie file format. 
+The XMPL format has been designed for easy and efficient conversion to the Binie file format.
 This feature allows XMPL to serve as a flexible tool for creating structured documents that can be readily transformed into a print-ready format.
 
 ### Example
@@ -98,5 +98,5 @@ Below is an example of an XMPL document designed to display "Hello World" in a c
 
 ## Validation and Compatibility
 
-XMPL is structured to be robust and flexible, ensuring that the conversion to Binie maintains the integrity and layout of the document. 
+XMPL is structured to be robust and flexible, ensuring that the conversion to Binie maintains the integrity and layout of the document.
 Implementations are expected to handle XMPL structure gracefully, supporting a wide range of document configurations.
