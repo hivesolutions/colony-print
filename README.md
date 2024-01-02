@@ -16,11 +16,11 @@ This project includes two main components:
 
 ## Binie Specification
 
-For a detailed understanding of the Binie file format used in this project, refer to the [Binie File Format Specification](binie.md). This document outlines the structure and organization of the Binie file format, which is essential for developing compatible applications and tools.
+For a detailed understanding of the Binie file format used in this project, refer to the [Binie File Format Specification](doc/binie.md). This document outlines the structure and organization of the Binie file format, which is essential for developing compatible applications and tools.
 
 ## XMPL Specification
 
-The XML Markup Language for Printing (XMPL) is integral to our document processing pipeline. For an in-depth understanding of the XMPL structure and its seamless convertibility to Binie, see the [XMPL File Format Specification](xmpl.md).
+The XML Markup Language for Printing (XMPL) is integral to our document processing pipeline. For an in-depth understanding of the XMPL structure and its seamless convertibility to Binie, see the [XMPL File Format Specification](doc/xmpl.md).
 
 ## Installation
 
