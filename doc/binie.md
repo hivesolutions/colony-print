@@ -18,7 +18,7 @@ Binie documents begin with a standard header that includes essential metadata ab
 
 | Offset (bytes) | Length (bytes) | Content         |
 | -------------- | -------------- | --------------- |
-| 0              | 256            | Document Title  |
+| 0              | 256            | Document title  |
 | 256            | 4              | Document width  |
 | 260            | 4              | Document height |
 | 264            | 4              | Element count   |
@@ -49,7 +49,7 @@ The element type for text elements is identified by the value `1`.
 
 #### Text Data
 
-Follows immediately after the text element header.
+Follows immediately after the text element header and contains the context specific payload of the text - typically the text itself.
 
 ### Image Element
 
@@ -66,7 +66,7 @@ The element type for image elements is identified by the value `2`.
 
 #### Image Data
 
-Follows immediately after the image element header.
+Follows immediately after the image element header that contains the binary contents of the image itself.
 
 ### Text Alignment
 
