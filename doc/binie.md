@@ -40,16 +40,27 @@ The element type for text elements is identified by the value `1`.
 
 #### Text Element Header
 
-| Offset (from text element start) | Length (bytes) | Content             |
-| -------------------------------- | -------------- | ------------------- |
-| 0                                | 8              | Common header       |
-| 8                                | 8              | Position            |
-| 16                               | 256            | Font                |
-| ...                              | ...            | Additional settings |
+| Offset (from text element start) | Length (bytes) | Content       |
+| -------------------------------- | -------------- | ------------- |
+| 0                                | 8              | Common header |
+| 8                                | 8              | Position      |
+| 16                               | 256            | Font          |
+| 272                              | 4              | Font size     |
+| 276                              | 4              | Text align    |
+| 280                              | 4              | Text weight   |
+| 284                              | 4              | Text italic   |
+| 288                              | 4              | Margin left   |
+| 292                              | 4              | Margin right  |
+| 296                              | 4              | Position X    |
+| 300                              | 4              | Position Y    |
+| 304                              | 4              | Block width   |
+| 308                              | 4              | Block height  |
+| 312                              | 4              | Data Length   |
 
 #### Text Data
 
 Follows immediately after the text element header and contains the context specific payload of the text - typically the text itself.
+The encoding of the text is not specified and should be handled by the application.
 
 ### Image Element
 
@@ -58,16 +69,16 @@ The element type for image elements is identified by the value `2`.
 
 #### Image Element Header
 
-| Offset (from image element start) | Length (bytes) | Content        |
-| --------------------------------- | -------------- | -------------- |
-| 0                                 | 8              | Common header  |
-| 8                                 | 8              | Position       |
-| 16                                | 4              | Text align     |
-| 20                                | 4              | Position X     |
-| 24                                | 4              | Position Y     |
-| 28                                | 4              | Block width    |
-| 32                                | 4              | Block height   |
-| 36                                | 4              | Length of data |
+| Offset (from image element start) | Length (bytes) | Content       |
+| --------------------------------- | -------------- | ------------- |
+| 0                                 | 8              | Common header |
+| 8                                 | 8              | Position      |
+| 16                                | 4              | Text align    |
+| 20                                | 4              | Position X    |
+| 24                                | 4              | Position Y    |
+| 28                                | 4              | Block width   |
+| 32                                | 4              | Block height  |
+| 36                                | 4              | Data Length   |
 
 #### Image Data
 
