@@ -58,11 +58,16 @@ The element type for image elements is identified by the value `2`.
 
 #### Image Element Header
 
-| Offset (from image element start) | Length (bytes) | Content             |
-| --------------------------------- | -------------- | ------------------- |
-| 0                                 | 8              | Common header       |
-| 8                                 | 8              | Position            |
-| ...                               | ...            | Additional settings |
+| Offset (from image element start) | Length (bytes) | Content        |
+| --------------------------------- | -------------- | -------------- |
+| 0                                 | 8              | Common header  |
+| 8                                 | 8              | Position       |
+| 16                                | 4              | Text align     |
+| 20                                | 4              | Position X     |
+| 24                                | 4              | Position Y     |
+| 28                                | 4              | Block width    |
+| 32                                | 4              | Block height   |
+| 36                                | 4              | Length of data |
 
 #### Image Data
 
