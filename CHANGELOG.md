@@ -13,13 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Small README.md content change
-* Changed code to make it Black compliant
-* Support for options as part of the print params
+*
 
 ### Fixed
 
 *
+
+## [0.3.0] - 2024-04-30
+
+### Changed
+
+* Small README.md content change
+* Changed code to make it Black compliant
+* Support for options as part of the print params
 
 ## [0.2.0] - 2023-05-07
 
