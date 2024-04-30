@@ -59,6 +59,7 @@ class ColonyPrintNode(object):
         name = job.get("name", "undefined")
         printer = job.get("printer", None)
         format = job.get("format", None)
+        options = job.get("options", dict())
         printer_s = printer if printer else "default"
 
         # tries to make sure that the format is compatible with the current
@@ -75,7 +76,7 @@ class ColonyPrintNode(object):
 
         logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
         if printer:
-            self.npcolony.print_printer_base64(printer, data_b64)
+            self.npcolony.print_printer_base64(printer, data_b64, options=options)
         else:
             self.npcolony.print_base64(data_b64)
 
