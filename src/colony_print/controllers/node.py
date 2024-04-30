@@ -57,12 +57,15 @@ class NodeController(appier.Controller):
         data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
         name = self.field("name", None)
         type = self.field("type", None)
+        options = self.field("options", None)
         name = name or str(uuid.uuid4())
         job = dict(data_b64=data_b64)
         if name:
             job["name"] = name
         if type:
             job["type"] = type
+        if options:
+            job["options"] = options
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
@@ -103,10 +106,16 @@ class NodeController(appier.Controller):
     def print_printer(self, id, printer):
         data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
         name = self.field("name", None)
+        type = self.field("type", None)
+        options = self.field("options", None)
         name = name or str(uuid.uuid4())
         job = dict(data_b64=data_b64, printer=printer)
         if name:
             job["name"] = name
+        if type:
+            job["type"] = type
+        if options:
+            job["options"] = options
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs

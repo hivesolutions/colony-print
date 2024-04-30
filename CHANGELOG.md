@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Small README.md content change
 * Changed code to make it Black compliant
+* Support for options as part of the print params
 
 ### Fixed
 
