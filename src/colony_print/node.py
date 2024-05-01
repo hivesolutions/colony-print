@@ -65,7 +65,7 @@ class ColonyPrintNode(object):
                 for job in jobs:
                     self.print_job(job)
             except Exception as exception:
-                logging.info("Exception while looping '%s'" % str(exception))
+                logging.warning("Exception while looping '%s'" % str(exception))
                 logging.info("Sleeping for %.2f seconds" % self.sleep_time)
                 time.sleep(self.sleep_time)
 
@@ -106,6 +106,10 @@ class ColonyPrintNode(object):
 
         temp_dir = tempfile.mkdtemp()
         try:
+            logging.debug(
+                "Created temporary directory '%s' for document generation" % temp_dir
+            )
+
             output_path = os.path.join(temp_dir, "%s.pdf" % str(uuid.uuid4()))
             options["output_path"] = output_path
             logging.info(
