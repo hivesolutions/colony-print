@@ -18,6 +18,8 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
 AAAAAAAAAwAAABIZWxsbyBXb3JsZAA="
 
+VALID_OPTIONS = set(["scale", "quality", "email_address"])
+
 
 class NodeController(appier.Controller):
     @appier.route("/nodes", "GET", json=True)
@@ -65,7 +67,9 @@ class NodeController(appier.Controller):
         if type:
             job["type"] = type
         if options:
-            job["options"] = options
+            job["options"] = dict(
+                (k, v) for k, v in options.items() if k in VALID_OPTIONS
+            )
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
@@ -115,7 +119,9 @@ class NodeController(appier.Controller):
         if type:
             job["type"] = type
         if options:
-            job["options"] = options
+            job["options"] = dict(
+                (k, v) for k, v in options.items() if k in VALID_OPTIONS
+            )
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs

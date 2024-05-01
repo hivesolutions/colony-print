@@ -1,3 +1,4 @@
 netius
 pymongo
 redis
+mailme-api
