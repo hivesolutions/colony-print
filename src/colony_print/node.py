@@ -121,7 +121,8 @@ class ColonyPrintNode(object):
             # does some busy waiting for the output file to be created
             # the process handling the PDF printing is asynchronous
             for _ in range(10):
-                if os.path.exists(output_path): break
+                if os.path.exists(output_path):
+                    break
                 time.sleep(0.5)
 
             file = open(output_path, "rb")
