@@ -118,6 +118,12 @@ class ColonyPrintNode(object):
 
             self.npcolony.print_printer_base64(printer, data_b64, options=options)
 
+            # does some busy waiting for the output file to be created
+            # the process handling the PDF printing is asynchronous
+            for _ in range(10):
+                if os.path.exists(output_path): break
+                time.sleep(0.5)
+
             file = open(output_path, "rb")
             try:
                 data = file.read()
