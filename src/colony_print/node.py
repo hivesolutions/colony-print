@@ -28,6 +28,7 @@ class ColonyPrintNode(object):
     def __init__(self, sleep_time=SLEEP_TIME):
         self.sleep_time = sleep_time
         self.node_mode = None
+        self.node_printer = None
         self.node_email_address = None
 
     def loop(self):
@@ -41,6 +42,7 @@ class ColonyPrintNode(object):
         node_name = appier.conf("NODE_NAME", "node")
         node_location = appier.conf("NODE_LOCATION", "undefined")
         self.node_mode = appier.conf("NODE_MODE", "normal")
+        self.node_printer = appier.conf("NODE_PRINTER", "default")
         self.node_email_address = appier.conf("NODE_EMAIL_ADDRESS", "normal")
 
         headers = dict()
@@ -80,7 +82,7 @@ class ColonyPrintNode(object):
         printer = job.get("printer", None)
         format = job.get("format", None)
         options = job.get("options", dict())
-        printer_s = printer if printer else "default"
+        printer_s = printer if printer else self.node_printer
 
         self._ensure_format(format)
 
@@ -98,7 +100,7 @@ class ColonyPrintNode(object):
         printer = job.get("printer", None)
         format = job.get("format", None)
         options = job.get("options", dict())
-        printer_s = printer if printer else "default"
+        printer_s = printer if printer else self.node_printer
 
         self._ensure_format(format)
 
@@ -109,8 +111,8 @@ class ColonyPrintNode(object):
             logging.info(
                 "Generating document job '%s' with '%s' printer" % (name, printer_s)
             )
-            if printer:
-                self.npcolony.print_printer_base64(printer, data_b64, options=options)
+
+            self.npcolony.print_printer_base64(printer, data_b64, options=options)
 
             file = open(output_path, "rb")
             try:
