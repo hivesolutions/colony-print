@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Busy waiting for the print job to finish
 
 ## [0.3.1] - 2024-05-01
 
