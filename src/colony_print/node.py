@@ -29,7 +29,7 @@ class ColonyPrintNode(object):
         self.sleep_time = sleep_time
         self.node_mode = None
         self.node_printer = None
-        self.node_email_address = None
+        self.node_email_receivers = None
 
     def loop(self):
         logging.basicConfig(
@@ -43,7 +43,10 @@ class ColonyPrintNode(object):
         node_location = appier.conf("NODE_LOCATION", "undefined")
         self.node_mode = appier.conf("NODE_MODE", "normal")
         self.node_printer = appier.conf("NODE_PRINTER", "default")
-        self.node_email_address = appier.conf("NODE_EMAIL_ADDRESS", "normal")
+        self.node_email_receivers = appier.conf("NODE_EMAIL_RECEIVER", [], cast=list)
+        self.node_email_receivers = appier.conf(
+            "NODE_EMAIL_RECEIVERS", self.node_email_receivers, cast=list
+        )
 
         headers = dict()
         if secret_key:
@@ -131,16 +134,23 @@ class ColonyPrintNode(object):
             finally:
                 file.close()
 
-            receivers = [options.get("email_address", self.node_email_address)]
+            # computes the complete list of email receivers using the
+            # base instance value and the ones provided via options
+            email_receivers = list(self.node_email_receivers)
+            email_receiver = options.get("email_receiver", None)
+            if email_receiver:
+                email_receivers += [email_receiver]
+            email_receivers += options.get("email_receivers", [])
+
             logging.info(
                 "Sending email to %s for job '%s' with '%s' printer"
-                % (",".join(receivers), name, printer_s)
+                % (",".join(email_receivers), name, printer_s)
             )
 
             api = mailme.API()
             api.send(
                 mailme.MessagePayload(
-                    receivers=receivers,
+                    receivers=email_receivers,
                     subject="Print job '%s'" % name,
                     attachments=[
                         mailme.AttachmentPayload(
