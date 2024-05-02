@@ -23,6 +23,20 @@ NODE_MODES = set(["normal", "email"])
 """ The set of running modes that are considered to be valid for
 the node, this is going to be used to validate the mode """
 
+EMAIL_TEMPLATE = """
+Hey there!
+
+Great news — your document **#%s** has just gone through a virtual transformation and is now rocking the PDF stage! 🎸📄 Ready to take a look? Check out the attachment—it's dressed to impress.
+
+We hope you find everything in perfect harmony. Should you need a replay, just hit 'print' again!
+
+Keep on printing,
+
+Your's dear 'Colony Print'
+
+P.S. No trees were harmed in the making of this PDF. 🌳✌️
+"""
+
 
 class ColonyPrintNode(object):
     def __init__(self, sleep_time=SLEEP_TIME):
@@ -104,6 +118,7 @@ class ColonyPrintNode(object):
         format = job.get("format", None)
         options = job.get("options", dict())
         printer_s = printer if printer else self.node_printer
+        short_name = name[-12:]
 
         self._ensure_format(format)
 
@@ -153,7 +168,9 @@ class ColonyPrintNode(object):
             api.send(
                 mailme.MessagePayload(
                     receivers=email_receivers,
-                    subject="Print job '%s'" % name,
+                    title="Your PDF Masterpiece Awaits!",
+                    subject="Print Job #%s is Ready!" % short_name,
+                    contents=EMAIL_TEMPLATE % name,
                     attachments=[
                         mailme.AttachmentPayload(
                             name="%s.pdf" % name,
