@@ -13,11 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Better support for email receiver processing
+*
 
 ### Fixed
 
 *
+
+## [0.3.3] - 2024-05-02
+
+### Changed
+
+* Better support for email receiver processing
 
 ## [0.3.2] - 2024-05-01
 
