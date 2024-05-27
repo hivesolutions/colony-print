@@ -105,7 +105,7 @@ class ColonyPrintNode(object):
 
         logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
         if printer:
-            self.npcolony.print_printer_base64(printer, data_b64, options=options)
+            self.npcolony.print_printer_base64(printer_s, data_b64, options=options)
         else:
             self.npcolony.print_base64(data_b64)
 
@@ -134,7 +134,7 @@ class ColonyPrintNode(object):
                 "Generating document job '%s' with '%s' printer" % (name, printer_s)
             )
 
-            self.npcolony.print_printer_base64(printer, data_b64, options=options)
+            self.npcolony.print_printer_base64(printer_s, data_b64, options=options)
 
             # does some busy waiting for the output file to be created
             # the process handling the PDF printing is asynchronous
