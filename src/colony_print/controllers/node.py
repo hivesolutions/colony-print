@@ -64,7 +64,7 @@ class NodeController(appier.Controller):
         if not id == job_info["node_id"]:
             raise appier.OperationalError("Node ID mismatch")
 
-        job_info.update(status="done", done_time=time.time(), result=result)
+        job_info.update(status="finished", finish_time=time.time(), result=result)
 
         # TODO: implement the job result handling logic
         # including the storage of external files (eg: PDFs)
