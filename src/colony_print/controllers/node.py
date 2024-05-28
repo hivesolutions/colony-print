@@ -3,6 +3,7 @@
 
 import json
 import uuid
+import time
 
 import appier
 
@@ -64,7 +65,7 @@ class NodeController(appier.Controller):
         job_id = str(uuid.uuid4())
         name = name or job_id
 
-        job_info = dict(id=job_id, name=name)
+        job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
             job_info["type"] = type
         if options:
@@ -83,6 +84,7 @@ class NodeController(appier.Controller):
         self.owner.jobs[id] = jobs
         appier.notify("jobs:%s" % id)
 
+        job_info.update(status="queued", queued_time=time.time())
         return job_info
 
     @appier.route("/nodes/<str:id>/print", "OPTIONS")
@@ -126,7 +128,9 @@ class NodeController(appier.Controller):
         job_id = str(uuid.uuid4())
         name = name or job_id
 
-        job_info = dict(id=job_id, name=name, printer=printer)
+        job_info = dict(
+            id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
+        )
         if type:
             job_info["type"] = type
         if options:
@@ -138,13 +142,14 @@ class NodeController(appier.Controller):
         # creates a copy of the job info as starting
         # point for the job structure and then adds
         # the "heavy" data (base64 encoded) to it
-        job = dict(job_info).update()
+        job = dict(job_info)
         job["data_b64"] = data_b64
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
         appier.notify("jobs:%s" % id)
 
+        job_info.update(status="queued", queued_time=time.time())
         return job_info
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
@@ -169,3 +174,6 @@ class NodeController(appier.Controller):
             for value in appier.wait("jobs:%s" % id):
                 yield value
         yield json.dumps(jobs)
+        for job in jobs:
+            job_info = self.owner.jobs_info[job["id"]]
+            job_info.update(status="printing", printing_time=time.time())
