@@ -60,20 +60,30 @@ class NodeController(appier.Controller):
         name = self.field("name", None)
         type = self.field("type", None)
         options = self.field("options", None)
-        name = name or str(uuid.uuid4())
-        job = dict(data_b64=data_b64)
-        if name:
-            job["name"] = name
+
+        job_id = str(uuid.uuid4())
+        name = name or job_id
+
+        job_info = dict(id=job_id, name=name)
         if type:
-            job["type"] = type
+            job_info["type"] = type
         if options:
-            job["options"] = dict(
+            job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
+        self.owner.jobs_info[job_id] = job_info
+
+        # creates a copy of the job info as starting
+        # point for the job structure and then adds
+        # the "heavy" data (base64 encoded) to it
+        job = dict(job_info)
+        job["data_b64"] = data_b64
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
         appier.notify("jobs:%s" % id)
+
+        return job_info
 
     @appier.route("/nodes/<str:id>/print", "OPTIONS")
     def print_default_o(self, id):
@@ -112,20 +122,30 @@ class NodeController(appier.Controller):
         name = self.field("name", None)
         type = self.field("type", None)
         options = self.field("options", None)
-        name = name or str(uuid.uuid4())
-        job = dict(data_b64=data_b64, printer=printer)
-        if name:
-            job["name"] = name
+
+        job_id = str(uuid.uuid4())
+        name = name or job_id
+
+        job_info = dict(id=job_id, name=name, printer=printer)
         if type:
-            job["type"] = type
+            job_info["type"] = type
         if options:
-            job["options"] = dict(
+            job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
+        self.owner.jobs_info[job_id] = job_info
+
+        # creates a copy of the job info as starting
+        # point for the job structure and then adds
+        # the "heavy" data (base64 encoded) to it
+        job = dict(job_info).update()
+        job["data_b64"] = data_b64
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
         appier.notify("jobs:%s" % id)
+
+        return job_info
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
     def print_printer_o(self, id, printer):

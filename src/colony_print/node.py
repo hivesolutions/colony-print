@@ -137,7 +137,8 @@ class ColonyPrintNode(object):
             self.npcolony.print_printer_base64(printer_s, data_b64, options=options)
 
             # does some busy waiting for the output file to be created
-            # the process handling the PDF printing is asynchronous
+            # note that the process of handling the PDF printing is
+            # asynchronous and may take some time to be completed
             for _ in range(10):
                 if os.path.exists(output_path):
                     break
@@ -164,6 +165,8 @@ class ColonyPrintNode(object):
                 % (",".join(email_receivers), name, printer_s)
             )
 
+            # creates the mailme API instance and sends the email with
+            # the generated PDF file as attachment to the email receivers
             api = mailme.API()
             api.send(
                 mailme.MessagePayload(
