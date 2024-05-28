@@ -54,6 +54,21 @@ class NodeController(appier.Controller):
         jobs = self.owner.jobs.get(id, [])
         return jobs
 
+    @appier.route("/nodes/<str:id>/jobs/<str:id>/result", "POST", json=True)
+    @appier.ensure(token="admin")
+    def job_result(self, id, job_id):
+        result = self.field("result", "success")
+        files = self.field("files", [])
+
+        job_info = self.owner.jobs_info[job_id]
+        if not id == job_info["node_id"]:
+            raise appier.OperationalError("Node ID mismatch")
+
+        job_info.update(status="done", done_time=time.time(), result=result)
+
+        # TODO: implement the job result handling logic
+        # including the storage of external files (eg: PDFs)
+
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json=True)
     @appier.ensure(token="admin")
     def print_default(self, id):
