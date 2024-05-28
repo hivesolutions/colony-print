@@ -54,7 +54,7 @@ class NodeController(appier.Controller):
         jobs = self.owner.jobs.get(id, [])
         return jobs
 
-    @appier.route("/nodes/<str:id>/jobs/<str:id>/result", "POST", json=True)
+    @appier.route("/nodes/<str:id>/jobs/<str:job_id>/result", "POST", json=True)
     @appier.ensure(token="admin")
     def job_result(self, id, job_id):
         result = self.field("result", "success")
