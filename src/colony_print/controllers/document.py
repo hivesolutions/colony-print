@@ -40,6 +40,24 @@ class DocumentController(appier.Controller):
         return self.send_print(data, format=format)
 
     def send_print(self, data, format="binie"):
+        """
+        Converts the provided data (XMPL) into the target format,
+        either Binie or PDF, and then sends then returns the converted
+        data back to the client.
+
+        This method is expected to be running inside an Appier request
+        handling context, as it sets content type and other headers.
+
+        :type data: String
+        :param data: The data to be converted into the target format.
+        :type format: String
+        :param format: The target format to be used for the conversion.
+        :rtype: String
+        :return: The converted data in the target format.
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/xmpl.md
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/binie.md
+        """
+
         # retrieves the various optional fields for printing
         # and then parses them creating the composite values
         # (should include the size tuple)
