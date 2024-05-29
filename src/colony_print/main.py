@@ -25,6 +25,7 @@ class ColonyPrintApp(appier.APIApp):
     def _observations(self):
         return "Printing in the cloud"
 
+
 if __name__ == "__main__":
     app = ColonyPrintApp()
     app.serve()
