@@ -16,13 +16,13 @@ class ColonyPrintApp(appier.APIApp):
             max_size=appier.conf("JOB_SIZE", 1024, cast=int)
         )
 
-    def _version(self) -> str:
+    def _version(self):
         return "0.3.3"
 
-    def _description(self) -> str:
+    def _description(self):
         return "Colony Print"
 
-    def _observations(self) -> str:
+    def _observations(self):
         return "Printing in the cloud"
 
 if __name__ == "__main__":
