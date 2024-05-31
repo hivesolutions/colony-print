@@ -239,6 +239,8 @@ class ColonyPrintNode(object):
         else:
             self.npcolony.print_base64(data_b64)
 
+        return dict()
+
     def _handle_text(self, data_b64):
         return dict(
             files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
