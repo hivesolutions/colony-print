@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
 import json
 import uuid
 import time
@@ -57,23 +58,30 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/jobs/<str:job_id>/result", "POST", json=True)
     @appier.ensure(token="admin")
     def job_result(self, id, job_id):
+        data_path = appier.conf("DATA_PATH", "./data")
+        job_path = os.path.join(data_path, job_id)
+
         payload = appier.get_object()
-        result = payload.get("result", "success")
-        handler = payload.get("handler", None)
         data = payload.get("data", dict())
-        files = data.get("files", [])
+        files = data.pop("files", [])
 
         job_info = self.owner.jobs_info[job_id]
         if not id == job_info["node_id"]:
             raise appier.OperationalError("Node ID mismatch")
 
-        job_info.update(status="finished", finish_time=time.time(), result=result)
+        if (payload or files) and not os.path.exists(job_path):
+            os.makedirs(job_path)
+
+        if payload:
+            payload_s = json.dumps(payload).encode("utf-8")
+            with open(os.path.join(job_path, "payload.json"), "wb") as _file:
+                _file.write(payload_s)
 
         for file in files:
-            print(file)
+            _file = appier.File(file)
+            _file.save(path=os.path.join(job_path, _file.file_name))
 
-        # TODO: implement the job result handling logic
-        # including the storage of external files (eg: PDFs)
+        job_info.update(status="finished", finish_time=time.time(), result=payload)
 
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json=True)
     @appier.ensure(token="admin")
