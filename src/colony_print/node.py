@@ -79,8 +79,24 @@ class ColonyPrintNode(object):
                     base_url + "nodes/%s/jobs" % node_id, headers=headers, timeout=600
                 )
                 logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
+                results = dict()
                 for job in jobs:
-                    self.print_job(job)
+                    try:
+                        result = self.print_job(job)
+                    except Exception as exception:
+                        logging.warning(
+                            "Exception while printing job '%s': %s"
+                            % (job["id"], str(exception))
+                        )
+                        result = dict(result="error", error=str(exception))
+                    results[job["id"]] = result
+                for job_id, result in results.items():
+                    logging.info("Posting job result for '%s'" % job_id)
+                    appier.post(
+                        base_url + "nodes/%s/jobs/%s/result" % (node_id, job_id),
+                        data_j=result,
+                        headers=headers,
+                    )
             except Exception as exception:
                 logging.warning("Exception while looping '%s'" % str(exception))
                 logging.info("Sleeping for %.2f seconds" % self.sleep_time)
@@ -92,22 +108,7 @@ class ColonyPrintNode(object):
         return getattr(self, "print_job_" + self.node_mode)(job)
 
     def print_job_normal(self, job):
-        # unpacks the complete set of job information to
-        # be able to print the job in the current system
-        data_b64 = job["data_b64"]
-        name = job.get("name", "undefined")
-        printer = job.get("printer", None)
-        format = job.get("format", None)
-        options = job.get("options", dict())
-        printer_s = printer if printer else self.node_printer
-
-        self._ensure_format(format)
-
-        logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
-        if printer:
-            self.npcolony.print_printer_base64(printer_s, data_b64, options=options)
-        else:
-            self.npcolony.print_base64(data_b64)
+        return self._handle_job(job)
 
     def print_job_email(self, job):
         import mailme
@@ -134,10 +135,15 @@ class ColonyPrintNode(object):
                 "Generating document job '%s' with '%s' printer" % (name, printer_s)
             )
 
-            self.npcolony.print_printer_base64(printer_s, data_b64, options=options)
+            # sends the print job for handling using npcolony, this will make
+            # sure that the job is printed in the current system
+            self._handle_npcolony(
+                data_b64, format=format, printer=printer_s, options=options
+            )
 
             # does some busy waiting for the output file to be created
-            # the process handling the PDF printing is asynchronous
+            # note that the process of handling the PDF printing is
+            # asynchronous and may take some time to be completed
             for _ in range(10):
                 if os.path.exists(output_path):
                     break
@@ -164,6 +170,8 @@ class ColonyPrintNode(object):
                 % (",".join(email_receivers), name, printer_s)
             )
 
+            # creates the mailme API instance and sends the email with
+            # the generated PDF file as attachment to the email receivers
             api = mailme.API()
             api.send(
                 mailme.MessagePayload(
@@ -183,11 +191,58 @@ class ColonyPrintNode(object):
         finally:
             shutil.rmtree(temp_dir)
 
+        return dict(
+            result="success",
+            mode="email",
+            handler="npcolony",
+            email_sent=True,
+            receivers=email_receivers,
+        )
+
     @property
     def npcolony(self):
         import npcolony
 
         return npcolony
+
+    def _handle_job(self, job):
+        # unpacks the complete set of job information to
+        # be able to print the job in the current system
+        data_b64 = job["data_b64"]
+        name = job.get("name", "undefined")
+        printer = job.get("printer", None)
+        type = job.get("type", None)
+        format = job.get("format", None)
+        options = job.get("options", dict())
+        printer_s = printer if printer else self.node_printer
+
+        logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
+        if format:
+            logging.info("Using format '%s' for job '%s'" % (format, name))
+
+        if type in (None, "npcolony"):
+            result = self._handle_npcolony(
+                data_b64, format=format, printer=printer_s, options=options
+            )
+            return dict(
+                result="success", handler="npcolony", printer=printer_s, data=result
+            )
+        elif type in ("text",):
+            result = self._handle_text(data_b64)
+            return dict(result="success", handler="text", data=result)
+
+    def _handle_npcolony(self, data_b64, format=None, printer=None, options=dict()):
+        self._ensure_format(format)
+
+        if printer:
+            self.npcolony.print_printer_base64(printer, data_b64, options=options)
+        else:
+            self.npcolony.print_base64(data_b64)
+
+    def _handle_text(self, data_b64):
+        return dict(
+            files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
+        )
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current

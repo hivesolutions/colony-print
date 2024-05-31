@@ -32,6 +32,7 @@ class PrintingManager(object):
 
         pdf_handler = colony_print.PrintingPDF()
         binie_handler = colony_print.PrintingBinie()
+
         self.load_handler(pdf_handler)
         self.load_handler(binie_handler)
 

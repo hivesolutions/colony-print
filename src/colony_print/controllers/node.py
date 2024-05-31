@@ -1,8 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
 import json
 import uuid
+import time
 
 import appier
 
@@ -53,27 +55,69 @@ class NodeController(appier.Controller):
         jobs = self.owner.jobs.get(id, [])
         return jobs
 
+    @appier.route("/nodes/<str:id>/jobs/<str:job_id>/result", "POST", json=True)
+    @appier.ensure(token="admin")
+    def job_result(self, id, job_id):
+        data_path = appier.conf("DATA_PATH", "./data")
+        job_path = os.path.join(data_path, job_id)
+
+        payload = appier.get_object()
+        data = payload.get("data", dict())
+        files = data.pop("files", [])
+
+        job_info = self.owner.jobs_info[job_id]
+        if not id == job_info["node_id"]:
+            raise appier.OperationalError("Node ID mismatch")
+
+        if (payload or files) and not os.path.exists(job_path):
+            os.makedirs(job_path)
+
+        if payload:
+            payload_s = json.dumps(payload).encode("utf-8")
+            with open(os.path.join(job_path, "payload.json"), "wb") as _file:
+                _file.write(payload_s)
+
+        for file in files:
+            _file = appier.File(file)
+            _file.save(path=os.path.join(job_path, _file.file_name))
+
+        job_info.update(status="finished", finish_time=time.time(), result=payload)
+
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json=True)
     @appier.ensure(token="admin")
     def print_default(self, id):
         data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
         name = self.field("name", None)
         type = self.field("type", None)
+        format = self.field("format", None)
         options = self.field("options", None)
-        name = name or str(uuid.uuid4())
-        job = dict(data_b64=data_b64)
-        if name:
-            job["name"] = name
+
+        job_id = str(uuid.uuid4())
+        name = name or job_id
+
+        job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
-            job["type"] = type
+            job_info["type"] = type
+        if format:
+            job_info["format"] = format
         if options:
-            job["options"] = dict(
+            job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
+        self.owner.jobs_info[job_id] = job_info
+
+        # creates a copy of the job info as starting
+        # point for the job structure and then adds
+        # the "heavy" data (base64 encoded) to it
+        job = dict(job_info)
+        job["data_b64"] = data_b64
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
         appier.notify("jobs:%s" % id)
+
+        job_info.update(status="queued", queued_time=time.time())
+        return job_info
 
     @appier.route("/nodes/<str:id>/print", "OPTIONS")
     def print_default_o(self, id):
@@ -111,21 +155,37 @@ class NodeController(appier.Controller):
         data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
         name = self.field("name", None)
         type = self.field("type", None)
+        format = self.field("format", None)
         options = self.field("options", None)
-        name = name or str(uuid.uuid4())
-        job = dict(data_b64=data_b64, printer=printer)
-        if name:
-            job["name"] = name
+
+        job_id = str(uuid.uuid4())
+        name = name or job_id
+
+        job_info = dict(
+            id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
+        )
         if type:
-            job["type"] = type
+            job_info["type"] = type
+        if format:
+            job_info["format"] = format
         if options:
-            job["options"] = dict(
+            job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
+        self.owner.jobs_info[job_id] = job_info
+
+        # creates a copy of the job info as starting
+        # point for the job structure and then adds
+        # the "heavy" data (base64 encoded) to it
+        job = dict(job_info)
+        job["data_b64"] = data_b64
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
         appier.notify("jobs:%s" % id)
+
+        job_info.update(status="queued", queued_time=time.time())
+        return job_info
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
     def print_printer_o(self, id, printer):
@@ -149,3 +209,6 @@ class NodeController(appier.Controller):
             for value in appier.wait("jobs:%s" % id):
                 yield value
         yield json.dumps(jobs)
+        for job in jobs:
+            job_info = self.owner.jobs_info[job["id"]]
+            job_info.update(status="printing", printing_time=time.time())

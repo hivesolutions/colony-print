@@ -12,6 +12,18 @@ class ColonyPrintApp(appier.APIApp):
         )
         self.nodes = dict()
         self.jobs = dict()
+        self.jobs_info = appier.LimitedSizeDict(
+            max_size=appier.conf("JOB_SIZE", 1024, cast=int)
+        )
+
+    def _version(self):
+        return "0.3.3"
+
+    def _description(self):
+        return "Colony Print"
+
+    def _observations(self):
+        return "Printing in the cloud"
 
 
 if __name__ == "__main__":

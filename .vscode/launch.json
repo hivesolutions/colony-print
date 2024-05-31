@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [{
+        "name": "Python",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "colony_print",
+        "justMyCode": false,
+        "env": {
+            "PYTHONPATH": "src"
+        }
+    }, {
+        "name": "Python (Node)",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "colony_print.node",
+        "justMyCode": false,
+        "env": {
+            "PYTHONPATH": "src"
+        }
+    }]
+}
