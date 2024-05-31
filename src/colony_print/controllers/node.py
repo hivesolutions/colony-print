@@ -5,6 +5,7 @@ import os
 import json
 import uuid
 import time
+import base64
 
 import appier
 
@@ -86,14 +87,31 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json=True)
     @appier.ensure(token="admin")
     def print_default(self, id):
-        data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
+        data = self.field("data", None)
+        data_b64 = self.field("data_b64", None)
         name = self.field("name", None)
         type = self.field("type", None)
         format = self.field("format", None)
         options = self.field("options", None)
 
+        appier.verify(
+            data or data_b64,
+            message="Either data or data_b64 fields must be provided",
+            code=400,
+        )
+        appier.verify(
+            not (data and data_b64),
+            message="Only one of data or data_b64 fields must be provided",
+            code=400,
+        )
+
         job_id = str(uuid.uuid4())
         name = name or job_id
+        data_b64 = (
+            base64.b64encode(appier.legacy.bytes(data, encoding="utf-8"))
+            if data
+            else data_b64
+        )
 
         job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
@@ -152,14 +170,31 @@ class NodeController(appier.Controller):
     )
     @appier.ensure(token="admin")
     def print_printer(self, id, printer):
-        data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
+        data = self.field("data", None)
+        data_b64 = self.field("data_b64", None)
         name = self.field("name", None)
         type = self.field("type", None)
         format = self.field("format", None)
         options = self.field("options", None)
 
+        appier.verify(
+            data or data_b64,
+            message="Either data or data_b64 fields must be provided",
+            code=400,
+        )
+        appier.verify(
+            not (data and data_b64),
+            message="Only one of data or data_b64 fields must be provided",
+            code=400,
+        )
+
         job_id = str(uuid.uuid4())
         name = name or job_id
+        data_b64 = (
+            base64.b64encode(appier.legacy.bytes(data, encoding="utf-8"))
+            if data
+            else data_b64
+        )
 
         job_info = dict(
             id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
