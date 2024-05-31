@@ -57,14 +57,20 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/jobs/<str:job_id>/result", "POST", json=True)
     @appier.ensure(token="admin")
     def job_result(self, id, job_id):
-        result = self.field("result", "success")
-        files = self.field("files", [])
+        payload = appier.get_object()
+        result = payload.get("result", "success")
+        handler = payload.get("handler", None)
+        data = payload.get("data", dict())
+        files = data.get("files", [])
 
         job_info = self.owner.jobs_info[job_id]
         if not id == job_info["node_id"]:
             raise appier.OperationalError("Node ID mismatch")
 
         job_info.update(status="finished", finish_time=time.time(), result=result)
+
+        for file in files:
+            print(file)
 
         # TODO: implement the job result handling logic
         # including the storage of external files (eg: PDFs)
@@ -75,6 +81,7 @@ class NodeController(appier.Controller):
         data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
         name = self.field("name", None)
         type = self.field("type", None)
+        format = self.field("format", None)
         options = self.field("options", None)
 
         job_id = str(uuid.uuid4())
@@ -83,6 +90,8 @@ class NodeController(appier.Controller):
         job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
             job_info["type"] = type
+        if format:
+            job_info["format"] = format
         if options:
             job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
@@ -138,6 +147,7 @@ class NodeController(appier.Controller):
         data_b64 = self.field("data_b64", mandatory=True, not_empty=True)
         name = self.field("name", None)
         type = self.field("type", None)
+        format = self.field("format", None)
         options = self.field("options", None)
 
         job_id = str(uuid.uuid4())
@@ -148,6 +158,8 @@ class NodeController(appier.Controller):
         )
         if type:
             job_info["type"] = type
+        if format:
+            job_info["format"] = format
         if options:
             job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS

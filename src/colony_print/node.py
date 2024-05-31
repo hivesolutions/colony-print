@@ -204,6 +204,7 @@ class ColonyPrintNode(object):
         data_b64 = job["data_b64"]
         name = job.get("name", "undefined")
         printer = job.get("printer", None)
+        type = job.get("type", None)
         format = job.get("format", None)
         options = job.get("options", dict())
         printer_s = printer if printer else self.node_printer
@@ -212,14 +213,14 @@ class ColonyPrintNode(object):
         if format:
             logging.info("Using format '%s' for job '%s'" % (format, name))
 
-        if format in (None, "binie", "pdf"):
+        if type in (None, "npcolony"):
             result = self._handle_npcolony(
                 data_b64, format=format, printer=printer_s, options=options
             )
             return dict(
                 result="success", handler="npcolony", printer=printer_s, data=result
             )
-        elif format in ("text",):
+        elif type in ("text",):
             result = self._handle_text(data_b64)
             return dict(result="success", handler="text", data=result)
 
@@ -232,7 +233,9 @@ class ColonyPrintNode(object):
             self.npcolony.print_base64(data_b64)
 
     def _handle_text(self, data_b64):
-        return data_b64
+        return dict(
+            files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
+        )
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
