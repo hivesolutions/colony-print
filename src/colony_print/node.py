@@ -81,7 +81,14 @@ class ColonyPrintNode(object):
                 logging.info("Retrieved %d jobs for node '%s'" % (len(jobs), node_id))
                 results = dict()
                 for job in jobs:
-                    result = self.print_job(job)
+                    try:
+                        result = self.print_job(job)
+                    except Exception as exception:
+                        logging.warning(
+                            "Exception while printing job '%s': %s"
+                            % (job["id"], str(exception))
+                        )
+                        result = dict(result="error", error=str(exception))
                     results[job["id"]] = result
                 for job_id, result in results.items():
                     logging.info("Posting job result for '%s'" % job_id)
