@@ -108,7 +108,9 @@ class NodeController(appier.Controller):
         job_id = str(uuid.uuid4())
         name = name or job_id
         data_b64 = (
-            base64.b64encode(appier.legacy.bytes(data, encoding="utf-8"))
+            base64.b64encode(appier.legacy.bytes(data, encoding="utf-8")).decode(
+                "utf-8"
+            )
             if data
             else data_b64
         )
@@ -191,7 +193,9 @@ class NodeController(appier.Controller):
         job_id = str(uuid.uuid4())
         name = name or job_id
         data_b64 = (
-            base64.b64encode(appier.legacy.bytes(data, encoding="utf-8"))
+            base64.b64encode(appier.legacy.bytes(data, encoding="utf-8")).decode(
+                "utf-8"
+            )
             if data
             else data_b64
         )
