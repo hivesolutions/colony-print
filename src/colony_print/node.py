@@ -4,6 +4,7 @@
 import os
 import time
 import uuid
+import json
 import base64
 import shutil
 import logging
@@ -71,7 +72,9 @@ class ColonyPrintNode(object):
                 logging.info("Submitting node information")
                 appier.post(
                     base_url + "nodes/%s" % node_id,
-                    data_j=dict(name=node_name, location=node_location),
+                    data_j=dict(
+                        name=node_name, engines=self.engines, location=node_location
+                    ),
                     headers=headers,
                 )
                 logging.info("Retrieving jobs for node '%s'" % node_id)
@@ -205,6 +208,17 @@ class ColonyPrintNode(object):
 
         return npcolony
 
+    @property
+    def engines(self):
+        engines = []
+        if self._has_npcolony():
+            engines.append("npcolony")
+        if self._has_gravo():
+            engines.append("gravo")
+        if self._has_text():
+            engines.append("text")
+        return engines
+
     def _handle_job(self, job):
         # unpacks the complete set of job information to
         # be able to print the job in the current system
@@ -227,6 +241,9 @@ class ColonyPrintNode(object):
             return dict(
                 result="success", handler="npcolony", printer=printer_s, data=result
             )
+        elif type in ("gravo",):
+            result = self._handle_gravo(data_b64)
+            return dict(result="success", handler="gravo", data=result)
         elif type in ("text",):
             result = self._handle_text(data_b64)
             return dict(result="success", handler="text", data=result)
@@ -241,10 +258,55 @@ class ColonyPrintNode(object):
 
         return dict()
 
+    def _handle_gravo(self, data_b64):
+        import gravo_pilot
+
+        data = base64.b64decode(data_b64)
+        data_j = json.loads(data)
+
+        text = data_j["text"]
+        font = data_j.get("font", "HELVETICA 1L")
+        dry_run = data_j.get("dry_run", False)
+
+        start = time.time()
+        screenshots = gravo_pilot.GravostyleAPI().write_text(
+            text, font=font, dry_run=dry_run
+        )
+        duration = time.time() - start
+
+        files = []
+
+        for screenshot in screenshots:
+            name, image = screenshot
+            buffer = appier.legacy.BytesIO()
+            image.save(buffer, format="PNG")
+            data = buffer.getvalue()
+            _data_b64 = base64.b64encode(data)
+            files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
+
+        return dict(duration=duration, files=files)
+
     def _handle_text(self, data_b64):
         return dict(
             files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
         )
+
+    def _has_npcolony(self):
+        try:
+            __import__("npcolony")
+        except Exception:
+            return False
+        return True
+
+    def _has_gravo(self):
+        try:
+            __import__("gravo_pilot")
+        except Exception:
+            return False
+        return True
+
+    def _has_text(self):
+        return True
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
