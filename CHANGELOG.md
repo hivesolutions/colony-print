@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+*
+
+### Changed
+
+*
+
+### Fixed
+
+*
+
+## [0.4.0] - 2024-06-03
+
+### Added
+
 * Support for new print job status visibility and result - [#7](https://github.com/hivesolutions/colony-print/issues/7)
 * Support for plain `data` field encoding - [#10](https://github.com/hivesolutions/colony-print/issues/10)
 * Support for gravo pilot printing - [#12](https://github.com/hivesolutions/colony-print/issues/12)
@@ -16,10 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Created template content using ChatGPT
-
-### Fixed
-
-*
 
 ## [0.3.3] - 2024-05-02
 
