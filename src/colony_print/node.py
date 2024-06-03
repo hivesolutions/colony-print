@@ -268,7 +268,9 @@ class ColonyPrintNode(object):
         font = data_j.get("font", "HELVETICA 1L")
         dry_run = data_j.get("dry_run", False)
 
-        screenshots = gravo_pilot.GravostyleAPI().write_text(text, font=font, dry_run=dry_run)
+        screenshots = gravo_pilot.GravostyleAPI().write_text(
+            text, font=font, dry_run=dry_run
+        )
         files = []
 
         for screenshot in screenshots:
@@ -277,11 +279,9 @@ class ColonyPrintNode(object):
             image.save(buffer, format="PNG")
             data = buffer.getvalue()
             _data_b64 = base64.b64encode(data)
-            files.append(
-                appier.File(dict(name=name, data=_data_b64)).json_v()
-            )
+            files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
 
-        return dict(files = files)
+        return dict(files=files)
 
     def _handle_text(self, data_b64):
         return dict(
