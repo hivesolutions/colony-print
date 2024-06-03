@@ -73,7 +73,10 @@ class ColonyPrintNode(object):
                 appier.post(
                     base_url + "nodes/%s" % node_id,
                     data_j=dict(
-                        name=node_name, engines=self.engines, location=node_location
+                        name=node_name,
+                        location=node_location,
+                        engines=self.engines,
+                        engine_info=self.engine_info,
                     ),
                     headers=headers,
                 )
@@ -219,6 +222,17 @@ class ColonyPrintNode(object):
             engines.append("text")
         return engines
 
+    @property
+    def engine_info(self):
+        engine_info = dict()
+        if self._has_npcolony() and hasattr(self, "_info_npcolony"):
+            engine_info["colony"] = self._info_npcolony()
+        if self._has_gravo() and hasattr(self, "_info_gravo"):
+            engine_info["gravo"] = self._info_gravo()
+        if self._has_text() and hasattr(self, "_info_text"):
+            engine_info["text"] = self._info_text()
+        return engine_info
+
     def _handle_job(self, job):
         # unpacks the complete set of job information to
         # be able to print the job in the current system
@@ -307,6 +321,11 @@ class ColonyPrintNode(object):
 
     def _has_text(self):
         return True
+
+    def _info_npcolony(self):
+        return dict(
+            format=self.npcolony.get_format(), devices=self.npcolony.get_devices()
+        )
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
