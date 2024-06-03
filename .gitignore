@@ -12,3 +12,4 @@ session.shelve*
 /dist
 /build
 /src/colony_print.egg-info
+/src/colony_print/data
