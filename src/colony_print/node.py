@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import time
 import uuid
 import json
@@ -75,8 +76,12 @@ class ColonyPrintNode(object):
                     data_j=dict(
                         name=node_name,
                         location=node_location,
+                        mode=self.node_mode,
+                        node_printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
+                        python=sys.version,
+                        os=os.name,
                     ),
                     headers=headers,
                 )
