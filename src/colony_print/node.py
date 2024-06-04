@@ -13,6 +13,9 @@ import tempfile
 
 import appier
 
+NAME = "colony-print"
+""" The name of the program currently running """
+
 VERSION = "0.4.0"
 """ The version of the colony print node currently running,
 this value should be updated whenever a new version is released """
@@ -68,6 +71,9 @@ class ColonyPrintNode(object):
             "NODE_EMAIL_RECEIVERS", self.node_email_receivers, cast=list
         )
 
+        logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
+        logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
+
         headers = dict()
         if secret_key:
             headers["X-Secret-Key"] = secret_key
@@ -84,7 +90,7 @@ class ColonyPrintNode(object):
                         node_printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
-                        python=sys.version, 
+                        python=sys.version,
                         os=os.name,
                         version=VERSION,
                     ),
