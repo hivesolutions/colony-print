@@ -13,6 +13,10 @@ import tempfile
 
 import appier
 
+VERSION = "0.4.0"
+""" The version of the colony print node currently running,
+this value should be updated whenever a new version is released """
+
 BASE_URL = "https://print.bemisc.com/"
 """ The default base URL to be used for the communication with the
 Colony Print server """
@@ -80,8 +84,9 @@ class ColonyPrintNode(object):
                         node_printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
-                        python=sys.version,
+                        python=sys.version, 
                         os=os.name,
+                        version=VERSION,
                     ),
                     headers=headers,
                 )
