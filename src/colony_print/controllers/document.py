@@ -41,8 +41,8 @@ class DocumentController(appier.Controller):
 
     def send_print(self, data, format="binie"):
         """
-        Converts the provided data (XMPL) into the target format,
-        either Binie or PDF, and then sends then returns the converted
+        Converts ("prints") the provided data (XMPL) into the target
+        format, either Binie or PDF, and then sends the converted
         data back to the client.
 
         This method is expected to be running inside an Appier request
