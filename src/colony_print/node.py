@@ -87,7 +87,7 @@ class ColonyPrintNode(object):
                         name=node_name,
                         location=node_location,
                         mode=self.node_mode,
-                        node_printer=self.node_printer,
+                        printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
                         platform=appier.PLATFORM,
@@ -279,6 +279,9 @@ class ColonyPrintNode(object):
             return dict(result="success", handler="text", data=result)
 
     def _handle_npcolony(self, data_b64, format=None, printer=None, options=dict()):
+        if not self._has_npcolony():
+            raise appier.OperationalError("npcolony engine is not available")
+
         self._ensure_format(format)
 
         if printer:
@@ -289,6 +292,9 @@ class ColonyPrintNode(object):
         return dict()
 
     def _handle_gravo(self, data_b64):
+        if not self._has_gravo():
+            raise appier.OperationalError("gravo engine is not available")
+
         import gravo_pilot
 
         data = base64.b64decode(data_b64)
@@ -317,6 +323,9 @@ class ColonyPrintNode(object):
         return dict(duration=duration, files=files)
 
     def _handle_text(self, data_b64):
+        if not self._has_text():
+            raise appier.OperationalError("text engine is not available")
+
         return dict(
             files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
         )
