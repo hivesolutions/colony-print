@@ -90,7 +90,7 @@ class ColonyPrintNode(object):
                         node_printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
-                        python=sys.version,
+                        platform=appier.PLATFORM,
                         os=os.name,
                         version=VERSION,
                     ),
