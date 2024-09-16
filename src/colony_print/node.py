@@ -302,11 +302,12 @@ class ColonyPrintNode(object):
 
         text = data_j["text"]
         font = data_j.get("font", "HELVETICA 1L")
+        font_size = data_j.get("font_size", None)
         dry_run = data_j.get("dry_run", False)
 
         start = time.time()
         screenshots = gravo_pilot.GravostyleAPI().write_text(
-            text, font=font, dry_run=dry_run
+            text, font=font, font_size=font_size, dry_run=dry_run
         )
         duration = time.time() - start
 
