@@ -9,6 +9,8 @@ This project includes two main components:
 
 ## Features
 
+* Cloud printing, with minimal configuration
+* Multiple engine support (npcolony, gravo, text)
 * XMPL to Binie conversion
 * PDF generation with custom fonts and images
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
