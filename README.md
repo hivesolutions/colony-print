@@ -57,6 +57,14 @@ into the `/usr/share/fonts/truetype` directory so they are exposed and ready to
 be used by the PDF generation infra-structure. For example, Calibri is one type of font that should
 be exported to a UNIX machine as many colony-generated documents use it.
 
+### Engines
+
+There are currently three engines available for printing in Colony Print:
+
+* `npcolony` - The [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) engine, which is used for GDI printing on Windows and CUPS printing on Linux.
+* `gravo` - Which allows engraving of text and signatures using [Gravo Pilot](https://github.com/hivesolutions/gravo-pilot).
+* `text` - A simple virtual printer text engine that prints text to a simple plain text file and returns the file.
+
 ## Development
 
 To run a localhost development server, use the following commands:
