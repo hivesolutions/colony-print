@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Options for saving output and sending email in print jobs
+*
 
 ### Changed
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.4.4] - 2025-01-18
+
+### Added
+
+* Options for saving output and sending email in print jobs
 
 ## [0.4.3] - 2025-01-18
 
