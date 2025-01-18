@@ -106,7 +106,7 @@ class ColonyPrintNode(object):
                     try:
                         result = self.print_job(job)
                     except Exception as exception:
-                        logging.warning(
+                        logging.exception(
                             "Exception while printing job '%s': %s"
                             % (job["id"], str(exception))
                         )
@@ -120,7 +120,7 @@ class ColonyPrintNode(object):
                         headers=headers,
                     )
             except Exception as exception:
-                logging.warning("Exception while looping '%s'" % str(exception))
+                logging.exception("Exception while looping '%s'" % str(exception))
                 logging.info("Sleeping for %.2f seconds" % self.sleep_time)
                 time.sleep(self.sleep_time)
 
