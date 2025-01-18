@@ -35,7 +35,7 @@ EMAIL_TEMPLATE = appier.legacy.u(
     """
 Hey there!
 
-Great news — your document **#%s** has just gone through a virtual transformation and is now rocking the PDF stage! 🎸📄 Ready to take a look? Check out the attachment—it's dressed to impress.
+Great news — your document **%s** has just gone through a virtual transformation and is now rocking the PDF stage! 🎸📄 Ready to take a look? Check out the attachment—it's dressed to impress.
 
 We hope you find everything in perfect harmony. Should you need a replay, just hit 'print' again!
 
@@ -200,7 +200,7 @@ class ColonyPrintNode(object):
                 mailme.MessagePayload(
                     receivers=email_receivers,
                     title="Your PDF Masterpiece Awaits!",
-                    subject="Print Job #%s is Ready!" % short_name,
+                    subject="Print Job %s is Ready!" % short_name,
                     contents=appier.legacy.bytes(
                         EMAIL_TEMPLATE % name, encoding="utf-8", force=True
                     ),
