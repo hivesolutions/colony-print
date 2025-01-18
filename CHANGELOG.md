@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+*
+
+## [0.4.5] - 2025-01-18
+
+### Fixed
+
 * Email receiver processing
 
 ## [0.4.4] - 2025-01-18

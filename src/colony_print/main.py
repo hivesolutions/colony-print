@@ -17,7 +17,7 @@ class ColonyPrintApp(appier.APIApp):
         )
 
     def _version(self):
-        return "0.4.4"
+        return "0.4.5"
 
     def _description(self):
         return "Colony Print"
