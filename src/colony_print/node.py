@@ -195,7 +195,7 @@ class ColonyPrintNode(object):
                 email_receivers.append(email_receiver)
             email_receivers = (
                 email_receivers
-                if email_override
+                if email_override and email_receivers
                 else list(self.node_email_receivers) + email_receivers
             )
 
