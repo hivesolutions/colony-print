@@ -145,7 +145,7 @@ class NodeController(appier.Controller):
     def print_hello_default(self, id):
         self.set_field("data_b64", HELLO_WORLD_B64)
         self.set_field("name", "hello_world")
-        self.print_default(id)
+        return self.print_default(id)
 
     @appier.route("/nodes/<str:id>/printers/print", ("GET", "POST"), json=True)
     @appier.ensure(token="admin")
@@ -231,7 +231,7 @@ class NodeController(appier.Controller):
     def print_hello_printer(self, id, printer):
         self.set_field("data_b64", HELLO_WORLD_B64)
         self.set_field("name", "hello_world")
-        self.print_printer(id, printer)
+        return self.print_printer(id, printer)
 
     @appier.coroutine
     def wait_jobs(self, id):
