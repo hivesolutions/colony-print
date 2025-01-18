@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *
 
+## [0.4.1] - 2025-01-18
+
+### Changed
+
+* Improved exception handling to add more verbosity
+
 ## [0.4.0] - 2024-06-03
 
 ### Added
