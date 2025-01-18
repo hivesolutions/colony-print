@@ -21,7 +21,16 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
 AAAAAAAAAwAAABIZWxsbyBXb3JsZAA="
 
-VALID_OPTIONS = set(["scale", "quality", "email_address"])
+VALID_OPTIONS = set(
+    [
+        "scale",
+        "quality",
+        "email_address",
+        "email_receivers",
+        "email_receiver",
+        "email_override",
+    ]
+)
 
 
 class NodeController(appier.Controller):
@@ -92,7 +101,7 @@ class NodeController(appier.Controller):
         name = self.field("name", None)
         type = self.field("type", None)
         format = self.field("format", None)
-        options = self.field("options", None)
+        options = self.field("options", None, cast=dict)
 
         appier.verify(
             data or data_b64,
@@ -174,7 +183,7 @@ class NodeController(appier.Controller):
         name = self.field("name", None)
         type = self.field("type", None)
         format = self.field("format", None)
-        options = self.field("options", None)
+        options = self.field("options", None, cast=dict)
 
         appier.verify(
             data or data_b64,

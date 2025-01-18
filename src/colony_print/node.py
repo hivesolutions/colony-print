@@ -181,12 +181,17 @@ class ColonyPrintNode(object):
             # computes the complete list of email receivers using the
             # base instance value and the ones provided via options,
             # makes sure that the email receivers are unique
-            email_receivers = list(self.node_email_receivers)
-            email_receiver = options.get("email_receiver", None)
+            email_receivers = options.get("email_receivers", [])
+            email_receiver = options.get("email_address", None)
+            email_receiver = options.get("email_receiver", email_receiver)
+            email_override = options.get("email_override", True)
             if email_receiver:
-                email_receivers += [email_receiver]
-            email_receivers += options.get("email_receivers", [])
-            email_receivers = list(set(email_receivers))
+                email_receivers.append(email_receiver)
+            email_receivers = (
+                email_receivers
+                if email_override
+                else list(self.node_email_receivers) + email_receivers
+            )
 
             logging.info(
                 "Sending email to %s for job '%s' with '%s' printer"
