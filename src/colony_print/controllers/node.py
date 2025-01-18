@@ -25,6 +25,8 @@ VALID_OPTIONS = set(
     [
         "scale",
         "quality",
+        "save_output",
+        "send_email",
         "email_address",
         "email_receivers",
         "email_receiver",

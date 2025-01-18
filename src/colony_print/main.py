@@ -13,7 +13,7 @@ class ColonyPrintApp(appier.APIApp):
         self.nodes = dict()
         self.jobs = dict()
         self.jobs_info = appier.LimitedSizeDict(
-            max_size=appier.conf("JOB_SIZE", 1024, cast=int)
+            max_size=appier.conf("JOB_SIZE", 128, cast=int)
         )
 
     def _version(self):

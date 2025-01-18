@@ -141,6 +141,7 @@ class ColonyPrintNode(object):
         printer = job.get("printer", None)
         format = job.get("format", None)
         options = job.get("options", dict())
+        save_output = options.get("save_output", False)
         printer_s = printer if printer else self.node_printer
         short_name = name[-12:]
 
@@ -174,9 +175,14 @@ class ColonyPrintNode(object):
 
             file = open(output_path, "rb")
             try:
-                data = file.read()
+                output_data = file.read()
             finally:
                 file.close()
+
+            # encodes the output data as base64 so that it may be sent
+            # as part of the email message, this is required for the
+            # attachment of the PDF file to the email message
+            output_data_b64 = base64.b64encode(output_data)
 
             # computes the complete list of email receivers using the
             # base instance value and the ones provided via options,
@@ -193,31 +199,33 @@ class ColonyPrintNode(object):
                 else list(self.node_email_receivers) + email_receivers
             )
 
-            logging.info(
-                "Sending email to %s for job '%s' with '%s' printer"
-                % (",".join(email_receivers), name, printer_s)
-            )
-
-            # creates the mailme API instance and sends the email with
-            # the generated PDF file as attachment to the email receivers
-            api = mailme.API()
-            api.send(
-                mailme.MessagePayload(
-                    receivers=email_receivers,
-                    title="Your PDF Masterpiece Awaits!",
-                    subject="Print Job %s is Ready!" % short_name,
-                    contents=appier.legacy.bytes(
-                        EMAIL_TEMPLATE % name, encoding="utf-8", force=True
-                    ),
-                    attachments=[
-                        mailme.AttachmentPayload(
-                            name="%s.pdf" % name,
-                            data=base64.b64encode(data).decode(),
-                            mime="application/pdf",
-                        )
-                    ],
+            send_email = options.get("send_email", True)
+            if send_email:
+                logging.info(
+                    "Sending email to %s for job '%s' with '%s' printer"
+                    % (",".join(email_receivers), name, printer_s)
                 )
-            )
+
+                # creates the mailme API instance and sends the email with
+                # the generated PDF file as attachment to the email receivers
+                api = mailme.API()
+                api.send(
+                    mailme.MessagePayload(
+                        receivers=email_receivers,
+                        title="Your PDF Masterpiece Awaits!",
+                        subject="Print Job %s is Ready!" % short_name,
+                        contents=appier.legacy.bytes(
+                            EMAIL_TEMPLATE % name, encoding="utf-8", force=True
+                        ),
+                        attachments=[
+                            mailme.AttachmentPayload(
+                                name="%s.pdf" % name,
+                                data=output_data_b64.decode(),
+                                mime="application/pdf",
+                            )
+                        ],
+                    )
+                )
         finally:
             shutil.rmtree(temp_dir)
 
@@ -227,6 +235,7 @@ class ColonyPrintNode(object):
             handler="npcolony",
             email_sent=True,
             receivers=email_receivers,
+            output_data=output_data_b64 if save_output else None,
         )
 
     @property
