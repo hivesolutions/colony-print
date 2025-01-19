@@ -142,6 +142,7 @@ class ColonyPrintNode(object):
         format = job.get("format", None)
         options = job.get("options", dict())
         save_output = options.get("save_output", False)
+        send_email = options.get("send_email", True)
         printer_s = printer if printer else self.node_printer
         short_name = name[-12:]
 
@@ -199,7 +200,6 @@ class ColonyPrintNode(object):
                 else list(self.node_email_receivers) + email_receivers
             )
 
-            send_email = options.get("send_email", True)
             if send_email:
                 logging.info(
                     "Sending email to %s for job '%s' with '%s' printer"
@@ -233,8 +233,8 @@ class ColonyPrintNode(object):
             result="success",
             mode="email",
             handler="npcolony",
-            email_sent=True,
-            receivers=email_receivers,
+            email_sent=send_email,
+            receivers=email_receivers if send_email else None,
             output_data=output_data_b64 if save_output else None,
         )
 
