@@ -9,15 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+*
+
+### Changed
+
+*
+
+### Fixed
+
+*
+
+## [0.4.6] - 2025-01-19
+
+### Added
+
 * New /ping route for health check
 
 ### Changed
 
 * Small result values changes
-
-### Fixed
-
-*
 
 ## [0.4.5] - 2025-01-18
 
