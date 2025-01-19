@@ -143,6 +143,7 @@ class ColonyPrintNode(object):
         options = job.get("options", dict())
         save_output = options.get("save_output", False)
         send_email = options.get("send_email", True)
+        safe_sleep = options.get("safe_sleep", 1.0)
         printer_s = printer if printer else self.node_printer
         short_name = name[-12:]
 
@@ -170,7 +171,8 @@ class ColonyPrintNode(object):
             # note that the process of handling the PDF printing is
             # asynchronous and may take some time to be completed
             for _ in range(10):
-                if os.path.exists(output_path):
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    time.sleep(safe_sleep)
                     break
                 time.sleep(0.5)
 
@@ -227,7 +229,7 @@ class ColonyPrintNode(object):
                     )
                 )
         finally:
-            shutil.rmtree(temp_dir)
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         return dict(
             result="success",
