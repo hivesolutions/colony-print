@@ -143,7 +143,7 @@ class ColonyPrintNode(object):
         options = job.get("options", dict())
         save_output = options.get("save_output", False)
         send_email = options.get("send_email", True)
-        safe_sleep = options.get("safe_sleep", 1.0)
+        safe_sleep = options.get("safe_sleep", 0.0)
         printer_s = printer if printer else self.node_printer
         short_name = name[-12:]
 
