@@ -234,6 +234,7 @@ class ColonyPrintNode(object):
             mode="email",
             handler="npcolony",
             email_sent=send_email,
+            output_saved=save_output,
             receivers=email_receivers if send_email else None,
             output_data=output_data_b64 if save_output else None,
         )
