@@ -13,11 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Set safe sleep time to zero
+*
 
 ### Fixed
 
 *
+
+## [0.4.8] - 2025-01-19
+
+### Changed
+
+* Set safe sleep time to zero
 
 ## [0.4.7] - 2025-01-19
 
