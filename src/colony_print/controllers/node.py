@@ -254,5 +254,8 @@ class NodeController(appier.Controller):
                 yield value
         yield json.dumps(jobs)
         for job in jobs:
-            job_info = self.owner.jobs_info[job["id"]]
+            job_id = job["id"]
+            if not job_id in self.owner.jobs_info:
+                continue
+            job_info = self.owner.jobs_info[job_id]
             job_info.update(status="printing", printing_time=time.time())
