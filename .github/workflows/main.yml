@@ -10,62 +10,76 @@ jobs:
     strategy:
       matrix:
         python-version: [
-          "2.7-buster",
-          "3.5-buster",
-          "3.6-buster",
-          "3.7-buster",
-          "3.8-buster",
-          "3.9-buster",
-          "3.10-buster",
-          "3.11-buster",
-          "3.12-bookworm",
-          "latest",
-          "rc"
+          2.7,
+          3.5,
+          3.6,
+          3.7,
+          3.8,
+          3.9,
+          "3.10",
+          "3.11",
+          "3.12",
+          latest,
+          rc
         ]
+    env:
+      MONGO_URL: mongodb://host.docker.internal
     runs-on: ubuntu-latest
-    container: python:${{ matrix.python-version }}
+    container:
+      image: python:${{ matrix.python-version }}
+      options: >-
+        --add-host=host.docker.internal:host-gateway
+        --volume /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: actions/checkout@v4
       - run: |
-          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian $(. /etc/os-release && echo "$VERSION_CODENAME")/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-          apt-get update && apt-get install -y mongodb-org mongodb-org-server mongodb-org-database\
-            mongodb-org-mongos mongodb-org-shell mongodb-org-tools && mkdir -p /data/db
-      - run: mongod &
+          apt-get update
+          apt-get install -y docker.io
+          command -v docker
+          docker version
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+          docker run -d --name mongo -p 27017:27017 mongo:7
       - run: python --version
       - run: |
           pip install -r requirements.txt
           pip install -r extra.txt
-        if: matrix.python-version != '2.7-buster'
+        if: matrix.python-version != '2.7'
       - run: |
           pip install -r requirements.py2.txt
           pip install -r extra.py2.txt
-        if: matrix.python-version == '2.7-buster'
+        if: matrix.python-version == '2.7'
       - run: |
           pip install black
           black . --check
-        if: matrix.python-version == '3.12-bookworm'
+        if: matrix.python-version == '3.12'
       - run: |
           pip install pytest
           pytest
       - run: python setup.py test
-        if: matrix.python-version != '3.12-bookworm' && matrix.python-version != 'latest'
+        if: ${{ !contains(fromJson('["3.9", "3.10", "3.11", "3.12", "latest"]'), matrix.python-version) }}
   build-pypy:
     name: Build PyPy
     timeout-minutes: 10
     strategy:
       matrix:
-        python-version: [2.7, 3.6]
+        python-version: [2.7, 3.6, 3.9, "3.10"]
+    env:
+      MONGO_URL: mongodb://host.docker.internal
     runs-on: ubuntu-latest
-    container: pypy:${{ matrix.python-version }}
+    container:
+      image: pypy:${{ matrix.python-version }}
+      options: >-
+        --add-host=host.docker.internal:host-gateway
+        --volume /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: actions/checkout@v4
       - run: |
-          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian $(. /etc/os-release && echo "$VERSION_CODENAME")/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-          apt-get update && apt-get install -y mongodb-org mongodb-org-server mongodb-org-database\
-            mongodb-org-mongos mongodb-org-shell mongodb-org-tools && mkdir -p /data/db
-      - run: mongod &
+          apt-get update
+          apt-get install -y docker.io
+          command -v docker
+          docker version
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+          docker run -d --name mongo -p 27017:27017 mongo:7
       - run: pypy --version
       - run: |
           pip install -r requirements.txt
@@ -83,4 +97,4 @@ jobs:
           pip install pytest
           pytest
       - run: pypy setup.py test
-        if: matrix.python-version != '3.12' && matrix.python-version != 'latest'
+        if: ${{ !contains(fromJson('["3.9", "3.10", "3.11", "3.12", "latest"]'), matrix.python-version) }}

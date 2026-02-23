@@ -9,31 +9,42 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        python-version: ["2.7-buster"]
+        python-version: [2.7]
+    env:
+      MONGO_URL: mongodb://host.docker.internal
     runs-on: ubuntu-latest
-    container: python:${{ matrix.python-version }}
+    container:
+      image: python:${{ matrix.python-version }}
+      options: >-
+        --add-host=host.docker.internal:host-gateway
+        --volume /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: actions/checkout@v4
       - run: |
-          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian $(. /etc/os-release && echo "$VERSION_CODENAME")/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-          apt-get update && apt-get install -y mongodb-org mongodb-org-server mongodb-org-database\
-            mongodb-org-mongos mongodb-org-shell mongodb-org-tools && mkdir -p /data/db
-      - run: mongod &
+          apt-get update
+          apt-get install -y docker.io
+          command -v docker
+          docker version
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+          docker run -d --name mongo -p 27017:27017 mongo:7
       - run: python --version
       - run: |
           pip install -r requirements.txt
           pip install -r extra.txt
-        if: matrix.python-version != '2.7-buster'
+        if: matrix.python-version != '2.7'
       - run: |
           pip install -r requirements.py2.txt
           pip install -r extra.py2.txt
-        if: matrix.python-version == '2.7-buster'
+        if: matrix.python-version == '2.7'
       - run: |
           pip install black
           black . --check
         if: matrix.python-version == '3.12'
+      - run: |
+          pip install pytest
+          pytest
       - run: python setup.py test
+        if: ${{ !contains(fromJson('["3.9", "3.10", "3.11", "3.12", "latest"]'), matrix.python-version) }}
       - run: pip install twine wheel
       - run: python setup.py sdist bdist_wheel
       - run: python -m twine upload -u ${PYPI_USERNAME} -p ${PYPI_PASSWORD} dist/*
