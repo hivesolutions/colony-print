@@ -31,8 +31,7 @@ NODE_MODES = set(["normal", "email"])
 """ The set of running modes that are considered to be valid for
 the node, this is going to be used to validate the mode """
 
-EMAIL_TEMPLATE = appier.legacy.u(
-    """
+EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
 
 Great news — your document **%s** has just gone through a virtual transformation and is now rocking the PDF stage! 🎸📄 Ready to take a look? Check out the attachment—it's dressed to impress.
@@ -44,8 +43,7 @@ Keep on printing,
 Your's dear 'Colony Print'
 
 P.S. No trees were harmed in the making of this PDF. 🌳✌️
-"""
-)
+""")
 
 
 class ColonyPrintNode(object):
@@ -323,11 +321,18 @@ class ColonyPrintNode(object):
         text = data_j["text"]
         font = data_j.get("font", "HELVETICA 1L")
         font_size = data_j.get("font_size", None)
+        width = data_j.get("width", 80)
+        height = data_j.get("height", 100)
         dry_run = data_j.get("dry_run", False)
 
         start = time.time()
         screenshots = gravo_pilot.GravostyleAPI().write_text(
-            text, font=font, font_size=font_size, dry_run=dry_run
+            text,
+            font=font,
+            font_size=font_size,
+            width=width,
+            height=height,
+            dry_run=dry_run,
         )
         duration = time.time() - start
 
