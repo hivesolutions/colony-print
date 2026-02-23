@@ -22,6 +22,20 @@ jobs:
           latest,
           rc
         ]
+        adapter: ["tiny", "mongo:6", "mongo:7", "mongo:8"]
+        exclude:
+          - python-version: 2.7
+            adapter: mongo:6
+          - python-version: 2.7
+            adapter: mongo:7
+          - python-version: 2.7
+            adapter: mongo:8
+          - python-version: 3.5
+            adapter: mongo:6
+          - python-version: 3.5
+            adapter: mongo:7
+          - python-version: 3.5
+            adapter: mongo:8
     env:
       MONGO_URL: mongodb://host.docker.internal
     runs-on: ubuntu-latest
@@ -38,7 +52,8 @@ jobs:
           command -v docker
           docker version
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-          docker run -d --name mongo -p 27017:27017 mongo:7
+          docker run -d --name mongo -p 27017:27017 ${{ matrix.adapter }}
+        if: contains(matrix.adapter, 'mongo')
       - run: python --version
       - run: |
           pip install -r requirements.txt
@@ -54,8 +69,8 @@ jobs:
         if: matrix.python-version == '3.12'
       - run: |
           pip install pytest
-          pytest
-      - run: python setup.py test
+          ADAPTER=${{ matrix.adapter }} pytest
+      - run: ADAPTER=${{ matrix.adapter }} python setup.py test
         if: ${{ !contains(fromJson('["3.9", "3.10", "3.11", "3.12", "latest"]'), matrix.python-version) }}
   build-pypy:
     name: Build PyPy
@@ -63,6 +78,20 @@ jobs:
     strategy:
       matrix:
         python-version: [2.7, 3.6, 3.9, "3.10"]
+        adapter: ["tiny", "mongo:6", "mongo:7", "mongo:8"]
+        exclude:
+          - python-version: 2.7
+            adapter: mongo:6
+          - python-version: 2.7
+            adapter: mongo:7
+          - python-version: 2.7
+            adapter: mongo:8
+          - python-version: 3.6
+            adapter: mongo:6
+          - python-version: 3.6
+            adapter: mongo:7
+          - python-version: 3.6
+            adapter: mongo:8
     env:
       MONGO_URL: mongodb://host.docker.internal
     runs-on: ubuntu-latest
@@ -79,7 +108,8 @@ jobs:
           command -v docker
           docker version
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-          docker run -d --name mongo -p 27017:27017 mongo:7
+          docker run -d --name mongo -p 27017:27017 ${{ matrix.adapter }}
+        if: contains(matrix.adapter, 'mongo')
       - run: pypy --version
       - run: |
           pip install -r requirements.txt
@@ -95,6 +125,6 @@ jobs:
         if: matrix.python-version == '3.12'
       - run: |
           pip install pytest
-          pytest
-      - run: pypy setup.py test
+          ADAPTER=${{ matrix.adapter }} pytest
+      - run: ADAPTER=${{ matrix.adapter }} pypy setup.py test
         if: ${{ !contains(fromJson('["3.9", "3.10", "3.11", "3.12", "latest"]'), matrix.python-version) }}
