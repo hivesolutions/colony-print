@@ -20,9 +20,12 @@ export const JobsList: FC = () => {
         setLoading(true);
         try {
             const data = await api.listJobs();
-            const items = Object.values(data).sort(
-                (a, b) => (b.queued_time || 0) - (a.queued_time || 0)
-            );
+            const items = Object.values(data)
+                .filter((j) => j && j.id)
+                .sort(
+                    (a, b) =>
+                        (b.queued_time || 0) - (a.queued_time || 0)
+                );
             setJobs(items);
         } catch {
             setJobs([]);
