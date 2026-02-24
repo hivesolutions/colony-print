@@ -1,0 +1,40 @@
+.detail-grid-card {
+    overflow: hidden;
+}
+
+.detail-grid-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+}
+
+.detail-grid {
+    margin: 0;
+}
+
+.detail-grid-row {
+    display: flex;
+    align-items: baseline;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-gray-100);
+}
+
+.detail-grid-row:last-child {
+    border-bottom: none;
+}
+
+.detail-grid-label {
+    width: 160px;
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-gray-500);
+}
+
+.detail-grid-value {
+    flex: 1;
+    font-size: 14px;
+    color: var(--color-gray-900);
+    margin: 0;
+}

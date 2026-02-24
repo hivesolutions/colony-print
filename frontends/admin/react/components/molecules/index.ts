@@ -1,6 +1,7 @@
 export { Content } from "./content";
 export { ContentHeader } from "./content-header";
 export { DataTable } from "./data-table";
+export { DetailGrid } from "./detail-grid";
 export { ErrorBox } from "./error-box";
 export { Form } from "./form";
 export { ProtectedRoute } from "./protected-route";

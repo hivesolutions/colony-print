@@ -1,0 +1,11 @@
+.node-show {
+    display: flex;
+    flex-direction: column;
+}
+
+.node-show-section {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}

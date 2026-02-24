@@ -1,0 +1,11 @@
+.job-show {
+    display: flex;
+    flex-direction: column;
+}
+
+.job-show-section {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}

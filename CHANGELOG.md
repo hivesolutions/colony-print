@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Favicon for the Admin UI
+* Job and node detail pages in the Admin UI
+* Clickable job and node IDs linking to detail pages
 
 ### Changed
 

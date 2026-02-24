@@ -2,7 +2,7 @@ import React, { FC, useCallback, useEffect, useState } from "react";
 
 import { useAPI } from "../../../hooks";
 import { NodeInfo, JobInfo } from "../../../api/colony-print";
-import { Tag } from "../../atoms";
+import { Link, Tag } from "../../atoms";
 import { ContentHeader, StatCard, DataTable } from "../../molecules";
 import { formatRelativeTime } from "../../../utils";
 
@@ -35,7 +35,9 @@ export const Dashboard: FC = () => {
         fetchData();
     }, [fetchData]);
 
-    const nodeCount = Object.keys(nodes).length;
+    const nodeCount = Object.values(nodes).filter(
+        (n) => n && n.name
+    ).length;
     const jobCount = Object.keys(jobs).length;
     const recentJobs = Object.values(jobs)
         .filter((j) => j && j.id)
@@ -46,7 +48,11 @@ export const Dashboard: FC = () => {
         {
             key: "name",
             header: "Name",
-            render: (job: JobInfo) => job.name || job.id
+            render: (job: JobInfo) => (
+                <Link to={`/jobs/${job.id}`}>
+                    {job.name || job.id}
+                </Link>
+            )
         },
         {
             key: "node_id",

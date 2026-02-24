@@ -2,7 +2,7 @@ import React, { FC, useCallback, useEffect, useState } from "react";
 
 import { useAPI } from "../../../hooks";
 import { NodeInfo } from "../../../api/colony-print";
-import { Tag } from "../../atoms";
+import { Link, Tag } from "../../atoms";
 import { ContentHeader, DataTable } from "../../molecules";
 
 import "./nodes-list.css";
@@ -21,10 +21,12 @@ export const NodesList: FC = () => {
         setLoading(true);
         try {
             const data = await api.listNodes();
-            const items = Object.entries(data).map(([id, node]) => ({
-                id,
-                node
-            }));
+            const items = Object.entries(data)
+                .filter(([, node]) => node && node.name)
+                .map(([id, node]) => ({
+                    id,
+                    node
+                }));
             setEntries(items);
         } catch {
             setEntries([]);
@@ -41,7 +43,11 @@ export const NodesList: FC = () => {
         {
             key: "id",
             header: "ID",
-            render: (entry: NodeEntry) => entry.id
+            render: (entry: NodeEntry) => (
+                <Link to={`/nodes/${entry.id}`}>
+                    {entry.id}
+                </Link>
+            )
         },
         {
             key: "name",

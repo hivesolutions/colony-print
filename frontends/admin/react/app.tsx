@@ -12,7 +12,9 @@ import { TopBar, SideBar, Content, ProtectedRoute } from "./components/molecules
 import { Login } from "./components/templates/login/login";
 import { Dashboard } from "./components/templates/dashboard/dashboard";
 import { NodesList } from "./components/templates/nodes/nodes-list";
+import { NodeShow } from "./components/templates/nodes/node-show";
 import { JobsList } from "./components/templates/jobs/jobs-list";
+import { JobShow } from "./components/templates/jobs/job-show";
 import { PrintersList } from "./components/templates/printers/printers-list";
 import { Settings } from "./components/templates/settings/settings";
 
@@ -71,7 +73,15 @@ const Layout: FC = () => {
                     <Routes>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/nodes" element={<NodesList />} />
+                        <Route
+                            path="/nodes/:id"
+                            element={<NodeShow />}
+                        />
                         <Route path="/jobs" element={<JobsList />} />
+                        <Route
+                            path="/jobs/:id"
+                            element={<JobShow />}
+                        />
                         <Route
                             path="/printers"
                             element={<PrintersList />}

@@ -2,7 +2,7 @@ import React, { FC, useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAPI } from "../../../hooks";
 import { JobInfo } from "../../../api/colony-print";
-import { Button, Tag } from "../../atoms";
+import { Button, Link, Tag } from "../../atoms";
 import { ContentHeader, DataTable } from "../../molecules";
 import { formatTimestamp } from "../../../utils";
 
@@ -51,7 +51,13 @@ export const JobsList: FC = () => {
             key: "id",
             header: "ID",
             render: (job: JobInfo) =>
-                job.id ? job.id.substring(0, 8) + "..." : "-"
+                job.id ? (
+                    <Link to={`/jobs/${job.id}`}>
+                        {job.id.substring(0, 8) + "..."}
+                    </Link>
+                ) : (
+                    "-"
+                )
         },
         {
             key: "name",
