@@ -2,7 +2,7 @@ import React, { FC, useCallback, useEffect, useState } from "react";
 
 import { useAPI } from "../../../hooks";
 import { PrinterInfo } from "../../../api/colony-print";
-import { Tag, Text } from "../../atoms";
+import { Tag } from "../../atoms";
 import { ContentHeader, DataTable } from "../../molecules";
 
 import "./printers-list.css";
@@ -41,7 +41,7 @@ export const PrintersList: FC = () => {
                 printer.is_default ? (
                     <Tag variant="success">Yes</Tag>
                 ) : (
-                    <Text variant="secondary">No</Text>
+                    <Tag variant="error">No</Tag>
                 )
         },
         {
