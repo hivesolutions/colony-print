@@ -13,11 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* New deploy version, using Python 3.14
+*
 
 ### Fixed
 
 *
+
+## [0.5.1] - 2026-02-24
+
+### Changed
+
+* New deploy version, using Python 3.14
 
 ## [0.5.0] - 2026-02-24
 
