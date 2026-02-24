@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+*
+
+## [0.5.2] - 2026-02-24
+
+### Fixed
+
 * Use `python -m build` instead of `setup.py sdist bdist_wheel` in deploy workflow to fix PyPI filename rejection
 
 ## [0.5.1] - 2026-02-24
