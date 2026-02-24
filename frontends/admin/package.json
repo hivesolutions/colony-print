@@ -1,0 +1,26 @@
+{
+    "name": "colony-print-admin",
+    "version": "0.1.0",
+    "description": "Colony Print Admin UI",
+    "private": true,
+    "scripts": {
+        "build": "parcel build index.html --dist-dir ../../src/colony_print/static/admin-ui --public-url /admin-ui",
+        "dev": "parcel index.html --port 3000",
+        "lint": "eslint .",
+        "pretty": "prettier --config .prettierrc \"./**/*.{ts,tsx,css,json}\" --write"
+    },
+    "dependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "react-router-dom": "^6.26.1"
+    },
+    "devDependencies": {
+        "@parcel/transformer-typescript-tsc": "^2.12.0",
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "eslint": "^8.57.0",
+        "parcel": "^2.12.0",
+        "prettier": "^3.3.3",
+        "typescript": "^5.5.4"
+    }
+}

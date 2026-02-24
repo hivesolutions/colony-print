@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Admin UI sub-project (React + TypeScript + Parcel) under `frontends/admin/` - [#14](https://github.com/hivesolutions/colony-print/issues/14)
+* AdminUIController to serve the SPA from `/admin-ui`
+* Dashboard, Nodes, Jobs, Printers, and Settings pages
+* Username/password authentication via Appier's built-in AdminPart
 
 ### Changed
 

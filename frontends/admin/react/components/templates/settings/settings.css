@@ -1,0 +1,19 @@
+.settings {
+    display: flex;
+    flex-direction: column;
+    max-width: 600px;
+}
+
+.settings-section {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.settings-session-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}

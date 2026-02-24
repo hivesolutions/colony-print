@@ -1,0 +1,29 @@
+.tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 16px;
+    font-family: var(--font-family);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.tag-default {
+    background-color: var(--color-gray-100);
+    color: var(--color-gray-700);
+}
+
+.tag-success {
+    background-color: var(--color-success-50);
+    color: var(--color-success-700);
+}
+
+.tag-error {
+    background-color: var(--color-error-50);
+    color: var(--color-error-700);
+}
+
+.tag-warning {
+    background-color: var(--color-warning-50);
+    color: var(--color-warning-700);
+}

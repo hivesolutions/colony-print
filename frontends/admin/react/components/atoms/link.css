@@ -1,0 +1,12 @@
+.link {
+    font-family: var(--font-family);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-primary-600);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.link:hover {
+    color: var(--color-primary-700);
+}

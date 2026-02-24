@@ -27,6 +27,9 @@ setuptools.setup(
     package_dir={"": os.path.normpath("src")},
     package_data={
         "colony_print": [
+            "static/admin-ui/*",
+            "static/admin-ui/css/*",
+            "static/admin-ui/js/*",
             "static/example/*",
             "static/example/js/*",
             "static/example/xml/*",

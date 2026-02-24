@@ -1,0 +1,29 @@
+.loader {
+    border: 3px solid var(--color-gray-200);
+    border-top-color: var(--color-primary-600);
+    border-radius: 50%;
+    animation: loader-spin 0.8s linear infinite;
+}
+
+.loader-sm {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
+}
+
+.loader-md {
+    width: 24px;
+    height: 24px;
+}
+
+.loader-lg {
+    width: 40px;
+    height: 40px;
+    border-width: 4px;
+}
+
+@keyframes loader-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

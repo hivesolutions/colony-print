@@ -1,0 +1,17 @@
+.content-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.content-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.content-header-actions {
+    display: flex;
+    gap: 8px;
+}
