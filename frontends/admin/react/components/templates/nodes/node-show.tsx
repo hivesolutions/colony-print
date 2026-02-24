@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { useAPI } from "../../../hooks";
 import { NodeInfo } from "../../../api/colony-print";
 import { Button, Tag, Title, Text } from "../../atoms";
-import { ContentHeader, DetailGrid } from "../../molecules";
+import { ContentHeader, DataTable, DetailGrid } from "../../molecules";
 
 import "./node-show.css";
 
@@ -81,29 +81,107 @@ export const NodeShow: FC = () => {
                 }
             />
             <DetailGrid fields={fields} loading={loading} />
-            {engineEntries.map(([engine, info]) => (
-                <div key={engine} className="node-show-section">
-                    <Title level={3}>
-                        {engine.charAt(0).toUpperCase() +
-                            engine.slice(1)}{" "}
-                        Engine
-                    </Title>
-                    <DetailGrid
-                        fields={Object.entries(
-                            info as Record<string, unknown>
-                        ).map(([key, value]) => ({
-                            label: key,
-                            value: (
-                                <Text>
-                                    {typeof value === "object"
-                                        ? JSON.stringify(value, null, 2)
-                                        : String(value)}
-                                </Text>
+            {engineEntries.map(([engine, info]) => {
+                const entries = Object.entries(
+                    info as Record<string, unknown>
+                );
+                const simpleFields = entries.filter(
+                    ([, v]) => !Array.isArray(v)
+                );
+                const arrayFields = entries.filter(([, v]) =>
+                    Array.isArray(v)
+                );
+                return (
+                    <div key={engine} className="node-show-section">
+                        <Title level={3}>
+                            {engine.charAt(0).toUpperCase() +
+                                engine.slice(1)}{" "}
+                            Engine
+                        </Title>
+                        {simpleFields.length > 0 && (
+                            <DetailGrid
+                                fields={simpleFields.map(
+                                    ([key, value]) => ({
+                                        label: key,
+                                        value: String(value)
+                                    })
+                                )}
+                            />
+                        )}
+                        {arrayFields.map(([key, value]) => {
+                            const items = value as Record<
+                                string,
+                                unknown
+                            >[];
+                            if (
+                                items.length === 0 ||
+                                typeof items[0] !== "object"
                             )
-                        }))}
-                    />
-                </div>
-            ))}
+                                return null;
+                            const headers = Object.keys(items[0]);
+                            return (
+                                <div
+                                    key={key}
+                                    className="node-show-subsection"
+                                >
+                                    <Text variant="secondary">
+                                        {key}
+                                    </Text>
+                                    <DataTable
+                                        columns={headers.map(
+                                            (h) => ({
+                                                key: h,
+                                                header:
+                                                    h
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                    h
+                                                        .slice(1)
+                                                        .replace(
+                                                            /_/g,
+                                                            " "
+                                                        ),
+                                                render: (
+                                                    item: Record<
+                                                        string,
+                                                        unknown
+                                                    >
+                                                ) => {
+                                                    const v =
+                                                        item[h];
+                                                    if (
+                                                        v === true
+                                                    )
+                                                        return (
+                                                            <Tag variant="success">
+                                                                Yes
+                                                            </Tag>
+                                                        );
+                                                    if (
+                                                        v === false
+                                                    )
+                                                        return (
+                                                            <Tag variant="error">
+                                                                No
+                                                            </Tag>
+                                                        );
+                                                    return (
+                                                        String(
+                                                            v ?? "-"
+                                                        ) || "-"
+                                                    );
+                                                }
+                                            })
+                                        )}
+                                        data={items}
+                                        emptyMessage={`No ${key}`}
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            })}
         </div>
     );
 };

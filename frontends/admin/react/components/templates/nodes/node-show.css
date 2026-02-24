@@ -9,3 +9,9 @@
     flex-direction: column;
     gap: 12px;
 }
+
+.node-show-subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
