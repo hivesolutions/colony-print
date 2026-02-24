@@ -1,0 +1,21 @@
+.printers-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.printers-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.printers-list-item {
+    padding: 16px 20px;
+}
+
+.printers-list-empty {
+    padding: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

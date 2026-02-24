@@ -1,0 +1,10 @@
+.jobs-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.jobs-list-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}

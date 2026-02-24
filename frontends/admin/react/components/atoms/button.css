@@ -1,0 +1,64 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-family);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.button-md {
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.button-lg {
+    padding: 10px 20px;
+    font-size: 15px;
+}
+
+.button-primary {
+    background-color: var(--color-primary-600);
+    border-color: var(--color-primary-600);
+    color: var(--color-white);
+}
+
+.button-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-700);
+    border-color: var(--color-primary-700);
+}
+
+.button-secondary {
+    background-color: var(--color-white);
+    border-color: var(--color-gray-300);
+    color: var(--color-gray-700);
+}
+
+.button-secondary:hover:not(:disabled) {
+    background-color: var(--color-gray-50);
+}
+
+.button-danger {
+    background-color: var(--color-error-500);
+    border-color: var(--color-error-500);
+    color: var(--color-white);
+}
+
+.button-danger:hover:not(:disabled) {
+    background-color: var(--color-error-700);
+    border-color: var(--color-error-700);
+}

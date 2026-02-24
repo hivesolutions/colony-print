@@ -1,0 +1,10 @@
+.stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 20px 24px;
+}
+
+.stat-card-value {
+    margin-top: 4px;
+}

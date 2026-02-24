@@ -67,6 +67,18 @@ There are currently three engines available for printing in Colony Print:
 * `gravo` - Which allows engraving of text and signatures using [Gravo Pilot](https://github.com/hivesolutions/gravo-pilot).
 * `text` - A simple virtual printer text engine that prints text to a simple plain text file and returns the file.
 
+## Admin UI
+
+A React-based admin interface is available under `frontends/admin/` for monitoring nodes, jobs and printers.
+
+```bash
+cd frontends/admin
+npm install
+npm run build
+```
+
+The built assets are output to `src/colony_print/static/admin-ui/` and served at `/admin-ui` when the server is running.
+
 ## Development
 
 To run a localhost development server, use the following commands:

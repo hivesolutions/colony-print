@@ -13,3 +13,8 @@ session.shelve*
 /build
 /src/colony_print.egg-info
 /src/colony_print/data
+/src/colony_print/static/admin-ui
+
+/frontends/admin/node_modules
+/frontends/admin/.parcel-cache
+/frontends/admin/dist
