@@ -2,9 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import os
-import mimetypes
 
 import appier
+
+ADMIN_UI_PREFIX = "admin-ui"
+""" The prefix path for the Admin UI static files,
+relative to the application's static directory """
 
 
 class AdminUIController(appier.Controller):
@@ -26,9 +29,10 @@ class AdminUIController(appier.Controller):
         # tries to serve the requested static file and if
         # it does not exist falls back to the index file
         # to support client-side routing
-        static_path = self._resolve_path(path)
+        resource = os.path.join(ADMIN_UI_PREFIX, path)
+        static_path = os.path.join(self.owner.static_path, resource)
         if os.path.isfile(static_path):
-            return self._serve_file(static_path)
+            return self.send_static(resource, cache=True)
         return self._serve_index()
 
     def _serve_index(self):
@@ -40,43 +44,8 @@ class AdminUIController(appier.Controller):
         :return: The contents of the index HTML file.
         """
 
-        index_path = self._resolve_path("index.html")
-        if not os.path.isfile(index_path):
+        resource = os.path.join(ADMIN_UI_PREFIX, "index.html")
+        static_path = os.path.join(self.owner.static_path, resource)
+        if not os.path.isfile(static_path):
             raise appier.NotFoundError(message="Admin UI not built")
-        return self._serve_file(index_path)
-
-    def _serve_file(self, path):
-        """
-        Serves a static file from the given absolute path,
-        setting the appropriate content type header based
-        on the file extension.
-
-        :type path: String
-        :param path: The absolute path to the file to serve.
-        :rtype: String
-        :return: The contents of the file.
-        """
-
-        mime, _encoding = mimetypes.guess_type(path)
-        if mime:
-            self.content_type(mime)
-        file = open(path, "rb")
-        try:
-            contents = file.read()
-        finally:
-            file.close()
-        return contents
-
-    def _resolve_path(self, path):
-        """
-        Resolves the given relative path to an absolute path
-        within the `static/admin-ui` directory.
-
-        :type path: String
-        :param path: The relative path to resolve.
-        :rtype: String
-        :return: The absolute path to the file.
-        """
-
-        base_path = os.path.dirname(os.path.dirname(__file__))
-        return os.path.join(base_path, "static", "admin-ui", path)
+        return self.send_static(resource)
