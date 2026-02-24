@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        python-version: [2.7]
+        python-version: ["3.14"]
     runs-on: ubuntu-latest
     container:
       image: python:${{ matrix.python-version }}
