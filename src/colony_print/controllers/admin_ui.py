@@ -24,7 +24,7 @@ class AdminUIController(appier.Controller):
     def admin_ui(self):
         return self._serve_index()
 
-    @appier.route("/admin-ui/<path:path>", "GET")
+    @appier.route("/admin-ui/<regex('.+'):path>", "GET")
     def admin_ui_path(self, path):
         # tries to serve the requested static file and if
         # it does not exist falls back to the index file
