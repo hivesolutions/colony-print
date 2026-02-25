@@ -22,6 +22,7 @@ export interface NodeInfo {
     platform: string;
     os: string;
     version: string;
+    last_ping?: number;
 }
 
 export interface JobInfo {

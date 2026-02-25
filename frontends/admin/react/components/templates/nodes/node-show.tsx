@@ -5,6 +5,7 @@ import { useAPI } from "../../../hooks";
 import { NodeInfo } from "../../../api/colony-print";
 import { Button, Tag, Title, Text } from "../../atoms";
 import { ContentHeader, DataTable, DetailGrid } from "../../molecules";
+import { formatRelativeTime } from "../../../utils";
 
 import "./node-show.css";
 
@@ -57,7 +58,11 @@ export const NodeShow: FC = () => {
               },
               { label: "Platform", value: node.platform || "-" },
               { label: "OS", value: node.os || "-" },
-              { label: "Version", value: node.version || "-" }
+              { label: "Version", value: node.version || "-" },
+              {
+                  label: "Last Seen",
+                  value: formatRelativeTime(node.last_ping)
+              }
           ]
         : [];
 

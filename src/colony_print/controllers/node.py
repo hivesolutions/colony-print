@@ -45,6 +45,7 @@ class NodeController(appier.Controller):
     @appier.ensure(token="admin")
     def create(self, id):
         node = appier.get_object()
+        node["last_ping"] = time.time()
         self.owner.nodes[id] = node
 
     @appier.route("/nodes/<str:id>", "GET", json=True)

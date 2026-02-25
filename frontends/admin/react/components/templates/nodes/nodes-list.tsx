@@ -4,6 +4,7 @@ import { useAPI } from "../../../hooks";
 import { NodeInfo } from "../../../api/colony-print";
 import { Link, Tag } from "../../atoms";
 import { ContentHeader, DataTable } from "../../molecules";
+import { formatRelativeTime } from "../../../utils";
 
 import "./nodes-list.css";
 
@@ -94,6 +95,12 @@ export const NodesList: FC = () => {
             key: "version",
             header: "Version",
             render: (entry: NodeEntry) => entry.node.version || "-"
+        },
+        {
+            key: "last_ping",
+            header: "Last Seen",
+            render: (entry: NodeEntry) =>
+                formatRelativeTime(entry.node.last_ping)
         }
     ];
 
