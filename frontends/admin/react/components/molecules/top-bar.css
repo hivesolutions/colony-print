@@ -8,6 +8,31 @@
     border-bottom: 1px solid var(--color-gray-200);
 }
 
+.top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.top-bar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-gray-600);
+    cursor: pointer;
+}
+
+.top-bar-toggle:hover {
+    background-color: var(--color-gray-100);
+    color: var(--color-gray-900);
+}
+
 .top-bar-brand {
     font-size: 16px;
     font-weight: 700;
@@ -18,4 +43,16 @@
     font-size: 13px;
     font-weight: 500;
     color: var(--color-gray-500);
+}
+
+@media (max-width: 768px) {
+    .top-bar {
+        padding: 0 16px;
+        position: relative;
+        z-index: 30;
+    }
+
+    .top-bar-toggle {
+        display: flex;
+    }
 }

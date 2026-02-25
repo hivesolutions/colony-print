@@ -57,7 +57,14 @@ export const Dashboard: FC = () => {
         {
             key: "node_id",
             header: "Node",
-            render: (job: JobInfo) => job.node_id
+            render: (job: JobInfo) =>
+                job.node_id ? (
+                    <Link to={`/nodes/${job.node_id}`}>
+                        {job.node_id}
+                    </Link>
+                ) : (
+                    "-"
+                )
         },
         {
             key: "status",

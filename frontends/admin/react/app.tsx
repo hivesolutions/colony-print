@@ -1,9 +1,10 @@
-import React, { FC, useState } from "react";
+import React, { FC, useCallback, useEffect, useState } from "react";
 import {
     BrowserRouter,
     Routes,
     Route,
-    Navigate
+    Navigate,
+    useLocation
 } from "react-router-dom";
 
 import { ColonyPrintAPI } from "./api/colony-print";
@@ -64,11 +65,30 @@ export const App: FC = () => {
 };
 
 const Layout: FC = () => {
+    const location = useLocation();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    const toggleSidebar = useCallback(
+        () => setSidebarOpen((prev) => !prev),
+        []
+    );
+    const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+    useEffect(() => {
+        setSidebarOpen(false);
+    }, [location.pathname]);
+
     return (
         <div className="layout">
-            <TopBar />
+            <TopBar onToggleSidebar={toggleSidebar} />
             <div className="layout-body">
-                <SideBar />
+                {sidebarOpen && (
+                    <div
+                        className="layout-overlay"
+                        onClick={closeSidebar}
+                    />
+                )}
+                <SideBar open={sidebarOpen} onClose={closeSidebar} />
                 <Content>
                     <Routes>
                         <Route path="/" element={<Dashboard />} />

@@ -8,4 +8,19 @@
     display: flex;
     flex: 1;
     overflow: hidden;
+    position: relative;
+}
+
+.layout-overlay {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .layout-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background-color: rgba(16, 24, 40, 0.4);
+        z-index: 20;
+    }
 }

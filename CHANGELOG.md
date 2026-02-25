@@ -12,14 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Favicon for the Admin UI
 * Job and node detail pages in the Admin UI
 * Clickable job and node IDs linking to detail pages
-
-### Changed
-
-*
-
-### Fixed
-
-*
+* Mobile-friendly responsive layout for the Admin UI
+* Collapsible sidebar with hamburger menu on mobile
+* Card-based table layout for mobile viewports
+* Node links in job listings and dashboard
 
 ## [0.5.2] - 2026-02-24
 

@@ -54,7 +54,10 @@ export function DataTable<T>({
                         data.map((item, index) => (
                             <tr key={index}>
                                 {columns.map((col) => (
-                                    <td key={col.key}>
+                                    <td
+                                        key={col.key}
+                                        data-label={col.header}
+                                    >
                                         {col.render(item)}
                                     </td>
                                 ))}

@@ -41,3 +41,19 @@
     background-color: var(--color-primary-50);
     color: var(--color-primary-700);
 }
+
+@media (max-width: 768px) {
+    .side-bar {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        bottom: 0;
+        z-index: 30;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+    }
+
+    .side-bar-open {
+        transform: translateX(0);
+    }
+}

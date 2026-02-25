@@ -53,7 +53,7 @@ export const JobsList: FC = () => {
             render: (job: JobInfo) =>
                 job.id ? (
                     <Link to={`/jobs/${job.id}`}>
-                        {job.id.substring(0, 8) + "..."}
+                        {job.id.substring(0, 8)}
                     </Link>
                 ) : (
                     "-"
@@ -67,7 +67,14 @@ export const JobsList: FC = () => {
         {
             key: "node_id",
             header: "Node",
-            render: (job: JobInfo) => job.node_id
+            render: (job: JobInfo) =>
+                job.node_id ? (
+                    <Link to={`/nodes/${job.node_id}`}>
+                        {job.node_id}
+                    </Link>
+                ) : (
+                    "-"
+                )
         },
         {
             key: "status",

@@ -38,3 +38,14 @@
     color: var(--color-gray-900);
     margin: 0;
 }
+
+@media (max-width: 768px) {
+    .detail-grid-row {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .detail-grid-label {
+        width: auto;
+    }
+}

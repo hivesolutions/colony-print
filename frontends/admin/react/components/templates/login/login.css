@@ -14,3 +14,10 @@
     flex-direction: column;
     gap: 24px;
 }
+
+@media (max-width: 768px) {
+    .login-card {
+        padding: 24px 16px;
+        margin: 0 16px;
+    }
+}

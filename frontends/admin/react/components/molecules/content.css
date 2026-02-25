@@ -3,3 +3,9 @@
     padding: 24px 32px;
     overflow-y: auto;
 }
+
+@media (max-width: 768px) {
+    .content {
+        padding: 16px;
+    }
+}

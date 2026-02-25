@@ -8,3 +8,9 @@
 .dashboard-recent {
     margin-top: 8px;
 }
+
+@media (max-width: 480px) {
+    .dashboard-stats {
+        grid-template-columns: 1fr;
+    }
+}
