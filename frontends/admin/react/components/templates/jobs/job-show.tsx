@@ -111,7 +111,7 @@ export const JobShow: FC = () => {
             <ContentHeader
                 title={job?.name || "Job"}
                 description={
-                    id ? `Job ${id.substring(0, 8)}...` : undefined
+                    id ? `Job ${id.substring(0, 8)}` : undefined
                 }
                 actions={
                     <Button
