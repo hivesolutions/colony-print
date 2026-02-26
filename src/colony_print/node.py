@@ -237,6 +237,8 @@ class ColonyPrintNode(object):
             output_saved=save_output,
             receivers=email_receivers if send_email else None,
             output_data=output_data_b64 if save_output else None,
+            output_encoding="base64" if save_output else None,
+            output_mime_type="application/pdf" if save_output else None,
         )
 
     @property
