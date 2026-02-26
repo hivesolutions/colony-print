@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Node last seen timestamp tracking and display in Admin UI
-* Job output file preview and download in Admin UI with encoding and MIME type display
+*
 
 ### Changed
 
@@ -19,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.7.0] - 2026-02-26
+
+### Added
+
+* Node last seen timestamp tracking and display in Admin UI
+* Job output file preview and download in Admin UI with encoding and MIME type display
 
 ## [0.6.0] - 2026-02-25
 
