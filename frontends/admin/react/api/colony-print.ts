@@ -37,7 +37,11 @@ export interface JobInfo {
     queued_time: number;
     printing_time?: number;
     finish_time?: number;
-    result?: Record<string, unknown>;
+    result?: Record<string, unknown> & {
+        output_data?: string;
+        output_encoding?: string;
+        output_mime_type?: string;
+    };
 }
 
 export interface PrinterInfo {

@@ -100,10 +100,28 @@ export const JobShow: FC = () => {
           )
         : [];
 
+    const outputData = job?.result?.output_data as string | undefined;
+    const outputMimeType = (job?.result?.output_mime_type as string | undefined) ?? "application/octet-stream";
+    const outputEncoding = (job?.result?.output_encoding as string | undefined) ?? "base64";
+
     const resultEntries = job?.result
-        ? Object.entries(job.result).filter(
-              ([, v]) => v !== undefined && v !== null
-          )
+        ? [
+              ...Object.entries(job.result).filter(
+                  ([key, v]) =>
+                      v !== undefined &&
+                      v !== null &&
+                      key !== "output_data" &&
+                      key !== "output_encoding" &&
+                      key !== "output_mime_type"
+              ),
+              ...(outputData
+                  ? [
+                        ["output_mime_type", outputMimeType],
+                        ["output_encoding", outputEncoding],
+                        ["output_data", outputData.substring(0, 32) + "..."]
+                    ]
+                  : [])
+          ]
         : [];
 
     return (
@@ -156,6 +174,27 @@ export const JobShow: FC = () => {
                             )
                         }))}
                     />
+                </div>
+            )}
+            {outputData && outputEncoding === "base64" && (
+                <div className="job-show-section">
+                    <Title level={3}>Output</Title>
+                    <div className="job-show-output">
+                        {outputMimeType === "application/pdf" && (
+                            <iframe
+                                className="job-show-output-preview"
+                                src={`data:${outputMimeType};base64,${outputData}`}
+                                title="Output Preview"
+                            />
+                        )}
+                        <a
+                            className="job-show-output-download"
+                            href={`data:${outputMimeType};base64,${outputData}`}
+                            download={`${job?.name || id}.pdf`}
+                        >
+                            Download
+                        </a>
+                    </div>
                 </div>
             )}
         </div>

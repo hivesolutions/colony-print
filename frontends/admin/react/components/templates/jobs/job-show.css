@@ -9,3 +9,34 @@
     flex-direction: column;
     gap: 12px;
 }
+
+.job-show-output {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.job-show-output-preview {
+    width: 100%;
+    height: 600px;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    background-color: #f9fafb;
+}
+
+.job-show-output-download {
+    align-self: flex-start;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    background-color: #ffffff;
+    color: #344054;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.job-show-output-download:hover {
+    background-color: #f9fafb;
+}
