@@ -104,6 +104,8 @@ export const JobShow: FC = () => {
     const outputMimeType = (job?.result?.output_mime_type as string | undefined) ?? "application/octet-stream";
     const outputEncoding = (job?.result?.output_encoding as string | undefined) ?? "base64";
 
+    const tracebackData = job?.result?.traceback as string | undefined;
+
     const resultEntries = job?.result
         ? [
               ...Object.entries(job.result).filter(
@@ -112,7 +114,8 @@ export const JobShow: FC = () => {
                       v !== null &&
                       key !== "output_data" &&
                       key !== "output_encoding" &&
-                      key !== "output_mime_type"
+                      key !== "output_mime_type" &&
+                      key !== "traceback"
               ),
               ...(outputData
                   ? [
@@ -176,6 +179,12 @@ export const JobShow: FC = () => {
                     />
                 </div>
             )}
+            {tracebackData && (
+                <div className="job-show-section">
+                    <Title level={3}>Traceback</Title>
+                    <pre className="job-show-traceback">{tracebackData}</pre>
+                </div>
+            )}
             {outputData && outputEncoding === "base64" && (
                 <div className="job-show-section">
                     <Title level={3}>Output</Title>
@@ -195,6 +204,14 @@ export const JobShow: FC = () => {
                             Download
                         </a>
                     </div>
+                </div>
+            )}
+            {job && (
+                <div className="job-show-section">
+                    <Title level={3}>Payload</Title>
+                    <pre className="job-show-payload">
+                        {JSON.stringify(job, null, 2)}
+                    </pre>
                 </div>
             )}
         </div>

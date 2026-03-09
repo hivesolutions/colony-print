@@ -9,6 +9,7 @@ import base64
 import shutil
 import logging
 import tempfile
+import traceback
 
 import appier
 
@@ -109,7 +110,11 @@ class ColonyPrintNode(object):
                             "Exception while printing job '%s': %s"
                             % (job["id"], str(exception))
                         )
-                        result = dict(result="error", error=str(exception))
+                        result = dict(
+                            result="error",
+                            error=str(exception),
+                            traceback=traceback.format_exc(),
+                        )
                     results[job["id"]] = result
                 for job_id, result in results.items():
                     logging.info("Posting job result for '%s'" % job_id)

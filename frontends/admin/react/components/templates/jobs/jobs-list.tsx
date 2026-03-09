@@ -111,6 +111,34 @@ export const JobsList: FC = () => {
             render: (job: JobInfo) => job.format || "-"
         },
         {
+            key: "result",
+            header: "Result",
+            render: (job: JobInfo) => {
+                const result = job.result?.result as
+                    | string
+                    | undefined;
+                if (!result) return "-";
+                const variant =
+                    result === "success"
+                        ? "success"
+                        : result === "error"
+                          ? "error"
+                          : "default";
+                return (
+                    <Tag
+                        variant={
+                            variant as
+                                | "success"
+                                | "error"
+                                | "default"
+                        }
+                    >
+                        {result}
+                    </Tag>
+                );
+            }
+        },
+        {
             key: "queued_time",
             header: "Queued",
             render: (job: JobInfo) => formatTimestamp(job.queued_time)

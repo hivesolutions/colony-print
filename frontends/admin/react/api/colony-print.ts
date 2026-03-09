@@ -41,6 +41,7 @@ export interface JobInfo {
         output_data?: string;
         output_encoding?: string;
         output_mime_type?: string;
+        traceback?: string;
     };
 }
 
