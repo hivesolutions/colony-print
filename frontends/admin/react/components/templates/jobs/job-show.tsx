@@ -168,13 +168,29 @@ export const JobShow: FC = () => {
                     <DetailGrid
                         fields={resultEntries.map(([key, value]) => ({
                             label: key,
-                            value: (
-                                <Text>
-                                    {typeof value === "object"
-                                        ? JSON.stringify(value)
-                                        : String(value)}
-                                </Text>
-                            )
+                            value:
+                                key === "result" ? (
+                                    <Tag
+                                        variant={
+                                            (value === "success"
+                                                ? "success"
+                                                : value === "error"
+                                                  ? "error"
+                                                  : "default") as
+                                                | "success"
+                                                | "error"
+                                                | "default"
+                                        }
+                                    >
+                                        {String(value)}
+                                    </Tag>
+                                ) : (
+                                    <Text>
+                                        {typeof value === "object"
+                                            ? JSON.stringify(value)
+                                            : String(value)}
+                                    </Text>
+                                )
                         }))}
                     />
                 </div>
