@@ -9,9 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Raw JSON payload display in job detail page in Admin UI
-* Traceback storage and display for failed print jobs in Admin UI
-* Result column with colored tags in jobs list page in Admin UI
+*
 
 ### Changed
 
@@ -20,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.8.0] - 2026-03-09
+
+### Added
+
+* Raw JSON payload display in job detail page in Admin UI
+* Traceback storage and display for failed print jobs in Admin UI
+* Result column with colored tags in jobs list page in Admin UI
 
 ## [0.7.0] - 2026-02-26
 
