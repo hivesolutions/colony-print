@@ -59,3 +59,41 @@
     color: #b42318;
     border-color: #fecdca;
 }
+
+.job-show-files {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.job-show-file {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background-color: #ffffff;
+    text-decoration: none;
+    color: #344054;
+    font-size: 14px;
+    border-bottom: 1px solid #e4e7ec;
+}
+
+.job-show-file:last-child {
+    border-bottom: none;
+}
+
+.job-show-file:hover {
+    background-color: #f9fafb;
+}
+
+.job-show-file-name {
+    font-weight: 500;
+    color: #101828;
+}
+
+.job-show-file-size {
+    color: #667085;
+    font-size: 13px;
+}

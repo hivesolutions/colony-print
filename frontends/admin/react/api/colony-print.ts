@@ -66,6 +66,11 @@ export interface ServerInfo {
     jobs: number;
 }
 
+export interface JobFileInfo {
+    name: string;
+    size: number;
+}
+
 export interface PingResponse {
     time: number;
 }
@@ -129,6 +134,15 @@ export class ColonyPrintAPI {
     async getJob(id: string): Promise<JobInfo> {
         const response = await this._fetch(`/jobs/${encodeURIComponent(id)}`);
         return (await response.json()) as JobInfo;
+    }
+
+    async listJobFiles(id: string): Promise<JobFileInfo[]> {
+        const response = await this._fetch(`/jobs/${encodeURIComponent(id)}/files`);
+        return (await response.json()) as JobFileInfo[];
+    }
+
+    jobFileUrl(id: string, name: string): string {
+        return `${this.baseUrl}/jobs/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`;
     }
 
     async listPrinters(): Promise<PrinterInfo[]> {

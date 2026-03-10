@@ -2,7 +2,7 @@ import React, { FC, useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
-import { JobInfo } from "../../../api/colony-print";
+import { JobInfo, JobFileInfo } from "../../../api/colony-print";
 import { Button, Link, Tag, Title, Text } from "../../atoms";
 import { ContentHeader, DetailGrid } from "../../molecules";
 import { formatTimestamp } from "../../../utils";
@@ -13,6 +13,7 @@ export const JobShow: FC = () => {
     const api = useAPI();
     const { id } = useParams<{ id: string }>();
     const [job, setJob] = useState<JobInfo | null>(null);
+    const [files, setFiles] = useState<JobFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchJob = useCallback(async () => {
@@ -21,6 +22,8 @@ export const JobShow: FC = () => {
         try {
             const data = await api.getJob(id);
             setJob(data);
+            const jobFiles = await api.listJobFiles(id);
+            setFiles(jobFiles);
         } catch {
             setJob(null);
         } finally {
@@ -230,6 +233,29 @@ export const JobShow: FC = () => {
                         >
                             Download
                         </a>
+                    </div>
+                </div>
+            )}
+            {files.length > 0 && (
+                <div className="job-show-section">
+                    <Title level={3}>Files</Title>
+                    <div className="job-show-files">
+                        {files.map((file) => (
+                            <a
+                                key={file.name}
+                                className="job-show-file"
+                                href={api.jobFileUrl(id!, file.name)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <span className="job-show-file-name">
+                                    {file.name}
+                                </span>
+                                <span className="job-show-file-size">
+                                    {formatBytes(file.size)}
+                                </span>
+                            </a>
+                        ))}
                     </div>
                 </div>
             )}
