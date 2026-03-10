@@ -387,9 +387,20 @@ class ColonyPrintNode(object):
         return True
 
     def _info_npcolony(self):
-        return dict(
+        info = dict(
             format=self.npcolony.get_format(), devices=self.npcolony.get_devices()
         )
+        if hasattr(self.npcolony, "VERSION"):
+            info["version"] = self.npcolony.VERSION
+        return info
+
+    def _info_gravo(self):
+        import gravo_pilot
+
+        info = dict()
+        if hasattr(gravo_pilot, "VERSION"):
+            info["version"] = gravo_pilot.VERSION
+        return info
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
