@@ -9,9 +9,9 @@ import { formatTimestamp } from "../../../utils";
 
 import "./job-show.css";
 
-const CollapsiblePayload: FC<{
+const CollapsibleSection: FC<{
     title: string;
-    children: string;
+    children: React.ReactNode;
 }> = ({ title, children }) => {
     const [open, setOpen] = useState(false);
     return (
@@ -28,9 +28,7 @@ const CollapsiblePayload: FC<{
                 </span>
                 <Title level={3}>{title}</Title>
             </button>
-            {open && (
-                <pre className="job-show-payload">{children}</pre>
-            )}
+            {open && children}
         </div>
     );
 };
@@ -141,6 +139,25 @@ export const JobShow: FC = () => {
     const outputEncoding = (job?.result?.output_encoding as string | undefined) ?? "base64";
 
     const tracebackData = job?.result?.traceback as string | undefined;
+    const resultData = job?.result?.data as Record<string, unknown> | undefined;
+    const durationData = resultData?.duration as number | undefined;
+    const logsData = resultData?.logs as string[][] | undefined;
+
+    const formatDurationSeconds = (seconds: number): string => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        if (h > 0) return `${h}h ${m}m ${s}s`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    };
+
+    const logSeverityVariant = (level: string) => {
+        if (level === "ERROR") return "error";
+        if (level === "WARNING") return "warning";
+        if (level === "INFO") return "success";
+        return "default";
+    };
 
     const resultEntries = job?.result
         ? [
@@ -154,6 +171,9 @@ export const JobShow: FC = () => {
                       key !== "output_mime_type" &&
                       key !== "traceback"
               ),
+              ...(durationData !== undefined
+                  ? [["duration", formatDurationSeconds(durationData)]]
+                  : []),
               ...(outputData
                   ? [
                         ["output_mime_type", outputMimeType],
@@ -286,26 +306,62 @@ export const JobShow: FC = () => {
                     </div>
                 </div>
             )}
+            {logsData && logsData.length > 0 && (
+                <CollapsibleSection title={`Logs (${logsData.length})`}>
+                    <div className="job-show-logs">
+                        {logsData.map((entry, i) => (
+                            <div key={i} className="job-show-log-entry">
+                                <span className="job-show-log-time">
+                                    {entry[0]}
+                                </span>
+                                <Tag
+                                    variant={
+                                        logSeverityVariant(entry[2]) as
+                                            | "success"
+                                            | "warning"
+                                            | "error"
+                                            | "default"
+                                    }
+                                >
+                                    {entry[2]}
+                                </Tag>
+                                <span className="job-show-log-source">
+                                    {entry[1]}
+                                </span>
+                                <span className="job-show-log-message">
+                                    {entry[3]}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
             {job?.request_payload &&
                 Object.keys(job.request_payload).length > 0 && (
-                    <CollapsiblePayload title="Request Payload">
-                        {JSON.stringify(
-                            job.request_payload,
-                            null,
-                            2
-                        )}
-                    </CollapsiblePayload>
+                    <CollapsibleSection title="Request">
+                        <pre className="job-show-payload">
+                            {JSON.stringify(
+                                job.request_payload,
+                                null,
+                                2
+                            )}
+                        </pre>
+                    </CollapsibleSection>
                 )}
             {job?.result &&
                 Object.keys(job.result).length > 0 && (
-                    <CollapsiblePayload title="Response Payload">
-                        {JSON.stringify(job.result, null, 2)}
-                    </CollapsiblePayload>
+                    <CollapsibleSection title="Response">
+                        <pre className="job-show-payload">
+                            {JSON.stringify(job.result, null, 2)}
+                        </pre>
+                    </CollapsibleSection>
                 )}
             {job && (
-                <CollapsiblePayload title="Payload">
-                    {JSON.stringify(job, null, 2)}
-                </CollapsiblePayload>
+                <CollapsibleSection title="Payload">
+                    <pre className="job-show-payload">
+                        {JSON.stringify(job, null, 2)}
+                    </pre>
+                </CollapsibleSection>
             )}
         </div>
     );
