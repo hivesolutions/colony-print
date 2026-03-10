@@ -73,7 +73,14 @@ export const JobShow: FC = () => {
                       </Tag>
                   )
               },
-              { label: "Type", value: job.type || "-" },
+              {
+                  label: "Type",
+                  value: job.type ? (
+                      <Tag variant="default">{job.type}</Tag>
+                  ) : (
+                      "-"
+                  )
+              },
               { label: "Format", value: job.format || "-" },
               {
                   label: "Data Length",
@@ -184,6 +191,10 @@ export const JobShow: FC = () => {
                                     >
                                         {String(value)}
                                     </Tag>
+                                ) : key === "handler" ? (
+                                    <Tag variant="default">
+                                        {String(value)}
+                                    </Tag>
                                 ) : (
                                     <Text>
                                         {typeof value === "object"
@@ -222,9 +233,22 @@ export const JobShow: FC = () => {
                     </div>
                 </div>
             )}
+            {job?.request_payload &&
+                Object.keys(job.request_payload).length > 0 && (
+                    <div className="job-show-section">
+                        <Title level={3}>Request Payload</Title>
+                        <pre className="job-show-payload">
+                            {JSON.stringify(
+                                job.request_payload,
+                                null,
+                                2
+                            )}
+                        </pre>
+                    </div>
+                )}
             {job && (
                 <div className="job-show-section">
-                    <Title level={3}>Payload</Title>
+                    <Title level={3}>Response Payload</Title>
                     <pre className="job-show-payload">
                         {JSON.stringify(job, null, 2)}
                     </pre>

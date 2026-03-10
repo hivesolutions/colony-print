@@ -103,7 +103,12 @@ export const JobsList: FC = () => {
         {
             key: "type",
             header: "Type",
-            render: (job: JobInfo) => job.type || "-"
+            render: (job: JobInfo) =>
+                job.type ? (
+                    <Tag variant="default">{job.type}</Tag>
+                ) : (
+                    "-"
+                )
         },
         {
             key: "format",

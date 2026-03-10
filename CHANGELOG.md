@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Server info endpoint and display in settings page of Admin UI
 * Duration formatting utility for uptime display
+* Request payload storage and display for JSON-based jobs (e.g. gravo)
+* Type and handler fields rendered as tags in job views
 
 ### Changed
 

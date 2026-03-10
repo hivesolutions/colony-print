@@ -37,6 +37,7 @@ export interface JobInfo {
     queued_time: number;
     printing_time?: number;
     finish_time?: number;
+    request_payload?: Record<string, unknown>;
     result?: Record<string, unknown> & {
         output_data?: string;
         output_encoding?: string;

@@ -30,5 +30,5 @@ class BaseController(appier.Controller):
             python=sys.version,
             uptime=uptime,
             nodes=len(self.owner.nodes),
-            jobs=len(self.owner.jobs_info)
+            jobs=len(self.owner.jobs_info),
         )
