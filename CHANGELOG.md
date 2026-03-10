@@ -9,10 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Server info endpoint and display in settings page of Admin UI
-* Duration formatting utility for uptime display
-* Request payload storage and display for JSON-based jobs (e.g. gravo)
-* Type and handler fields rendered as tags in job views
+*
 
 ### Changed
 
@@ -21,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.9.0] - 2026-03-10
+
+### Added
+
+* Server info endpoint and display in settings page of Admin UI
+* Duration formatting utility for uptime display
+* Request payload storage and display for JSON-based jobs (e.g. gravo)
+* Type and handler fields rendered as tags in job views
 
 ## [0.8.0] - 2026-03-09
 
