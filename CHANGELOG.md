@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Duration formatting and collapsible logs section with severity tags in job detail page
+*
 
 ### Changed
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.12.0] - 2026-03-10
+
+### Added
+
+* Duration formatting and collapsible logs section with severity tags in job detail page
 
 ## [0.11.0] - 2026-03-10
 
