@@ -4,6 +4,10 @@
     max-width: 600px;
 }
 
+.settings > .detail-grid-card {
+    margin-bottom: 16px;
+}
+
 .settings-section {
     padding: 24px;
     display: flex;

@@ -1,10 +1,13 @@
-import React, { FC, useContext, useState } from "react";
+import React, { FC, useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
+import { ServerInfo } from "../../../api/colony-print";
 import { DataContext } from "../../../contexts";
-import { Button, Card, Text, TextInput, Title } from "../../atoms";
-import { ContentHeader, Form } from "../../molecules";
+import { Button, Card, Tag, Text, TextInput, Title } from "../../atoms";
+import { ContentHeader, DetailGrid, Form } from "../../molecules";
+
+import { formatDuration } from "../../../utils";
 
 import "./settings.css";
 
@@ -16,6 +19,24 @@ export const Settings: FC = () => {
     const [baseUrl, setBaseUrl] = useState(
         localStorage.getItem("baseUrl") ?? ""
     );
+    const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+    const [serverLoading, setServerLoading] = useState(true);
+
+    const fetchServerInfo = useCallback(async () => {
+        setServerLoading(true);
+        try {
+            const data = await api.getInfo();
+            setServerInfo(data);
+        } catch {
+            setServerInfo(null);
+        } finally {
+            setServerLoading(false);
+        }
+    }, [api]);
+
+    useEffect(() => {
+        fetchServerInfo();
+    }, [fetchServerInfo]);
 
     const onSaveBaseUrl = () => {
         localStorage.setItem("baseUrl", baseUrl);
@@ -41,6 +62,62 @@ export const Settings: FC = () => {
             <ContentHeader
                 title="Settings"
                 description="Configure your admin interface"
+            />
+            <DetailGrid
+                fields={
+                    serverInfo
+                        ? [
+                              {
+                                  label: "Name",
+                                  value: serverInfo.name || "-"
+                              },
+                              {
+                                  label: "Version",
+                                  value: (
+                                      <Tag variant="default">
+                                          {serverInfo.version}
+                                      </Tag>
+                                  )
+                              },
+                              {
+                                  label: "Description",
+                                  value:
+                                      serverInfo.description || "-"
+                              },
+                              {
+                                  label: "Platform",
+                                  value: serverInfo.platform || "-"
+                              },
+                              {
+                                  label: "OS",
+                                  value: serverInfo.os || "-"
+                              },
+                              {
+                                  label: "Python",
+                                  value: serverInfo.python || "-"
+                              },
+                              {
+                                  label: "Uptime",
+                                  value: formatDuration(
+                                      serverInfo.uptime
+                                  )
+                              },
+                              {
+                                  label: "Nodes",
+                                  value: String(
+                                      serverInfo.nodes ?? "-"
+                                  )
+                              },
+                              {
+                                  label: "Jobs",
+                                  value: String(
+                                      serverInfo.jobs ?? "-"
+                                  )
+                              }
+                          ]
+                        : []
+                }
+                loading={serverLoading}
             />
             <Card style={["settings-section"]}>
                 <Title level={3}>API Connection</Title>

@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Server info endpoint and display in settings page of Admin UI
+* Duration formatting utility for uptime display
 
 ### Changed
 

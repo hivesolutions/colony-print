@@ -53,6 +53,18 @@ export interface PrinterInfo {
     length: number;
 }
 
+export interface ServerInfo {
+    name: string;
+    version: string;
+    description: string;
+    platform: string;
+    os: string;
+    python: string;
+    uptime: number | null;
+    nodes: number;
+    jobs: number;
+}
+
 export interface PingResponse {
     time: number;
 }
@@ -121,6 +133,11 @@ export class ColonyPrintAPI {
     async listPrinters(): Promise<PrinterInfo[]> {
         const response = await this._fetch("/printers");
         return (await response.json()) as PrinterInfo[];
+    }
+
+    async getInfo(): Promise<ServerInfo> {
+        const response = await this._fetch("/info");
+        return (await response.json()) as ServerInfo;
     }
 
     async ping(): Promise<PingResponse> {

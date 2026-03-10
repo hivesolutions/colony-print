@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import time
+
 import appier
 import appier_extras
 
@@ -10,6 +12,7 @@ class ColonyPrintApp(appier.APIApp):
         appier.APIApp.__init__(
             self, name="colony-print", parts=(appier_extras.AdminPart,), *args, **kwargs
         )
+        self.start_time = time.time()
         self.nodes = dict()
         self.jobs = dict()
         self.jobs_info = appier.LimitedSizeDict(
