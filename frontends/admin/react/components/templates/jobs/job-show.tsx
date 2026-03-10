@@ -272,9 +272,18 @@ export const JobShow: FC = () => {
                         </pre>
                     </div>
                 )}
+            {job?.result &&
+                Object.keys(job.result).length > 0 && (
+                    <div className="job-show-section">
+                        <Title level={3}>Response Payload</Title>
+                        <pre className="job-show-payload">
+                            {JSON.stringify(job.result, null, 2)}
+                        </pre>
+                    </div>
+                )}
             {job && (
                 <div className="job-show-section">
-                    <Title level={3}>Response Payload</Title>
+                    <Title level={3}>Payload</Title>
                     <pre className="job-show-payload">
                         {JSON.stringify(job, null, 2)}
                     </pre>
