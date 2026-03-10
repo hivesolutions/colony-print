@@ -9,9 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Separate request, response, and full payload sections in job detail page
-* Collapsible payload sections in job detail page
-* Strip result data field from in-memory job info
+*
 
 ### Changed
 
@@ -20,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.11.0] - 2026-03-10
+
+### Added
+
+* Separate request, response, and full payload sections in job detail page
+* Collapsible payload sections in job detail page
+* Strip result data field from in-memory job info
 
 ## [0.10.0] - 2026-03-10
 
