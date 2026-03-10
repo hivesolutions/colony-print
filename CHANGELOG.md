@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Separate request, response, and full payload sections in job detail page
+* Collapsible payload sections in job detail page
+* Strip result data field from in-memory job info
 
 ### Changed
 

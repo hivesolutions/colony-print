@@ -97,3 +97,28 @@
     color: #667085;
     font-size: 13px;
 }
+
+.job-show-collapsible {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.job-show-collapsible:hover {
+    opacity: 0.7;
+}
+
+.job-show-collapsible-icon {
+    font-size: 12px;
+    color: #667085;
+    transition: transform 0.2s ease;
+}
+
+.job-show-collapsible-open .job-show-collapsible-icon {
+    color: #344054;
+}

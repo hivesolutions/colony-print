@@ -9,6 +9,32 @@ import { formatTimestamp } from "../../../utils";
 
 import "./job-show.css";
 
+const CollapsiblePayload: FC<{
+    title: string;
+    children: string;
+}> = ({ title, children }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="job-show-section">
+            <button
+                className={
+                    "job-show-collapsible" +
+                    (open ? " job-show-collapsible-open" : "")
+                }
+                onClick={() => setOpen(!open)}
+            >
+                <span className="job-show-collapsible-icon">
+                    {open ? "\u25BC" : "\u25B6"}
+                </span>
+                <Title level={3}>{title}</Title>
+            </button>
+            {open && (
+                <pre className="job-show-payload">{children}</pre>
+            )}
+        </div>
+    );
+};
+
 export const JobShow: FC = () => {
     const api = useAPI();
     const { id } = useParams<{ id: string }>();
@@ -122,6 +148,7 @@ export const JobShow: FC = () => {
                   ([key, v]) =>
                       v !== undefined &&
                       v !== null &&
+                      key !== "data" &&
                       key !== "output_data" &&
                       key !== "output_encoding" &&
                       key !== "output_mime_type" &&
@@ -261,33 +288,24 @@ export const JobShow: FC = () => {
             )}
             {job?.request_payload &&
                 Object.keys(job.request_payload).length > 0 && (
-                    <div className="job-show-section">
-                        <Title level={3}>Request Payload</Title>
-                        <pre className="job-show-payload">
-                            {JSON.stringify(
-                                job.request_payload,
-                                null,
-                                2
-                            )}
-                        </pre>
-                    </div>
+                    <CollapsiblePayload title="Request Payload">
+                        {JSON.stringify(
+                            job.request_payload,
+                            null,
+                            2
+                        )}
+                    </CollapsiblePayload>
                 )}
             {job?.result &&
                 Object.keys(job.result).length > 0 && (
-                    <div className="job-show-section">
-                        <Title level={3}>Response Payload</Title>
-                        <pre className="job-show-payload">
-                            {JSON.stringify(job.result, null, 2)}
-                        </pre>
-                    </div>
+                    <CollapsiblePayload title="Response Payload">
+                        {JSON.stringify(job.result, null, 2)}
+                    </CollapsiblePayload>
                 )}
             {job && (
-                <div className="job-show-section">
-                    <Title level={3}>Payload</Title>
-                    <pre className="job-show-payload">
-                        {JSON.stringify(job, null, 2)}
-                    </pre>
-                </div>
+                <CollapsiblePayload title="Payload">
+                    {JSON.stringify(job, null, 2)}
+                </CollapsiblePayload>
             )}
         </div>
     );
