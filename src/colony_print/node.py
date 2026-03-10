@@ -331,16 +331,18 @@ class ColonyPrintNode(object):
         width = data_j.get("width", 80)
         height = data_j.get("height", 100)
         dry_run = data_j.get("dry_run", False)
+        debug = data_j.get("debug", False)
 
         start = time.time()
-        screenshots = gravo_pilot.GravostyleAPI().write_text(
-            text,
-            font=font,
-            font_size=font_size,
-            width=width,
-            height=height,
-            dry_run=dry_run,
-        )
+        with gravo_pilot.capture_logs() as logs:
+            screenshots = gravo_pilot.GravostyleAPI().write_text(
+                text,
+                font=font,
+                font_size=font_size,
+                width=width,
+                height=height,
+                dry_run=dry_run,
+            )
         duration = time.time() - start
 
         files = []
@@ -353,7 +355,11 @@ class ColonyPrintNode(object):
             _data_b64 = base64.b64encode(data)
             files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
 
-        return dict(duration=duration, files=files)
+        return (
+            dict(duration=duration, logs=logs, files=files)
+            if debug
+            else dict(duration=duration, files=files)
+        )
 
     def _handle_text(self, data_b64):
         if not self._has_text():
