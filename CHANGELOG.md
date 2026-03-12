@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Margins parameter validation for Gravo Pilot print jobs
+*
 
 ### Changed
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.14.0] - 2026-03-12
+
+### Added
+
+* Margins parameter validation for Gravo Pilot print jobs
 
 ## [0.13.0] - 2026-03-12
 
