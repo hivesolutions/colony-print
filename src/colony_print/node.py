@@ -334,6 +334,12 @@ class ColonyPrintNode(object):
         dry_run = data_j.get("dry_run", False)
         debug = data_j.get("debug", False)
 
+        if margins:
+            appier.verify(
+                isinstance(margins, (list, tuple)) and len(margins) == 4,
+                message="Margins must be a 4-element array [left, right, top, bottom]",
+            )
+
         start = time.time()
         with gravo_pilot.capture_logs() as logs:
             screenshots = gravo_pilot.GravostyleAPI().write_text(
