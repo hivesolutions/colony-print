@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* NPColony and Gravo Pilot version reporting in node engine info
-* Gravo Pilot support for margins
+*
 
 ### Changed
 
@@ -19,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.13.0] - 2026-03-12
+
+### Added
+
+* NPColony and Gravo Pilot version reporting in node engine info
+* Gravo Pilot support for margins
 
 ## [0.12.0] - 2026-03-10
 
