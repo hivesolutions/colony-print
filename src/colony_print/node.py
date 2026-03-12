@@ -330,6 +330,7 @@ class ColonyPrintNode(object):
         font_size = data_j.get("font_size", None)
         width = data_j.get("width", 80)
         height = data_j.get("height", 100)
+        margins = data_j.get("margins", None)
         dry_run = data_j.get("dry_run", False)
         debug = data_j.get("debug", False)
 
@@ -341,6 +342,7 @@ class ColonyPrintNode(object):
                 font_size=font_size,
                 width=width,
                 height=height,
+                margins=tuple(margins) if margins else None,
                 dry_run=dry_run,
             )
         duration = time.time() - start
