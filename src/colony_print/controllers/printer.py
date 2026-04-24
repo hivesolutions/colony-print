@@ -8,6 +8,8 @@ class PrinterController(appier.Controller):
     @appier.route("/printers", "GET", json=True)
     @appier.ensure(token="admin")
     def list(self):
+        if not self.has_npcolony:
+            return []
         return self.npcolony.get_devices()
 
     @appier.route("/printers/hello", "GET", json=True)
@@ -32,3 +34,11 @@ class PrinterController(appier.Controller):
         import npcolony
 
         return npcolony
+
+    @property
+    def has_npcolony(self):
+        try:
+            import npcolony
+        except ImportError:
+            return False
+        return True

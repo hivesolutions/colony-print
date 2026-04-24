@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Return empty list from `GET /printers` instead of 500 when the `npcolony` engine is not available
 
 ## [0.14.0] - 2026-03-12
 
