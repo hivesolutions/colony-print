@@ -8,7 +8,7 @@ import { formatTimestamp } from "../../../utils";
 
 import "./jobs-list.css";
 
-type StatusFilter = "all" | "queued" | "printing" | "finished";
+type StatusFilter = "all" | "queued" | "printing" | "finished" | "cancelled";
 
 export const JobsList: FC = () => {
     const api = useAPI();
@@ -85,13 +85,16 @@ export const JobsList: FC = () => {
                         ? "success"
                         : job.status === "printing"
                           ? "warning"
-                          : "default";
+                          : job.status === "cancelled"
+                            ? "error"
+                            : "default";
                 return (
                     <Tag
                         variant={
                             variant as
                                 | "success"
                                 | "warning"
+                                | "error"
                                 | "default"
                         }
                     >
@@ -159,7 +162,8 @@ export const JobsList: FC = () => {
         "all",
         "queued",
         "printing",
-        "finished"
+        "finished",
+        "cancelled"
     ];
 
     return (

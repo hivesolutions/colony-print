@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * CI job that builds a Docker image and deploys it to the bemisc infrastructure
+* Ability to cancel queued print jobs
 
 ### Changed
 

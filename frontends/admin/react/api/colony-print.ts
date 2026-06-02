@@ -37,6 +37,7 @@ export interface JobInfo {
     queued_time: number;
     printing_time?: number;
     finish_time?: number;
+    cancel_time?: number;
     request_payload?: Record<string, unknown>;
     result?: Record<string, unknown> & {
         output_data?: string;
@@ -133,6 +134,14 @@ export class ColonyPrintAPI {
 
     async getJob(id: string): Promise<JobInfo> {
         const response = await this._fetch(`/jobs/${encodeURIComponent(id)}`);
+        return (await response.json()) as JobInfo;
+    }
+
+    async cancelJob(id: string): Promise<JobInfo> {
+        const response = await this._fetch(
+            `/jobs/${encodeURIComponent(id)}/cancel`,
+            { method: "POST" }
+        );
         return (await response.json()) as JobInfo;
     }
 

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import time
 
 import appier
 
@@ -16,6 +17,36 @@ class JobController(appier.Controller):
     @appier.ensure(token="admin")
     def show(self, id):
         return self.owner.jobs_info[id]
+
+    @appier.route("/jobs/<str:id>/cancel", "POST", json=True)
+    @appier.ensure(token="admin")
+    def cancel(self, id):
+        appier.verify(
+            id in self.owner.jobs_info,
+            message="Job not found",
+            code=404,
+        )
+
+        job_info = self.owner.jobs_info[id]
+        status = job_info.get("status", None)
+
+        # only queued jobs may be reliably cancelled, as a job already
+        # picked up by a node is being printed and can no longer be
+        # stopped from the server side
+        appier.verify(
+            status == "queued",
+            message="Job in '%s' status can not be cancelled" % status,
+            code=409,
+        )
+
+        # removes the job from the pending queue of its node so that it
+        # is never dispatched, in case it has not been picked up yet
+        node_id = job_info["node_id"]
+        jobs = self.owner.jobs.get(node_id, [])
+        self.owner.jobs[node_id] = [job for job in jobs if not job["id"] == id]
+
+        job_info.update(status="cancelled", cancel_time=time.time())
+        return job_info
 
     @appier.route("/jobs/<str:id>/files", "GET", json=True)
     @appier.ensure(token="admin")

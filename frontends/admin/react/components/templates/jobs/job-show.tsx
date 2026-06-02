@@ -39,6 +39,7 @@ export const JobShow: FC = () => {
     const [job, setJob] = useState<JobInfo | null>(null);
     const [files, setFiles] = useState<JobFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
+    const [cancelling, setCancelling] = useState(false);
 
     const fetchJob = useCallback(async () => {
         if (!id) return;
@@ -59,6 +60,20 @@ export const JobShow: FC = () => {
         fetchJob();
     }, [fetchJob]);
 
+    const cancelJob = useCallback(async () => {
+        if (!id) return;
+        setCancelling(true);
+        try {
+            await api.cancelJob(id);
+        } catch {
+            // ignores the error as the job refresh below will
+            // reflect the actual (server-side) job state
+        } finally {
+            await fetchJob();
+            setCancelling(false);
+        }
+    }, [api, id, fetchJob]);
+
     const formatBytes = (bytes?: number): string => {
         if (bytes === undefined || bytes === null) return "-";
         if (bytes < 1024) return `${bytes} B`;
@@ -70,6 +85,7 @@ export const JobShow: FC = () => {
     const statusVariant = (status: string) => {
         if (status === "finished") return "success";
         if (status === "printing") return "warning";
+        if (status === "cancelled") return "error";
         return "default";
     };
 
@@ -93,6 +109,7 @@ export const JobShow: FC = () => {
                               statusVariant(job.status) as
                                   | "success"
                                   | "warning"
+                                  | "error"
                                   | "default"
                           }
                       >
@@ -124,6 +141,10 @@ export const JobShow: FC = () => {
               {
                   label: "Finished",
                   value: formatTimestamp(job.finish_time)
+              },
+              {
+                  label: "Cancelled",
+                  value: formatTimestamp(job.cancel_time)
               }
           ]
         : [];
@@ -192,13 +213,25 @@ export const JobShow: FC = () => {
                     id ? `Job ${id.substring(0, 8)}` : undefined
                 }
                 actions={
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => window.history.back()}
-                    >
-                        Back to Jobs
-                    </Button>
+                    <>
+                        {job?.status === "queued" && (
+                            <Button
+                                variant="danger"
+                                size="sm"
+                                loading={cancelling}
+                                onClick={cancelJob}
+                            >
+                                Cancel
+                            </Button>
+                        )}
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => window.history.back()}
+                        >
+                            Back to Jobs
+                        </Button>
+                    </>
                 }
             />
             <DetailGrid fields={fields} loading={loading} />
