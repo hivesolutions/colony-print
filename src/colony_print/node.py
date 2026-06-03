@@ -359,7 +359,7 @@ class ColonyPrintNode(object):
 
         for screenshot in screenshots:
             name, value = screenshot
-            if not appier.legacy.is_bytes(value):
+            if appier.legacy.is_string(value):
                 with open(value, "rb") as file:
                     data = file.read()
             else:
