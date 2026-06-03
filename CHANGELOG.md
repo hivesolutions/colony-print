@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+*
+
+## [0.16.1] - 2026-06-03
+
+### Fixed
+
 * Correct handling of file-based Gravo session recording videos when returning job results
 
 ## [0.16.0] - 2026-06-03
