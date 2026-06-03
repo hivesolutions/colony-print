@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * CI step that deploys the `colony-print-latest` instance to the bemisc infrastructure on every push to `master`
+* Support for the gravo `record` parameter, returning the session recording video alongside the job screenshots
 
 ### Changed
 

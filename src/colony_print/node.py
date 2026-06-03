@@ -332,6 +332,7 @@ class ColonyPrintNode(object):
         height = data_j.get("height", 100)
         margins = data_j.get("margins", None)
         dry_run = data_j.get("dry_run", False)
+        record = data_j.get("record", False)
         debug = data_j.get("debug", False)
 
         if margins:
@@ -350,16 +351,21 @@ class ColonyPrintNode(object):
                 height=height,
                 margins=tuple(margins) if margins else None,
                 dry_run=dry_run,
+                record=record,
             )
         duration = time.time() - start
 
         files = []
 
         for screenshot in screenshots:
-            name, image = screenshot
-            buffer = appier.legacy.BytesIO()
-            image.save(buffer, format="PNG")
-            data = buffer.getvalue()
+            name, value = screenshot
+            if not appier.legacy.is_bytes(value):
+                with open(value, "rb") as file:
+                    data = file.read()
+            else:
+                buffer = appier.legacy.BytesIO()
+                value.save(buffer, format="PNG")
+                data = buffer.getvalue()
             _data_b64 = base64.b64encode(data)
             files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
 
