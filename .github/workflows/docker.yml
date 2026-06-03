@@ -48,6 +48,16 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Trigger colony-print-latest deployment
+        if: github.event_name == 'push' && github.ref_name == 'master'
+        uses: hivesolutions/deploy-action@v1
+        with:
+          repository: hivesolutions/infra-bemisc
+          service: colony-print-latest
+          group: apps
+          tag: latest
+          token: ${{ secrets.INFRA_DEPLOY_PAT }}
+
       - name: Trigger colony-print deployment
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: hivesolutions/deploy-action@v1
