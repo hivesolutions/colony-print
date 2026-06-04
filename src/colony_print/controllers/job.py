@@ -13,10 +13,18 @@ class JobController(appier.Controller):
     def list(self):
         return dict(self.owner.jobs_info)
 
+    @appier.route("/jobs", "OPTIONS")
+    def list_o(self):
+        return ""
+
     @appier.route("/jobs/<str:id>", "GET", json=True)
     @appier.ensure(token="admin")
     def show(self, id):
         return self.owner.jobs_info[id]
+
+    @appier.route("/jobs/<str:id>", "OPTIONS")
+    def show_o(self, id):
+        return ""
 
     @appier.route("/jobs/<str:id>/cancel", "POST", json=True)
     @appier.ensure(token="admin")
@@ -48,6 +56,10 @@ class JobController(appier.Controller):
         job_info.update(status="cancelled", cancel_time=time.time())
         return job_info
 
+    @appier.route("/jobs/<str:id>/cancel", "OPTIONS")
+    def cancel_o(self, id):
+        return ""
+
     @appier.route("/jobs/<str:id>/files", "GET", json=True)
     @appier.ensure(token="admin")
     def files(self, id):
@@ -60,6 +72,10 @@ class JobController(appier.Controller):
             for name in sorted(os.listdir(job_path))
         ]
 
+    @appier.route("/jobs/<str:id>/files", "OPTIONS")
+    def files_o(self, id):
+        return ""
+
     @appier.route("/jobs/<str:id>/files/<str:name>", "GET")
     @appier.ensure(token="admin")
     def file(self, id, name):
@@ -71,3 +87,7 @@ class JobController(appier.Controller):
             code=404,
         )
         return self.send_path(file_path)
+
+    @appier.route("/jobs/<str:id>/files/<str:name>", "OPTIONS")
+    def file_o(self, id, name):
+        return ""

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* OPTIONS handlers on every `/jobs` and `/jobs/<id>/...` route so browsers can complete the CORS preflight and reach the job status, cancel and files endpoints directly from a different origin, matching the pattern already in place for the `/nodes/<id>/print` routes.
 
 ### Changed
 
