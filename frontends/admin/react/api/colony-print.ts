@@ -145,6 +145,14 @@ export class ColonyPrintAPI {
         return (await response.json()) as JobInfo;
     }
 
+    async cloneJob(id: string): Promise<JobInfo> {
+        const response = await this._fetch(
+            `/jobs/${encodeURIComponent(id)}/clone`,
+            { method: "POST" }
+        );
+        return (await response.json()) as JobInfo;
+    }
+
     async listJobFiles(id: string): Promise<JobFileInfo[]> {
         const response = await this._fetch(`/jobs/${encodeURIComponent(id)}/files`);
         return (await response.json()) as JobFileInfo[];
@@ -152,6 +160,10 @@ export class ColonyPrintAPI {
 
     jobFileUrl(id: string, name: string): string {
         return `${this.baseUrl}/jobs/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`;
+    }
+
+    jobPayloadUrl(id: string): string {
+        return `${this.baseUrl}/jobs/${encodeURIComponent(id)}/payload`;
     }
 
     async listPrinters(): Promise<PrinterInfo[]> {

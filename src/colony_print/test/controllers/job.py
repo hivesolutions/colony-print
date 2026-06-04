@@ -60,6 +60,20 @@ class JobControllerTest(unittest.TestCase):
             response.headers["Access-Control-Allow-Headers"].startswith("*"), True
         )
 
+    def test_clone(self):
+        response = self.app.post("/jobs/name/clone")
+        self.assertEqual(response.code, 403)
+
+    def test_clone_o(self):
+        response = self.app.options("/jobs/name/clone")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Origin"].startswith("*"), True
+        )
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Headers"].startswith("*"), True
+        )
+
     def test_files(self):
         response = self.app.get("/jobs/name/files")
         self.assertEqual(response.code, 403)
@@ -80,6 +94,20 @@ class JobControllerTest(unittest.TestCase):
 
     def test_file_o(self):
         response = self.app.options("/jobs/name/files/file.txt")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Origin"].startswith("*"), True
+        )
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Headers"].startswith("*"), True
+        )
+
+    def test_payload(self):
+        response = self.app.get("/jobs/name/payload")
+        self.assertEqual(response.code, 403)
+
+    def test_payload_o(self):
+        response = self.app.options("/jobs/name/payload")
         self.assertEqual(response.code, 200)
         self.assertEqual(
             response.headers["Access-Control-Allow-Origin"].startswith("*"), True

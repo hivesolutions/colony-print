@@ -137,6 +137,7 @@ class NodeController(appier.Controller):
         if request_payload:
             job_info["request_payload"] = request_payload
         self.owner.jobs_info[job_id] = job_info
+        self.owner.jobs_data[job_id] = data_b64
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
@@ -224,6 +225,7 @@ class NodeController(appier.Controller):
         if request_payload:
             job_info["request_payload"] = request_payload
         self.owner.jobs_info[job_id] = job_info
+        self.owner.jobs_data[job_id] = data_b64
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds

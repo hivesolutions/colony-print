@@ -1,5 +1,5 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
 import { JobInfo, JobFileInfo } from "../../../api/colony-print";
@@ -36,10 +36,12 @@ const CollapsibleSection: FC<{
 export const JobShow: FC = () => {
     const api = useAPI();
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
     const [job, setJob] = useState<JobInfo | null>(null);
     const [files, setFiles] = useState<JobFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState(false);
+    const [duplicating, setDuplicating] = useState(false);
 
     const fetchJob = useCallback(async () => {
         if (!id) return;
@@ -73,6 +75,21 @@ export const JobShow: FC = () => {
             setCancelling(false);
         }
     }, [api, id, fetchJob]);
+
+    const duplicateJob = useCallback(async () => {
+        if (!id) return;
+        setDuplicating(true);
+        try {
+            const clone = await api.cloneJob(id);
+            navigate(`/jobs/${clone.id}`);
+        } catch {
+            // ignores the error as the job refresh below will
+            // reflect the actual (server-side) job state
+        } finally {
+            await fetchJob();
+            setDuplicating(false);
+        }
+    }, [api, id, navigate, fetchJob]);
 
     const formatBytes = (bytes?: number): string => {
         if (bytes === undefined || bytes === null) return "-";
@@ -214,6 +231,16 @@ export const JobShow: FC = () => {
                 }
                 actions={
                     <>
+                        {job && (
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                loading={duplicating}
+                                onClick={duplicateJob}
+                            >
+                                Duplicate
+                            </Button>
+                        )}
                         {job?.status === "queued" && (
                             <Button
                                 variant="danger"
@@ -316,10 +343,27 @@ export const JobShow: FC = () => {
                     </div>
                 </div>
             )}
-            {files.length > 0 && (
+            {(files.length > 0 || (job && job.data_length > 0)) && (
                 <div className="job-show-section">
                     <Title level={3}>Files</Title>
                     <div className="job-show-files">
+                        {job && job.data_length > 0 && (
+                            <a
+                                className="job-show-file"
+                                href={api.jobPayloadUrl(id!)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <span className="job-show-file-name">
+                                    {`${job.name || id}.payload`}
+                                </span>
+                                <span className="job-show-file-size">
+                                    {formatBytes(
+                                        Math.floor((job.data_length * 3) / 4)
+                                    )}
+                                </span>
+                            </a>
+                        )}
                         {files.map((file) => (
                             <a
                                 key={file.name}

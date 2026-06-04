@@ -18,6 +18,9 @@ class ColonyPrintApp(appier.APIApp):
         self.jobs_info = appier.LimitedSizeDict(
             max_size=appier.conf("JOB_SIZE", 128, cast=int)
         )
+        self.jobs_data = appier.LimitedSizeDict(
+            max_size=appier.conf("JOB_SIZE", 128, cast=int)
+        )
 
     def _version(self):
         return "0.17.0"
