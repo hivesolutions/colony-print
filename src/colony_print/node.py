@@ -16,7 +16,7 @@ import appier
 NAME = "colony-print"
 """ The name of the program currently running """
 
-VERSION = "0.16.1"
+VERSION = "0.17.0"
 """ The version of the colony print node currently running,
 this value should be updated whenever a new version is released """
 
