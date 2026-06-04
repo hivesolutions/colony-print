@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Ability to duplicate an existing print job, reusing its original payload, from both the API and the Admin UI
-* Ability to download a print job's original payload from the Admin UI
+*
 
 ### Changed
 
@@ -19,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.18.0] - 2026-06-04
+
+### Added
+
+* Ability to duplicate an existing print job, reusing its original payload, from both the API and the Admin UI
+* Ability to download a print job's original payload from the Admin UI
 
 ## [0.17.0] - 2026-06-04
 
