@@ -334,6 +334,7 @@ class ColonyPrintNode(object):
         dry_run = data_j.get("dry_run", False)
         record = data_j.get("record", False)
         debug = data_j.get("debug", False)
+        extra_fonts = data_j.get("extra_fonts", None)
 
         if margins:
             appier.verify(
@@ -341,19 +342,36 @@ class ColonyPrintNode(object):
                 message="Margins must be a 4-element array [left, right, top, bottom]",
             )
 
-        start = time.time()
-        with gravo_pilot.capture_logs() as logs:
-            screenshots = gravo_pilot.GravostyleAPI().write_text(
-                text,
-                font=font,
-                font_size=font_size,
-                width=width,
-                height=height,
-                margins=tuple(margins) if margins else None,
-                dry_run=dry_run,
-                record=record,
-            )
-        duration = time.time() - start
+        # stages every extra font payload onto a per job temporary
+        # directory so that gravo pilot can find the requested fonts
+        # on disk by name and install them into the engraving software
+        # for the duration of the print job, with a try and finally
+        # block guaranteeing that the staging directory is removed
+        # regardless of whether the print succeeds or raises
+        extra_fonts_dir = None
+        extra_fonts_paths = None
+        if extra_fonts:
+            extra_fonts_dir = tempfile.mkdtemp(prefix="colony-print-fonts-")
+            extra_fonts_paths = self._stage_extra_fonts(extra_fonts, extra_fonts_dir)
+
+        try:
+            start = time.time()
+            with gravo_pilot.capture_logs() as logs:
+                screenshots = gravo_pilot.GravostyleAPI().write_text(
+                    text,
+                    font=font,
+                    font_size=font_size,
+                    width=width,
+                    height=height,
+                    margins=tuple(margins) if margins else None,
+                    dry_run=dry_run,
+                    record=record,
+                    extra_fonts=extra_fonts_paths,
+                )
+            duration = time.time() - start
+        finally:
+            if extra_fonts_dir:
+                shutil.rmtree(extra_fonts_dir, ignore_errors=True)
 
         files = []
 
@@ -374,6 +392,38 @@ class ColonyPrintNode(object):
             if debug
             else dict(duration=duration, files=files)
         )
+
+    def _stage_extra_fonts(self, extra_fonts, target_dir):
+        """
+        Writes the provided extra fonts onto the given target directory
+        as `<name>.f3s` files, returning the mapping of font name to
+        the absolute path of the staged payload so that the caller can
+        forward it to gravo pilot's `extra_fonts` keyword argument.
+
+        Each entry value is a base64 string mirroring the wire format
+        used by the rest of the gravo print payload, so that the print
+        request itself stays as a single self contained JSON envelope.
+
+        :type extra_fonts: dict
+        :param extra_fonts: The mapping of font name to the base64
+        encoded `.f3s` payload that should be staged on disk.
+        :type target_dir: str
+        :param target_dir: The file system path of the directory where
+        the payloads should be written, typically a per job temporary
+        directory owned by the caller.
+        :rtype: dict
+        :return: The mapping of font name to the absolute path of the
+        staged payload, ready to be passed to gravo pilot.
+        """
+
+        paths = dict()
+        for name, payload_b64 in extra_fonts.items():
+            target_path = os.path.join(target_dir, "%s.f3s" % name)
+            payload = base64.b64decode(payload_b64)
+            with open(target_path, "wb") as file:
+                file.write(payload)
+            paths[name] = target_path
+        return paths
 
     def _handle_text(self, data_b64):
         if not self._has_text():
