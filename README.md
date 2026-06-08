@@ -54,15 +54,10 @@ python -m colony_print.node
 
 ### Fonts
 
-To be able to use new fonts (other than the ones provided by the system), one must install them
-into the `/usr/share/fonts/truetype` directory so they are exposed and ready to
-be used by the PDF generation infra-structure. For example, Calibri is one type of font that should
-be exported to a UNIX machine as many colony-generated documents use it.
+To be able to use new fonts (other than the ones provided by the system), one must install them into the `/usr/share/fonts/truetype` directory so they are exposed and ready to be used by the PDF generation infra-structure. For example, Calibri is one type of font that should be exported to a UNIX machine as many colony-generated documents use it.
 
-The `/usr/share/fonts/truetype` install path is shared by the PDF generation engine. The `gravo`
-engine receives its fonts on a per print job basis through the `extra_fonts` field of the gravo
-print payload (see [Gravo Print Payload](#gravo-print-payload)) and stages them on a per job
-temporary directory, so the two flows are independent and operators should not confuse them.
+The `/usr/share/fonts/truetype` install path is shared by the PDF generation engine.
+The `gravo` engine receives its fonts on a per print job basis through the `extra_fonts` field of the gravo print payload (see [Gravo Print Payload](#gravo-print-payload)) and stages them on a per job temporary directory, so the two flows are independent and operators should not confuse them.
 
 ### Engines
 
@@ -74,8 +69,7 @@ There are currently three engines available for printing in Colony Print:
 
 ### Gravo Print Payload
 
-The `gravo` engine accepts a JSON payload submitted as base64 to the print endpoint. The accepted
-fields are documented below:
+The `gravo` engine accepts a JSON payload submitted as base64 to the print endpoint. The accepted fields are documented below:
 
 | Field         | Type            | Required | Notes                                                                                                                                                                                                                                       |
 | ------------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
