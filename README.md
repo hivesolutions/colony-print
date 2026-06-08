@@ -67,6 +67,40 @@ There are currently three engines available for printing in Colony Print:
 * `gravo` - Which allows engraving of text and signatures using [Gravo Pilot](https://github.com/hivesolutions/gravo-pilot). Accepts an `extra_fonts` mapping in the print payload to ship `.f3s` font payloads to the engraving software on a per print job basis (see [Gravo Print Payload](#gravo-print-payload)).
 * `text` - A simple virtual printer text engine that prints text to a simple plain text file and returns the file.
 
+### Print Request
+
+Every engine is reached through the same print endpoint and request envelope. A job is submitted to `/nodes/<id>/print` (or `/nodes/<id>/printers/<printer>/print` to target a specific printer) with the following fields:
+
+| Field      | Type   | Required | Notes                                                                                                      |
+| ---------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `data`     | string | yes\*    | Raw document data, base64 encoded by the server before dispatch. Mutually exclusive with `data_b64`.       |
+| `data_b64` | string | yes\*    | Base64 encoded document data, the engine specific payload described below. Mutually exclusive with `data`. |
+| `name`     | string | no       | Human readable job name. Defaults to the generated job identifier.                                         |
+| `type`     | string | no       | Target engine: `npcolony` (default), `gravo` or `text`.                                                    |
+| `format`   | string | no       | Expected document format (e.g. `binie`, `pdf`). Validated against the node format when provided.           |
+| `options`  | object | no       | Extra per job options (see table below). Keys outside the supported set are discarded.                     |
+
+\* Exactly one of `data` or `data_b64` must be provided.
+
+The `options` map is filtered to the following keys:
+
+| Option            | Type    | Scope      | Notes                                                                                      |
+| ----------------- | ------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `scale`           | number  | npcolony   | Forwarded to the npcolony engine to scale the printed output.                              |
+| `quality`         | number  | npcolony   | Forwarded to the npcolony engine to control the print quality.                             |
+| `save_output`     | boolean | email mode | When `true` the generated PDF is returned (base64) in the job result. Defaults to `false`. |
+| `send_email`      | boolean | email mode | Whether to send the result email. Defaults to `true`.                                      |
+| `email_address`   | string  | email mode | Single recipient address (alias of `email_receiver`).                                      |
+| `email_receiver`  | string  | email mode | Single recipient address.                                                                  |
+| `email_receivers` | array   | email mode | List of recipient addresses.                                                               |
+| `email_override`  | boolean | email mode | When `true` the provided receivers replace the node default receivers. Defaults to `true`. |
+
+The `save_output` and `email_*` options only take effect on nodes running in `email` mode (`NODE_MODE=email`).
+
+### npcolony Print Payload
+
+The `npcolony` engine is the default and prints through [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) using GDI on Windows and CUPS on Linux. Its payload is the binary print document carried in `data_b64`, typically a [Binie](doc/binie.md) document produced by the XMPL to Binie conversion, dispatched directly to the target printer. There are no JSON fields: the printing behaviour is tuned through the `scale` and `quality` options and the optional `format` field described in [Print Request](#print-request).
+
 ### Gravo Print Payload
 
 The `gravo` engine accepts a JSON payload submitted as base64 to the print endpoint. The accepted fields are documented below:
@@ -83,6 +117,10 @@ The `gravo` engine accepts a JSON payload submitted as base64 to the print endpo
 | `record`      | boolean         | no       | When `true` a video of the engraving session is captured and returned with the screenshots. Defaults to `false`.                                                                                                                            |
 | `debug`       | boolean         | no       | When `true` the response includes the captured gravo pilot logs. Defaults to `false`.                                                                                                                                                       |
 | `extra_fonts` | object          | no       | Mapping of font name to the base64 encoded `.f3s` payload that should be installed for the duration of the engraving session. Each entry is staged on a per job temporary directory and forwarded to gravo pilot's `extra_fonts` parameter. |
+
+### Text Print Payload
+
+The `text` engine is a virtual printer that does not talk to any physical device. Its payload is the plain text content carried in `data_b64`; the engine writes it to a `document.txt` file and returns that file (base64 encoded) in the job result. It has no JSON fields and ignores the printer, format and option values, which makes it convenient for testing and for capturing print output without hardware.
 
 ## Admin UI
 
