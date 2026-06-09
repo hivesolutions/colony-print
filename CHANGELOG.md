@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Optional `extra_fonts` field on the `gravo` print payload that ships per print job `.f3s` font payloads to the engraving software, staged on a per job temporary directory through a new `_stage_extra_fonts` helper and forwarded to gravo pilot's `extra_fonts` keyword argument; the staging directory is removed regardless of whether the print succeeds or raises ([#20](https://github.com/hivesolutions/colony-print/issues/20))
+*
 
 ### Changed
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.19.0] - 2026-06-09
+
+### Added
+
+* Optional `extra_fonts` field on the `gravo` print payload that ships per print job `.f3s` font payloads to the engraving software, staged on a per job temporary directory through a new `_stage_extra_fonts` helper and forwarded to gravo pilot's `extra_fonts` keyword argument; the staging directory is removed regardless of whether the print succeeds or raises ([#20](https://github.com/hivesolutions/colony-print/issues/20))
 
 ## [0.18.0] - 2026-06-04
 
