@@ -200,6 +200,6 @@ class JobController(appier.Controller):
 
         try:
             data = base64.b64decode(data_b64)
-            return json.loads(data)
+            return json.loads(data.decode("utf-8"))
         except Exception:
             return None
