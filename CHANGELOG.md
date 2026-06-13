@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+*
+
+## [0.19.1] - 2026-06-13
+
+### Fixed
+
 * Faster job listing by no longer retaining the decoded payload of each job
 * Correct decoding of the job request payload on Python 3.5 setups
 
