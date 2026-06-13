@@ -133,9 +133,6 @@ class NodeController(appier.Controller):
             job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
-        request_payload = self._decode_payload(data_b64)
-        if request_payload:
-            job_info["request_payload"] = request_payload
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
 
@@ -221,9 +218,6 @@ class NodeController(appier.Controller):
             job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
-        request_payload = self._decode_payload(data_b64)
-        if request_payload:
-            job_info["request_payload"] = request_payload
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
 
@@ -268,23 +262,3 @@ class NodeController(appier.Controller):
                 continue
             job_info = self.owner.jobs_info[job_id]
             job_info.update(status="printing", printing_time=time.time())
-
-    def _decode_payload(self, data_b64):
-        """
-        Tries to decode and parse the base64-encoded job data as JSON
-        so it can be stored as the request payload for inspection in
-        the admin UI (e.g. gravo jobs contain text, font, width, height).
-        Returns None for binary payloads that are not valid JSON.
-
-        :type data_b64: String
-        :param data_b64: The base64-encoded job data string.
-        :rtype: Dictionary
-        :return: The parsed JSON payload as a dictionary, or None
-        if the data is not valid JSON (e.g. binary npcolony data).
-        """
-
-        try:
-            data = base64.b64decode(data_b64)
-            return json.loads(data)
-        except Exception:
-            return None

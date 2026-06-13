@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import json
+import base64
 import logging
 import unittest
 
@@ -115,3 +117,47 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual(
             response.headers["Access-Control-Allow-Headers"].startswith("*"), True
         )
+
+    def test_enrich_job_info_includes_payload(self):
+        controller = colony_print.controllers.JobController(self.app)
+        data = json.dumps(dict(text="Hello World", font="HELVETICA 1L"))
+        data_b64 = base64.b64encode(data.encode("utf-8"))
+        self.app.jobs_info["name"] = dict(id="name", name="document")
+        self.app.jobs_data["name"] = data_b64
+        job_info = controller.enrich_job_info(self.app.jobs_info["name"])
+        self.assertEqual(job_info["id"], "name")
+        self.assertEqual(
+            job_info["request_payload"],
+            dict(text="Hello World", font="HELVETICA 1L"),
+        )
+        self.assertEqual("request_payload" in self.app.jobs_info["name"], False)
+
+    def test_enrich_job_info_binary_data(self):
+        controller = colony_print.controllers.JobController(self.app)
+        self.app.jobs_info["name"] = dict(id="name", name="document")
+        self.app.jobs_data["name"] = base64.b64encode(b"\x00\x01\x00\x00binary-payload")
+        job_info = controller.enrich_job_info(self.app.jobs_info["name"])
+        self.assertEqual("request_payload" in job_info, False)
+
+    def test_enrich_job_info_without_data(self):
+        controller = colony_print.controllers.JobController(self.app)
+        job_info = controller.enrich_job_info(dict(id="name", name="document"))
+        self.assertEqual("request_payload" in job_info, False)
+
+    def test_decode_payload_json(self):
+        controller = colony_print.controllers.JobController(self.app)
+        data = json.dumps(dict(text="Hello World", font="HELVETICA 1L"))
+        data_b64 = base64.b64encode(data.encode("utf-8"))
+        payload = controller._decode_payload(data_b64)
+        self.assertEqual(payload, dict(text="Hello World", font="HELVETICA 1L"))
+
+    def test_decode_payload_binary(self):
+        controller = colony_print.controllers.JobController(self.app)
+        data_b64 = base64.b64encode(b"\x00\x01\x00\x00binary-payload")
+        payload = controller._decode_payload(data_b64)
+        self.assertEqual(payload, None)
+
+    def test_decode_payload_invalid(self):
+        controller = colony_print.controllers.JobController(self.app)
+        payload = controller._decode_payload("!!!not-base64!!!")
+        self.assertEqual(payload, None)

@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Faster job listing by no longer retaining the decoded payload of each job
 
 ## [0.19.0] - 2026-06-09
 

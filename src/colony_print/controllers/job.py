@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import json
 import uuid
 import time
 import base64
@@ -17,7 +18,6 @@ CLONE_FIELDS = set(
         "type",
         "format",
         "options",
-        "request_payload",
     ]
 )
 
@@ -35,7 +35,7 @@ class JobController(appier.Controller):
     @appier.route("/jobs/<str:id>", "GET", json=True)
     @appier.ensure(token="admin")
     def show(self, id):
-        return self.owner.jobs_info[id]
+        return self.enrich_job_info(self.owner.jobs_info[id])
 
     @appier.route("/jobs/<str:id>", "OPTIONS")
     def show_o(self, id):
@@ -172,3 +172,34 @@ class JobController(appier.Controller):
     @appier.route("/jobs/<str:id>/payload", "OPTIONS")
     def payload_o(self, id):
         return ""
+
+    def enrich_job_info(self, job_info):
+        # enriches a copy of the provided job info with the decoded request
+        # payload pulled from the persisted data on demand, so that it is not
+        # kept within the (listed) job info and the listing stays lean
+        job_info = dict(job_info)
+        data_b64 = self.owner.jobs_data.get(job_info["id"], None)
+        request_payload = self._decode_payload(data_b64) if data_b64 else None
+        if request_payload:
+            job_info["request_payload"] = request_payload
+        return job_info
+
+    def _decode_payload(self, data_b64):
+        """
+        Tries to decode and parse the base64-encoded job data as JSON
+        so it can be exposed as the request payload for inspection in
+        the admin UI (e.g. gravo jobs contain text, font, width, height).
+        Returns None for binary payloads that are not valid JSON.
+
+        :type data_b64: String
+        :param data_b64: The base64-encoded job data string.
+        :rtype: Dictionary
+        :return: The parsed JSON payload as a dictionary, or None
+        if the data is not valid JSON (e.g. binary npcolony data).
+        """
+
+        try:
+            data = base64.b64decode(data_b64)
+            return json.loads(data)
+        except Exception:
+            return None
