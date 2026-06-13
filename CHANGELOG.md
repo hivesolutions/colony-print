@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Correct decoding of the gravo print payload on Python 3.5 setups
 
 ## [0.19.1] - 2026-06-13
 

@@ -322,8 +322,7 @@ class ColonyPrintNode(object):
 
         import gravo_pilot
 
-        data = base64.b64decode(data_b64)
-        data_j = json.loads(data)
+        data_j = self._decode_payload(data_b64)
 
         text = data_j["text"]
         font = data_j.get("font", "HELVETICA 1L")
@@ -424,6 +423,25 @@ class ColonyPrintNode(object):
                 file.write(payload)
             paths[name] = target_path
         return paths
+
+    def _decode_payload(self, data_b64):
+        """
+        Decodes and parses the provided base64 encoded payload as JSON,
+        returning the resulting structure to the caller.
+
+        The decoded base64 data is converted to a text string before the
+        JSON parsing so that the operation stays compatible with Python
+        3.5, where the json.loads function does not accept byte input.
+
+        :type data_b64: String
+        :param data_b64: The base64 encoded payload to be decoded and
+        parsed as a JSON structure.
+        :rtype: Dictionary
+        :return: The JSON structure parsed from the provided payload.
+        """
+
+        data = base64.b64decode(data_b64)
+        return json.loads(data.decode("utf-8"))
 
     def _handle_text(self, data_b64):
         if not self._has_text():

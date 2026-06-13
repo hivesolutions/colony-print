@@ -2,10 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import os
+import json
 import base64
 import shutil
 import tempfile
 import unittest
+
+import appier
 
 import colony_print.node
 
@@ -52,3 +55,25 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         with open(paths["font_a"], "rb") as file:
             self.assertEqual(file.read(), payload)
+
+    def test_decode_payload_json(self):
+        data = json.dumps(dict(text="Hello World", font="HELVETICA 1L"))
+        data_b64 = base64.b64encode(data.encode("utf-8"))
+        payload = self.node._decode_payload(data_b64)
+        self.assertEqual(payload, dict(text="Hello World", font="HELVETICA 1L"))
+
+    def test_decode_payload_unicode(self):
+        original = dict(text=appier.legacy.u("é✨"))
+        data_b64 = base64.b64encode(json.dumps(original).encode("utf-8"))
+        payload = self.node._decode_payload(data_b64)
+        self.assertEqual(payload, original)
+
+    def test_decode_payload_multifont(self):
+        data = json.dumps(dict(text=[["HELVETICA 1L", "A"], ["TIMES 1L", "B"]]))
+        data_b64 = base64.b64encode(data.encode("utf-8"))
+        payload = self.node._decode_payload(data_b64)
+        self.assertEqual(payload, dict(text=[["HELVETICA 1L", "A"], ["TIMES 1L", "B"]]))
+
+    def test_decode_payload_invalid(self):
+        data_b64 = base64.b64encode(b"not a json payload")
+        self.assertRaises(ValueError, lambda: self.node._decode_payload(data_b64))
