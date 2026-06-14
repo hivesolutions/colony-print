@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Faster job listing by dropping heavy result fields from each job
 
 ## [0.19.2] - 2026-06-14
 

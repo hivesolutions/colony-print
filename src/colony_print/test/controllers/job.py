@@ -118,6 +118,51 @@ class JobControllerTest(unittest.TestCase):
             response.headers["Access-Control-Allow-Headers"].startswith("*"), True
         )
 
+    def test_jobs_light_excludes_output_data(self):
+        controller = colony_print.controllers.JobController(self.app)
+        self.app.jobs_info["name"] = dict(
+            id="name",
+            name="document",
+            result=dict(result="success", output_data="QkxPQg=="),
+        )
+        jobs = controller.jobs_light
+        self.assertEqual("output_data" in jobs["name"]["result"], False)
+        self.assertEqual("output_data" in self.app.jobs_info["name"]["result"], True)
+
+    def test_slim_job_info_strips_output_data(self):
+        controller = colony_print.controllers.JobController(self.app)
+        job_info = dict(
+            id="name",
+            name="document",
+            result=dict(
+                result="success",
+                output_data="QkxPQg==",
+                output_mime_type="application/pdf",
+            ),
+        )
+        slim = controller.slim_job_info(job_info)
+        self.assertEqual("output_data" in slim["result"], False)
+        self.assertEqual(slim["result"]["output_mime_type"], "application/pdf")
+        self.assertEqual("output_data" in job_info["result"], True)
+
+    def test_slim_job_info_strips_traceback(self):
+        controller = colony_print.controllers.JobController(self.app)
+        job_info = dict(
+            id="name",
+            name="document",
+            result=dict(result="error", error="boom", traceback="Traceback ..."),
+        )
+        slim = controller.slim_job_info(job_info)
+        self.assertEqual("traceback" in slim["result"], False)
+        self.assertEqual(slim["result"]["error"], "boom")
+        self.assertEqual("traceback" in job_info["result"], True)
+
+    def test_slim_job_info_without_result(self):
+        controller = colony_print.controllers.JobController(self.app)
+        job_info = dict(id="name", name="document", status="queued")
+        slim = controller.slim_job_info(job_info)
+        self.assertEqual(slim, dict(id="name", name="document", status="queued"))
+
     def test_enrich_job_info_includes_payload(self):
         controller = colony_print.controllers.JobController(self.app)
         data = json.dumps(dict(text="Hello World", font="HELVETICA 1L"))

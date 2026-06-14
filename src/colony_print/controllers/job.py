@@ -21,12 +21,14 @@ CLONE_FIELDS = set(
     ]
 )
 
+LIST_RESULT_EXCLUDED = set(["output_data", "traceback"])
+
 
 class JobController(appier.Controller):
     @appier.route("/jobs", "GET", json=True)
     @appier.ensure(token="admin")
     def list(self):
-        return dict(self.owner.jobs_info)
+        return self.jobs_light
 
     @appier.route("/jobs", "OPTIONS")
     def list_o(self):
@@ -172,6 +174,25 @@ class JobController(appier.Controller):
     @appier.route("/jobs/<str:id>/payload", "OPTIONS")
     def payload_o(self, id):
         return ""
+
+    @property
+    def jobs_light(self):
+        return dict(
+            (id, self.slim_job_info(info)) for id, info in self.owner.jobs_info.items()
+        )
+
+    def slim_job_info(self, job_info):
+        # builds a lightweight copy of the job info for the listing, dropping
+        # the heavy blobs (e.g. the base64 output data and the error traceback)
+        # from the job result so that the list response stays small even for
+        # finished jobs
+        job_info = dict(job_info)
+        result = job_info.get("result", None)
+        if result:
+            job_info["result"] = dict(
+                (k, v) for k, v in result.items() if not k in LIST_RESULT_EXCLUDED
+            )
+        return job_info
 
     def enrich_job_info(self, job_info):
         # enriches a copy of the provided job info with the decoded request
