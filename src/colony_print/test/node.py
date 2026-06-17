@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import json
 import base64
 import shutil
@@ -13,13 +14,70 @@ import appier
 import colony_print.node
 
 
+class MockGravostyleAPI(object):
+    """
+    Stand-in for gravo pilot's GravostyleAPI that records the keyword
+    arguments passed to write_text, so that the flag forwarding done by
+    the node can be inspected without driving the real software.
+    """
+
+    calls = []
+
+    def write_text(self, text, **kwargs):
+        MockGravostyleAPI.calls.append(kwargs)
+        return []
+
+
+class MockGravoPilot(object):
+    """
+    Stand-in for the gravo pilot module that exposes the minimal
+    surface used by the node, namely the GravostyleAPI class and the
+    capture_logs context manager, so that _handle_gravo can be
+    exercised without the real dependency installed.
+    """
+
+    GravostyleAPI = MockGravostyleAPI
+
+    @staticmethod
+    def capture_logs(*args, **kwargs):
+        import contextlib
+
+        @contextlib.contextmanager
+        def _capture():
+            yield []
+
+        return _capture()
+
+
 class ColonyPrintNodeTest(unittest.TestCase):
     def setUp(self):
         self.node = colony_print.node.ColonyPrintNode()
         self.target_dir = tempfile.mkdtemp(prefix="colony-print-fonts-test-")
+        MockGravostyleAPI.calls = []
+        self._gravo_pilot = sys.modules.get("gravo_pilot")
+        sys.modules["gravo_pilot"] = MockGravoPilot
 
     def tearDown(self):
         shutil.rmtree(self.target_dir, ignore_errors=True)
+        if self._gravo_pilot == None:
+            sys.modules.pop("gravo_pilot", None)
+        else:
+            sys.modules["gravo_pilot"] = self._gravo_pilot
+
+    def _gravo_payload(self, **kwargs):
+        data = dict(text="Hello World")
+        data.update(kwargs)
+        return base64.b64encode(json.dumps(data).encode("utf-8"))
+
+    def test_handle_gravo_forwards_check_path(self):
+        self.node._handle_gravo(self._gravo_payload(check_path=True, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual(MockGravostyleAPI.calls[0]["check_path"], True)
+
+    def test_handle_gravo_check_path_defaults_to_false(self):
+        self.node._handle_gravo(self._gravo_payload(dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual(MockGravostyleAPI.calls[0]["check_path"], False)
 
     def test_stage_extra_fonts_writes_payloads(self):
         payload_a = b"\x00\x01\x00\x00font-a-payload"

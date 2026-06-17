@@ -332,6 +332,7 @@ class ColonyPrintNode(object):
         margins = data_j.get("margins", None)
         dry_run = data_j.get("dry_run", False)
         record = data_j.get("record", False)
+        check_path = data_j.get("check_path", False)
         debug = data_j.get("debug", False)
         extra_fonts = data_j.get("extra_fonts", None)
 
@@ -365,6 +366,7 @@ class ColonyPrintNode(object):
                     margins=tuple(margins) if margins else None,
                     dry_run=dry_run,
                     record=record,
+                    check_path=check_path,
                     extra_fonts=extra_fonts_paths,
                 )
             duration = time.time() - start
