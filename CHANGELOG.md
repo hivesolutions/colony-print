@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Support for the check path mode in gravo print jobs, tracing the engraving path with the laser light only
+*
 
 ### Changed
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.20.0] - 2026-06-17
+
+### Added
+
+* Support for the check path mode in gravo print jobs, tracing the engraving path with the laser light only
 
 ## [0.19.3] - 2026-06-14
 
