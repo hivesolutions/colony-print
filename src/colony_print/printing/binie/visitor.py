@@ -503,7 +503,7 @@ class Visitor(object):
         valid_attributes = [
             (value, getattr(node, value))
             for value in dir(node)
-            if value not in EXCLUSION_LIST
+            if not value in EXCLUSION_LIST
         ]
 
         for valid_attribute_name, valid_attribute_value in valid_attributes:
@@ -511,7 +511,7 @@ class Visitor(object):
 
     def remove_context(self, node):
         valid_attribute_names = [
-            value for value in dir(node) if value not in EXCLUSION_LIST
+            value for value in dir(node) if not value in EXCLUSION_LIST
         ]
 
         for valid_attribute_name in valid_attribute_names:
