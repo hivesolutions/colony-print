@@ -487,6 +487,16 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 226.77, 22.68))
         self.assertEqual(self._pages(data_b64), 1)
 
+    def test_convert_binie_document_size_no_device(self):
+        MockNPColony.devices = []
+        data_b64, options = self.node._convert_binie(
+            LABEL_B64, printer="missing", options=dict(media="A4")
+        )
+        self.assertEqual(options, dict(media="Custom.80x8mm", scaling="none"))
+        media_box = self._media_box(data_b64)
+        self.assertAlmostEqual(media_box[2], 226.77, places=2)
+        self.assertAlmostEqual(media_box[3], 22.68, places=2)
+
     def test_convert_binie_no_device(self):
         MockNPColony.devices = []
         data_b64, options = self.node._convert_binie(
