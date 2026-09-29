@@ -103,6 +103,17 @@ class BinieRenderer(object):
     as a result of the pages that have already been drawn """
 
     def __init__(self, size=None, margins=None):
+        """
+        Constructor of the class.
+
+        :type size: Tuple
+        :param size: The default size (width and height in points) of
+        the pages, used when the document doesn't define one.
+        :type margins: Tuple
+        :param margins: The margins (left, bottom, right and top in
+        points) of the page, that delimit its printable area.
+        """
+
         self.size = size or visitor.PAPER_SIZE
         self.margins = margins or (0.0, 0.0, 0.0, 0.0)
         self.fonts = {}
@@ -526,6 +537,17 @@ class BinieRenderer(object):
         return file_path.decode("utf-8").strip() or None
 
     def _string(self, value):
+        """
+        Converts the provided (null terminated) binie string into an
+        unicode string, ignoring the bytes after the first null one and
+        the ones that are not valid UTF-8.
+
+        :type value: String
+        :param value: The binie string (bytes) to be converted.
+        :rtype: String
+        :return: The unicode string that the binie string represents.
+        """
+
         return value.split(b"\0", 1)[0].decode("utf-8", "ignore")
 
 
