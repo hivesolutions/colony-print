@@ -569,8 +569,9 @@ class BinieRendererTest(unittest.TestCase):
         self.assertEqual(colony_print.valid_binie(data + b"\0"), False)
         self.assertEqual(colony_print.valid_binie(data[:100]), False)
         self.assertEqual(colony_print.valid_binie(b"%PDF-1.4\n" + b"\0" * 300), False)
+        self.assertEqual(colony_print.valid_binie(self._binie([(3, b"\0" * 16)])), True)
         self.assertEqual(
-            colony_print.valid_binie(self._binie([(3, b"\0" * 16)])), False
+            colony_print.valid_binie(self._binie([(3, b"\0" * 16)])[:-1]), False
         )
 
         count_data = struct.pack("<256sIII", b"test", 0, 0, 3) + data[268:]

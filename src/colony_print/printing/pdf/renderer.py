@@ -542,16 +542,15 @@ def valid_binie(data):
     count = struct.unpack_from(DOCUMENT_HEADER_FORMAT, data)[3]
 
     # iterates over the elements of the document making sure that each
-    # of them has a known type and is contained in the data
+    # of them is contained in the data, the ones of unknown types included
+    # as they are ignored while rendering (as the specification defines)
     offset = header_size
     for _index in appier.legacy.xrange(count):
         if offset + element_size > len(data):
             return False
-        element_type, element_length = struct.unpack_from(
+        _element_type, element_length = struct.unpack_from(
             ELEMENT_HEADER_FORMAT, data, offset
         )
-        if not element_type in (TEXT_VALUE, IMAGE_VALUE):
-            return False
         offset += element_size + element_length
 
     # the document is only valid in case the elements end exactly

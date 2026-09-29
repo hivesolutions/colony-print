@@ -290,6 +290,12 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(self.node._is_binie(pdf_b64, format="binie"), True)
         self.assertEqual(self.node._is_binie("not base64 data"), False)
 
+        data = base64.b64decode(binie_b64)
+        data = data[:264] + struct.pack("<I", 2) + data[268:] + struct.pack("<II", 3, 0)
+        self.assertEqual(
+            self.node._is_binie(base64.b64encode(data).decode("utf-8")), True
+        )
+
         MockNPColony.format = "binie"
         self.assertEqual(self.node._is_binie(binie_b64), False)
         self.assertEqual(self.node._is_binie(binie_b64, format="binie"), False)
