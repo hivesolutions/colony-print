@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import json
+import zlib
 import base64
 import shutil
 import struct
@@ -31,9 +32,20 @@ RECEIPT_DEVICE = dict(
     bottom=0.0,
     right=215.43,
     top=841.89,
+    custom=dict(
+        min_width=72.0,
+        min_length=72.0,
+        max_width=227.0,
+        max_length=9288.0,
+        margin_left=11.34,
+        margin_bottom=0.0,
+        margin_right=11.34,
+        margin_top=0.0,
+    ),
 )
 """ The device of an 80 mm receipt printer, as reported by npcolony
-for a CUPS queue (sizes in points, printable area 72 mm wide) """
+for a CUPS queue (sizes in points, printable area 72 mm wide), that
+accepts custom paper sizes up to the width of its roll """
 
 OFFICE_DEVICE = dict(
     name="office",
@@ -45,9 +57,28 @@ OFFICE_DEVICE = dict(
     bottom=12.0,
     right=583.28,
     top=829.89,
+    custom=dict(
+        min_width=278.99,
+        min_length=419.5,
+        max_width=612.0,
+        max_length=1008.0,
+        margin_left=12.0,
+        margin_bottom=12.0,
+        margin_right=12.0,
+        margin_top=12.0,
+    ),
 )
 """ The device of an A4 office printer (the default printer), as
-reported by npcolony for a CUPS queue (sizes in points) """
+reported by npcolony for a CUPS queue (sizes in points), that accepts
+custom paper sizes from 98 x 148 mm to 216 x 356 mm """
+
+LABEL_B64 = base64.b64encode(
+    base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)[:256]
+    + struct.pack("<II", 800, 80)
+    + base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)[264:]
+).decode("utf-8")
+""" The hello world binie document with the size (80 x 8 mm) of a
+product label, as the ones printed by Omni """
 
 
 class MockGravostyleAPI(object):
@@ -167,6 +198,28 @@ class ColonyPrintNodeTest(unittest.TestCase):
         data = base64.b64decode(data_b64)
         pattern = b"/MediaBox \\[ (\\S+) (\\S+) (\\S+) (\\S+) \\]"
         return tuple(float(value) for value in re.search(pattern, data).groups())
+
+    def _pages(self, data_b64):
+        data = base64.b64decode(data_b64)
+        return len(re.findall(b"/Type /Page\\b", data))
+
+    def _contents(self, data_b64):
+        # extracts the (decompressed) content streams of the pages from
+        # the PDF document, the ones that contain drawing operations
+        data = base64.b64decode(data_b64)
+        contents = []
+        for match in re.finditer(b"<<([^>]*?)>>\\s*stream\\r?\\n", data):
+            if not b"FlateDecode" in match.group(1):
+                continue
+            end = data.index(b"endstream", match.end())
+            try:
+                content = zlib.decompress(data[match.end() : end])
+            except Exception:
+                continue
+            if not b" Tf " in content:
+                continue
+            contents.append(content)
+        return contents
 
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
@@ -338,6 +391,112 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertAlmostEqual(media_box[2], 226.77, places=2)
         self.assertAlmostEqual(media_box[3], 283.46, places=2)
 
+        data = data[:256] + struct.pack("<II", 1500, 2000) + data[264:]
+        data_b64, options = self.node._convert_binie(
+            base64.b64encode(data).decode("utf-8"), printer="office"
+        )
+        self.assertEqual(options, dict(media="Custom.150x200mm", scaling="none"))
+        media_box = self._media_box(data_b64)
+        self.assertAlmostEqual(media_box[2], 425.2, places=2)
+        self.assertAlmostEqual(media_box[3], 566.93, places=2)
+
+    def test_convert_binie_document_size_margins(self):
+        MockNPColony.devices = [
+            dict(
+                OFFICE_DEVICE,
+                custom=dict(OFFICE_DEVICE["custom"], margin_left=0.0, margin_top=0.0),
+            )
+        ]
+        data = base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)
+        data = data[:256] + struct.pack("<II", 1500, 2000) + data[264:]
+        data_b64, _options = self.node._convert_binie(
+            base64.b64encode(data).decode("utf-8")
+        )
+        renderer = colony_print.BinieRenderer(margins=(0.0, 12.0, 12.0, 0.0))
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        self.assertEqual(
+            self._contents(data_b64),
+            self._contents(base64.b64encode(file.getvalue())),
+        )
+
+    def test_convert_binie_document_size_media(self):
+        data_b64, options = self.node._convert_binie(
+            LABEL_B64, printer="office", options=dict(title="label")
+        )
+        self.assertEqual(options, dict(title="label", media="A4", scaling="none"))
+        self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 595.28, 841.89))
+        self.assertEqual(self._pages(data_b64), 1)
+
+        renderer = colony_print.BinieRenderer(
+            size=(595.28, 841.89), margins=(12.0, 12.0, 12.0, 12.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(base64.b64decode(LABEL_B64), file)
+        self.assertEqual(
+            self._contents(data_b64),
+            self._contents(base64.b64encode(file.getvalue())),
+        )
+
+        MockNPColony.devices = [dict(OFFICE_DEVICE, custom=None)]
+        data_b64, options = self.node._convert_binie(LABEL_B64, printer="office")
+        self.assertEqual(options, dict(media="A4", scaling="none"))
+        self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 595.28, 841.89))
+        self.assertEqual(self._pages(data_b64), 1)
+
+    def test_convert_binie_document_size_default(self):
+        data = base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)
+        data = data[:256] + struct.pack("<II", 800, 2970) + data[264:]
+        data_b64, options = self.node._convert_binie(
+            base64.b64encode(data).decode("utf-8"), printer="Receipt"
+        )
+        self.assertEqual(options, dict(media="RP80x297", scaling="none"))
+        self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 226.77, 841.89))
+
+    def test_convert_binie_document_size_legacy(self):
+        MockNPColony.devices = [
+            dict(
+                (key, value)
+                for key, value in RECEIPT_DEVICE.items()
+                if not key == "custom"
+            )
+        ]
+        data = base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)
+        data = data[:256] + struct.pack("<II", 800, 1000) + data[264:]
+        data_b64, options = self.node._convert_binie(
+            base64.b64encode(data).decode("utf-8"), printer="Receipt"
+        )
+        self.assertEqual(options, dict(media="RP80x297", scaling="none"))
+        self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 226.77, 841.89))
+
+        MockNPColony.devices = [
+            dict(
+                name="label",
+                is_default=True,
+                media="w227h23",
+                width=226.77,
+                length=22.68,
+                left=0.0,
+                bottom=0.0,
+                right=226.77,
+                top=22.68,
+            )
+        ]
+        data_b64, options = self.node._convert_binie(LABEL_B64)
+        self.assertEqual(options, dict(media="w227h23", scaling="none"))
+        self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 226.77, 22.68))
+        self.assertEqual(self._pages(data_b64), 1)
+
+    def test_convert_binie_document_size_no_device(self):
+        MockNPColony.devices = []
+        data_b64, options = self.node._convert_binie(
+            LABEL_B64, printer="missing", options=dict(media="A4")
+        )
+        self.assertEqual(options, dict(media="Custom.80x8mm", scaling="none"))
+        media_box = self._media_box(data_b64)
+        self.assertAlmostEqual(media_box[2], 226.77, places=2)
+        self.assertAlmostEqual(media_box[3], 22.68, places=2)
+
     def test_convert_binie_no_device(self):
         MockNPColony.devices = []
         data_b64, options = self.node._convert_binie(
@@ -379,6 +538,36 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
         MockNPColony.devices = []
         self.assertEqual(self.node._device("default"), dict())
+
+    def test_is_custom(self):
+        is_custom = self.node._is_custom
+        self.assertEqual(is_custom(RECEIPT_DEVICE, (226.77, 283.46)), True)
+        self.assertEqual(is_custom(RECEIPT_DEVICE, (226.77, 841.89)), False)
+        self.assertEqual(is_custom(RECEIPT_DEVICE, (283.46, 283.46)), False)
+        self.assertEqual(is_custom(RECEIPT_DEVICE, (226.77, 22.68)), False)
+
+        self.assertEqual(is_custom(OFFICE_DEVICE, (425.2, 566.93)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (226.77, 22.68)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (595.28, 841.89)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (597.28, 843.89)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (599.28, 841.89)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (278.99, 419.5)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (277.0, 417.5)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (275.0, 419.5)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (612.0, 1008.0)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (614.0, 1010.0)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (615.0, 1008.0)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (425.2, 1011.0)), False)
+
+        custom = dict(RECEIPT_DEVICE["custom"], max_width=226.77)
+        device = dict(RECEIPT_DEVICE, custom=custom)
+        self.assertEqual(is_custom(device, (800 / 254.0 * 72.0, 283.46)), True)
+
+        device = dict(OFFICE_DEVICE, custom=None)
+        self.assertEqual(is_custom(device, (425.2, 566.93)), False)
+
+        device = dict(name="legacy", media="A4", width=595.28, length=841.89)
+        self.assertEqual(is_custom(device, (425.2, 566.93)), False)
 
     def test_handle_gravo_forwards_check_path(self):
         self.node._handle_gravo(self._gravo_payload(check_path=True, dry_run=True))

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Email mode for Binie documents on Linux nodes - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * Zero height pages when converting a document with only a width - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * PDF generation failing on Python 3.5, 3.7 and 3.8 with the reportlab releases installed by default - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Labels split into several clipped pages on Linux printers without their paper size (e.g. A4 office printers), now printed at their real size in the top left corner as on Windows - [#26](https://github.com/hivesolutions/colony-print/issues/26)
 
 ## [0.20.0] - 2026-06-17
 

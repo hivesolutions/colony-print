@@ -57,7 +57,7 @@ python -m colony_print.node
 To be able to use new fonts (other than the ones provided by the system), one must install them into the `/usr/share/fonts/truetype` directory so they are exposed and ready to be used by the PDF generation infra-structure. For example, Calibri is one type of font that should be exported to a UNIX machine as many colony-generated documents use it.
 
 The `/usr/share/fonts/truetype` install path is shared by the PDF generation engine.
-Linux (CUPS) nodes need the same fonts to lay out the Binie documents they print. They look for the font files by name in the same paths and, as Windows does, fall back to the closest installed font found through fontconfig (`fc-match`), so installing Calibri (or the metric compatible Carlito font) keeps the layout identical to the Windows one.
+Linux (CUPS) nodes need the same fonts to lay out the Binie documents they print. They look for the font files by name in the same paths and, as Windows does, fall back to the closest installed font found through fontconfig (`fc-match`), so installing Calibri (or the metric compatible Carlito font) keeps the layout identical to the Windows one. The same applies to the barcode fonts of the documents (e.g. the `2 of 5` font of the Omni product labels, looked up as `2 of 5.ttf`), whose barcodes are otherwise printed as the letters they are encoded with.
 The `gravo` engine receives its fonts on a per print job basis through the `extra_fonts` field of the gravo print payload (see [Gravo Print Payload](#gravo-print-payload)) and stages them on a per job temporary directory, so the two flows are independent and operators should not confuse them.
 
 ### Engines
@@ -104,17 +104,19 @@ The `save_output` and `email_*` options only take effect on nodes running in `em
 
 The `npcolony` engine is the default and prints through [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) using GDI on Windows and CUPS on Linux. Its payload is the binary print document carried in `data_b64`, typically a [Binie](doc/binie.md) document produced by the XMPL to Binie conversion, dispatched directly to the target printer. There are no JSON fields: the printing behaviour is tuned through the options and the optional `format` field described in [Print Request](#print-request).
 
-On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes only print PDF documents, so they convert Binie jobs (with the `binie` format, or without a format when the payload is a valid Binie document) into a PDF laid out with the same rules as GDI: the paper size of the document when it defines one and the printer's default paper size otherwise, with the content kept inside the printable area of the printer and printed without scaling. The `media` option doesn't apply to them, as their pages are always laid out for that paper size. PDF documents and any other data are sent to CUPS untouched.
+On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes only print PDF documents, so they convert Binie jobs (with the `binie` format, or without a format when the payload is a valid Binie document) into a PDF laid out with the same rules as GDI: the paper size of the document when it defines one and the printer accepts it as a custom paper size (as the Windows driver of the printer does), and the printer's default paper size otherwise (e.g. a label printed on an A4 printer comes out at its real size in the top left corner of the page), with the content laid out from the top left corner of the printable area of the page and printed without scaling. The `media` option doesn't apply to them, as their pages are always laid out for that paper size. PDF documents and any other data are sent to CUPS untouched.
 
 ### Linux (CUPS) Printing
 
 The printer of the job (or `NODE_PRINTER` when the job has none) selects the CUPS queue, and `default`, the default value of `NODE_PRINTER`, selects the default queue (or the only queue, when none is the default). Jobs for a queue that does not exist, or that CUPS refuses, fail with an error instead of being reported as printed.
 
-Each queue should use a driver for its printer and a default paper size that matches the loaded paper, as that size is used for the Binie documents that do not define one (e.g. `lpadmin -p receipt -o PageSize=RP80x297`):
+Each queue should use a driver for its printer and a default paper size that matches the loaded paper, as that size is used for the Binie documents that do not define one, or whose size the printer does not accept as a custom paper size (e.g. `lpadmin -p receipt -o PageSize=RP80x297`):
 
 * Receipt printers - the vendor CUPS driver (e.g. the Epson TM series driver), with its paper reduction options enabled to avoid feeding blank paper at the end of the receipt.
 * Label printers - the label drivers shipped with CUPS (Zebra, Dymo) or the vendor ones, with the default size set to the loaded label.
 * Office printers - driverless (IPP Everywhere) queues.
+
+The custom paper sizes a printer accepts, and their margins, are the ones of the PPD of its queue, as reported by npcolony. With npcolony versions that don't report them, a Binie document only uses its own size when it matches the default paper size of the queue.
 
 In `email` mode the PDF document is written to the output file (print to file) instead of being printed, as it happens with the PDF printer on Windows.
 
