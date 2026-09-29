@@ -428,7 +428,7 @@ class ColonyPrintNode(object):
         """
         Retrieves the information of the device (printer) with the provided
         name, the default device is used for an invalid or the default name
-        (falling back to the last one, as npcolony does).
+        (or the single device when none is the default, as npcolony does).
 
         :type printer: String
         :param printer: The name of the printer to retrieve the device.
@@ -444,8 +444,8 @@ class ColonyPrintNode(object):
                 return device
             if not is_default and device.get("name", "").lower() == printer.lower():
                 return device
-        if is_default and devices:
-            return devices[-1]
+        if is_default and len(devices) == 1:
+            return devices[0]
         return dict()
 
     def _handle_gravo(self, data_b64):

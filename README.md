@@ -108,7 +108,7 @@ On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes 
 
 ### Linux (CUPS) Printing
 
-The printer of the job (or `NODE_PRINTER` when the job has none) selects the CUPS queue, and `default`, the default value of `NODE_PRINTER`, selects the default queue. Jobs for a queue that does not exist, or that CUPS refuses, fail with an error instead of being reported as printed.
+The printer of the job (or `NODE_PRINTER` when the job has none) selects the CUPS queue, and `default`, the default value of `NODE_PRINTER`, selects the default queue (or the only queue, when none is the default). Jobs for a queue that does not exist, or that CUPS refuses, fail with an error instead of being reported as printed.
 
 Each queue should use a driver for its printer and a default paper size that matches the loaded paper, as that size is used for the Binie documents that do not define one (e.g. `lpadmin -p receipt -o PageSize=RP80x297`):
 

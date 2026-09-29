@@ -352,7 +352,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(self.node._device("missing"), dict())
 
         MockNPColony.devices = [RECEIPT_DEVICE, dict(OFFICE_DEVICE, is_default=False)]
-        self.assertEqual(self.node._device("default")["name"], "office")
+        self.assertEqual(self.node._device("default"), dict())
+
+        MockNPColony.devices = [RECEIPT_DEVICE]
+        self.assertEqual(self.node._device("default"), RECEIPT_DEVICE)
 
         MockNPColony.devices = []
         self.assertEqual(self.node._device("default"), dict())
