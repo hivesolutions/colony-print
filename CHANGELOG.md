@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Print jobs on Linux printers are named after the job in the printer queue - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Binie documents on Linux nodes only use their own paper size when the printer accepts it as a custom size (as reported by a recent npcolony), otherwise they print on the default paper of the printer - [#26](https://github.com/hivesolutions/colony-print/issues/26)
 
 ### Fixed
 
