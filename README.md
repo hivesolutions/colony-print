@@ -85,18 +85,18 @@ Every engine is reached through the same print endpoint and request envelope. A 
 
 The `options` map is filtered to the following keys:
 
-| Option            | Type    | Scope                | Notes                                                                                      |
-| ----------------- | ------- | -------------------- | ------------------------------------------------------------------------------------------ |
-| `scale`           | number  | npcolony             | Accepted for compatibility, currently not applied by the npcolony engine.                  |
-| `quality`         | number  | npcolony             | Accepted for compatibility, currently not applied by the npcolony engine.                  |
-| `media`           | string  | npcolony (CUPS only) | Paper size requested to CUPS (e.g. `80x297mm`, `RP80x297` or `Custom.80x200mm`).           |
-| `scaling`         | string  | npcolony (CUPS only) | CUPS print scaling: `auto`, `auto-fit`, `fit`, `fill` or `none`.                           |
-| `save_output`     | boolean | email mode           | When `true` the generated PDF is returned (base64) in the job result. Defaults to `false`. |
-| `send_email`      | boolean | email mode           | Whether to send the result email. Defaults to `true`.                                      |
-| `email_address`   | string  | email mode           | Single recipient address (alias of `email_receiver`).                                      |
-| `email_receiver`  | string  | email mode           | Single recipient address.                                                                  |
-| `email_receivers` | array   | email mode           | List of recipient addresses.                                                               |
-| `email_override`  | boolean | email mode           | When `true` the provided receivers replace the node default receivers. Defaults to `true`. |
+| Option            | Type    | Scope      | Notes                                                                                      |
+| ----------------- | ------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `scale`           | number  | npcolony   | Accepted for compatibility, currently not applied by the npcolony engine.                  |
+| `quality`         | number  | npcolony   | Accepted for compatibility, currently not applied by the npcolony engine.                  |
+| `media`           | string  | npcolony   | Paper size requested to CUPS (e.g. `80x297mm`, `RP80x297` or `Custom.80x200mm`).           |
+| `scaling`         | string  | npcolony   | CUPS print scaling: `auto`, `auto-fit`, `fit`, `fill` or `none`.                           |
+| `save_output`     | boolean | email mode | When `true` the generated PDF is returned (base64) in the job result. Defaults to `false`. |
+| `send_email`      | boolean | email mode | Whether to send the result email. Defaults to `true`.                                      |
+| `email_address`   | string  | email mode | Single recipient address (alias of `email_receiver`).                                      |
+| `email_receiver`  | string  | email mode | Single recipient address.                                                                  |
+| `email_receivers` | array   | email mode | List of recipient addresses.                                                               |
+| `email_override`  | boolean | email mode | When `true` the provided receivers replace the node default receivers. Defaults to `true`. |
 
 The `save_output` and `email_*` options only take effect on nodes running in `email` mode (`NODE_MODE=email`).
 
