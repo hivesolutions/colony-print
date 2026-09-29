@@ -37,10 +37,10 @@ RECEIPT_DEVICE = dict(
         min_length=72.0,
         max_width=227.0,
         max_length=9288.0,
-        left=11.34,
-        bottom=0.0,
-        right=11.34,
-        top=0.0,
+        margin_left=11.34,
+        margin_bottom=0.0,
+        margin_right=11.34,
+        margin_top=0.0,
     ),
 )
 """ The device of an 80 mm receipt printer, as reported by npcolony
@@ -62,10 +62,10 @@ OFFICE_DEVICE = dict(
         min_length=419.5,
         max_width=612.0,
         max_length=1008.0,
-        left=12.0,
-        bottom=12.0,
-        right=12.0,
-        top=12.0,
+        margin_left=12.0,
+        margin_bottom=12.0,
+        margin_right=12.0,
+        margin_top=12.0,
     ),
 )
 """ The device of an A4 office printer (the default printer), as
@@ -402,7 +402,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
     def test_convert_binie_document_size_margins(self):
         MockNPColony.devices = [
-            dict(OFFICE_DEVICE, custom=dict(OFFICE_DEVICE["custom"], left=0.0, top=0.0))
+            dict(
+                OFFICE_DEVICE,
+                custom=dict(OFFICE_DEVICE["custom"], margin_left=0.0, margin_top=0.0),
+            )
         ]
         data = base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)
         data = data[:256] + struct.pack("<II", 1500, 2000) + data[264:]

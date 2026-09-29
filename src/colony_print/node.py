@@ -430,10 +430,10 @@ class ColonyPrintNode(object):
             )
             if custom:
                 margins = (
-                    device["custom"]["left"],
-                    device["custom"]["bottom"],
-                    device["custom"]["right"],
-                    device["custom"]["top"],
+                    device["custom"]["margin_left"],
+                    device["custom"]["margin_bottom"],
+                    device["custom"]["margin_right"],
+                    device["custom"]["margin_top"],
                 )
         if custom:
             media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
