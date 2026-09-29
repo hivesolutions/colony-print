@@ -64,7 +64,7 @@ class DocumentController(appier.Controller):
         b64 = self.field("base64", False, cast=bool)
         width = self.field("width", 0.0, cast=float)
         height = self.field("height", 0.0, cast=float)
-        has_size = width > 0.0 and width > 0.0
+        has_size = width > 0.0 and height > 0.0
 
         mime = self.get_mime(format, b64=base64)
         manager = self.get_manager()

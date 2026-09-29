@@ -7,6 +7,7 @@ import uuid
 import json
 import base64
 import shutil
+import struct
 import logging
 import tempfile
 import traceback
@@ -290,6 +291,7 @@ class ColonyPrintNode(object):
             logging.info("Using format '%s' for job '%s'" % (format, name))
 
         if type in (None, "npcolony"):
+            options["title"] = name
             result = self._handle_npcolony(
                 data_b64, format=format, printer=printer_s, options=options
             )
@@ -307,6 +309,15 @@ class ColonyPrintNode(object):
         if not self._has_npcolony():
             raise appier.OperationalError("npcolony engine is not available")
 
+        # in case the data is a binie document and the current system only
+        # prints pdf documents (eg: cups) converts the document into a pdf
+        # one laid out for the printer, resulting in the same windows layout
+        if self._is_binie(data_b64, format=format):
+            data_b64, options = self._convert_binie(
+                data_b64, printer=printer, options=options
+            )
+            format = "pdf"
+
         self._ensure_format(format)
 
         if printer:
@@ -314,6 +325,127 @@ class ColonyPrintNode(object):
         else:
             self.npcolony.print_base64(data_b64)
 
+        return dict()
+
+    def _is_binie(self, data_b64, format=None):
+        """
+        Verifies if the provided (base64 encoded) data is a binie
+        document that must be converted into a PDF document, which
+        is the case for systems that only print PDF documents (CUPS).
+
+        Data without format is only considered a binie document in
+        case its structure is valid, so that any other data (eg: a PDF
+        document) keeps being sent untouched to the printer.
+
+        :type data_b64: String
+        :param data_b64: The base64 encoded data of the job.
+        :type format: String
+        :param format: The format of the data of the job, if any.
+        :rtype: bool
+        :return: If the data is a binie document to be converted.
+        """
+
+        import colony_print
+
+        if not hasattr(self.npcolony, "get_format"):
+            return False
+        if not self.npcolony.get_format() == "pdf":
+            return False
+        if format:
+            return format == "binie"
+
+        try:
+            data = base64.b64decode(data_b64)
+        except Exception:
+            return False
+        return colony_print.valid_binie(data)
+
+    def _convert_binie(self, data_b64, printer=None, options=dict()):
+        """
+        Converts the provided (base64 encoded) binie document into a PDF
+        document laid out for the media and the printable area of the
+        target printer, returning it together with the print options.
+
+        The media of the printer (or the size of the document, when it's
+        defined, as windows does) is explicitly requested and no scaling
+        is applied, as the document is already laid out for the printer.
+
+        :type data_b64: String
+        :param data_b64: The base64 encoded binie document.
+        :type printer: String
+        :param printer: The name of the target printer, the default
+        printer is used for an invalid or the default name.
+        :type options: Dictionary
+        :param options: The options of the job, that take precedence
+        over the ones calculated for the printer.
+        :rtype: Tuple
+        :return: The base64 encoded PDF document and the options to be
+        used for its printing.
+        """
+
+        import colony_print
+
+        # decodes the binie document and retrieves the size defined in its
+        # header (tenths of millimeter), that is used as the media of the
+        # job when defined (as the custom paper size of windows)
+        data = base64.b64decode(data_b64)
+        width, height = struct.unpack_from("<II", data, 256)
+
+        # retrieves the target device (printer) and calculates the size of
+        # its media and its margins (in points) from its imageable area
+        device = self._device(printer)
+        size, margins = None, None
+        media = device.get("media", None)
+        device_width = device.get("width", 0.0)
+        device_length = device.get("length", 0.0)
+        if device_width > 0 and device_length > 0:
+            size = (device_width, device_length)
+            margins = (
+                device.get("left", 0.0),
+                device.get("bottom", 0.0),
+                device_width - device.get("right", device_width),
+                device_length - device.get("top", device_length),
+            )
+        if width > 0 and height > 0:
+            media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
+
+        # renders the binie document as a pdf document using the size and
+        # the margins of the printer (the document size takes precedence)
+        renderer = colony_print.BinieRenderer(size=size, margins=margins)
+        buffer = appier.legacy.BytesIO()
+        renderer.render(data, buffer)
+        data_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        # builds the options of the pdf document keeping the options of the
+        # job and requesting the media of the printer with no scaling
+        options = dict(options)
+        if media:
+            options.setdefault("media", media)
+        options.setdefault("scaling", "none")
+        return data_b64, options
+
+    def _device(self, printer):
+        """
+        Retrieves the information of the device (printer) with the provided
+        name, the default device is used for an invalid or the default name
+        (falling back to the last one, as npcolony does).
+
+        :type printer: String
+        :param printer: The name of the printer to retrieve the device.
+        :rtype: Dictionary
+        :return: The information of the device or an empty map in case
+        no device is found for the printer.
+        """
+
+        devices = self.npcolony.get_devices()
+        is_default = printer in (None, "", "default")
+        for device in devices:
+            if is_default and device.get("is_default", False):
+                return device
+            if not is_default and device.get("name", "").lower() == printer.lower():
+                return device
+        if is_default and devices:
+            return devices[-1]
         return dict()
 
     def _handle_gravo(self, data_b64):
@@ -489,11 +621,13 @@ class ColonyPrintNode(object):
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
         # system, this is required to avoid problems with the printing of the
-        # data in printers of the current system
+        # data in printers of the current system, note that binie documents
+        # are compatible with pdf systems as they are converted into pdf
         if (
             format
             and hasattr(self.npcolony, "get_format")
             and not format == self.npcolony.get_format()
+            and not (format == "binie" and self.npcolony.get_format() == "pdf")
         ):
             raise appier.OperationalError(
                 "Format '%s' not compatible with system" % format

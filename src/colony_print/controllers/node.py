@@ -25,6 +25,8 @@ VALID_OPTIONS = set(
     [
         "scale",
         "quality",
+        "media",
+        "scaling",
         "save_output",
         "send_email",
         "email_address",

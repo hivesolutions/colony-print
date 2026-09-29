@@ -57,6 +57,7 @@ python -m colony_print.node
 To be able to use new fonts (other than the ones provided by the system), one must install them into the `/usr/share/fonts/truetype` directory so they are exposed and ready to be used by the PDF generation infra-structure. For example, Calibri is one type of font that should be exported to a UNIX machine as many colony-generated documents use it.
 
 The `/usr/share/fonts/truetype` install path is shared by the PDF generation engine.
+Linux (CUPS) nodes need the same fonts to lay out the Binie documents they print. They look for the font files by name in the same paths and, as Windows does, fall back to the closest installed font found through fontconfig (`fc-match`), so installing Calibri (or the metric compatible Carlito font) keeps the layout identical to the Windows one.
 The `gravo` engine receives its fonts on a per print job basis through the `extra_fonts` field of the gravo print payload (see [Gravo Print Payload](#gravo-print-payload)) and stages them on a per job temporary directory, so the two flows are independent and operators should not confuse them.
 
 ### Engines
@@ -86,8 +87,10 @@ The `options` map is filtered to the following keys:
 
 | Option            | Type    | Scope      | Notes                                                                                      |
 | ----------------- | ------- | ---------- | ------------------------------------------------------------------------------------------ |
-| `scale`           | number  | npcolony   | Forwarded to the npcolony engine to scale the printed output.                              |
-| `quality`         | number  | npcolony   | Forwarded to the npcolony engine to control the print quality.                             |
+| `scale`           | number  | npcolony   | Accepted for compatibility, currently not applied by the npcolony engine.                  |
+| `quality`         | number  | npcolony   | Accepted for compatibility, currently not applied by the npcolony engine.                  |
+| `media`           | string  | CUPS       | Paper size requested to CUPS (e.g. `80x297mm`, `RP80x297` or `Custom.80x200mm`).           |
+| `scaling`         | string  | CUPS       | CUPS print scaling: `auto`, `auto-fit`, `fit`, `fill` or `none`.                           |
 | `save_output`     | boolean | email mode | When `true` the generated PDF is returned (base64) in the job result. Defaults to `false`. |
 | `send_email`      | boolean | email mode | Whether to send the result email. Defaults to `true`.                                      |
 | `email_address`   | string  | email mode | Single recipient address (alias of `email_receiver`).                                      |
@@ -99,7 +102,21 @@ The `save_output` and `email_*` options only take effect on nodes running in `em
 
 ### npcolony Print Payload
 
-The `npcolony` engine is the default and prints through [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) using GDI on Windows and CUPS on Linux. Its payload is the binary print document carried in `data_b64`, typically a [Binie](doc/binie.md) document produced by the XMPL to Binie conversion, dispatched directly to the target printer. There are no JSON fields: the printing behaviour is tuned through the `scale` and `quality` options and the optional `format` field described in [Print Request](#print-request).
+The `npcolony` engine is the default and prints through [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) using GDI on Windows and CUPS on Linux. Its payload is the binary print document carried in `data_b64`, typically a [Binie](doc/binie.md) document produced by the XMPL to Binie conversion, dispatched directly to the target printer. There are no JSON fields: the printing behaviour is tuned through the options and the optional `format` field described in [Print Request](#print-request).
+
+On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes only print PDF documents, so they convert Binie jobs (with the `binie` format, or without a format when the payload is a valid Binie document) into a PDF laid out with the same rules as GDI: the paper size of the document when it defines one and the printer's default paper size otherwise, with the content kept inside the printable area of the printer and printed without scaling. PDF documents and any other data are sent to CUPS untouched.
+
+### Linux (CUPS) Printing
+
+The printer of the job (or `NODE_PRINTER` when the job has none) selects the CUPS queue, and `default`, the default value of `NODE_PRINTER`, selects the default queue. Jobs for a queue that does not exist, or that CUPS refuses, fail with an error instead of being reported as printed.
+
+Each queue should use a driver for its printer and a default paper size that matches the loaded paper, as that size is used for the Binie documents that do not define one (e.g. `lpadmin -p receipt -o PageSize=RP80x297`):
+
+* Receipt printers - the vendor CUPS driver (e.g. the Epson TM series driver), with its paper reduction options enabled to avoid feeding blank paper at the end of the receipt.
+* Label printers - the label drivers shipped with CUPS (Zebra, Dymo) or the vendor ones, with the default size set to the loaded label.
+* Office printers - driverless (IPP Everywhere) queues.
+
+In `email` mode the PDF document is written to the output file (print to file) instead of being printed, as it happens with the PDF printer on Windows.
 
 ### Gravo Print Payload
 
