@@ -307,11 +307,11 @@ class ColonyPrintNodeTest(unittest.TestCase):
         data_b64, options = self.node._convert_binie(
             colony_print.controllers.node.HELLO_WORLD_B64,
             printer="receipt",
-            options=dict(title="hello_world", media="Custom.80x200mm"),
+            options=dict(title="hello_world", media="Custom.80x200mm", scaling="fit"),
         )
         self.assertEqual(base64.b64decode(data_b64)[:5], b"%PDF-")
         self.assertEqual(
-            options, dict(title="hello_world", media="Custom.80x200mm", scaling="none")
+            options, dict(title="hello_world", media="RP80x297", scaling="fit")
         )
         self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 226.77, 841.89))
 
@@ -319,7 +319,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
         data = base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)
         data = data[:256] + struct.pack("<II", 800, 1000) + data[264:]
         data_b64, options = self.node._convert_binie(
-            base64.b64encode(data).decode("utf-8"), printer="Receipt"
+            base64.b64encode(data).decode("utf-8"),
+            printer="Receipt",
+            options=dict(media="A4"),
         )
         self.assertEqual(options, dict(media="Custom.80x100mm", scaling="none"))
         media_box = self._media_box(data_b64)
@@ -329,7 +331,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
     def test_convert_binie_no_device(self):
         MockNPColony.devices = []
         data_b64, options = self.node._convert_binie(
-            colony_print.controllers.node.HELLO_WORLD_B64, printer="missing"
+            colony_print.controllers.node.HELLO_WORLD_B64,
+            printer="missing",
+            options=dict(media="Custom.80x200mm"),
         )
         self.assertEqual(options, dict(scaling="none"))
         media_box = self._media_box(data_b64)

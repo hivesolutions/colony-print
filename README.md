@@ -104,7 +104,7 @@ The `save_output` and `email_*` options only take effect on nodes running in `em
 
 The `npcolony` engine is the default and prints through [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) using GDI on Windows and CUPS on Linux. Its payload is the binary print document carried in `data_b64`, typically a [Binie](doc/binie.md) document produced by the XMPL to Binie conversion, dispatched directly to the target printer. There are no JSON fields: the printing behaviour is tuned through the options and the optional `format` field described in [Print Request](#print-request).
 
-On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes only print PDF documents, so they convert Binie jobs (with the `binie` format, or without a format when the payload is a valid Binie document) into a PDF laid out with the same rules as GDI: the paper size of the document when it defines one and the printer's default paper size otherwise, with the content kept inside the printable area of the printer and printed without scaling. PDF documents and any other data are sent to CUPS untouched.
+On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes only print PDF documents, so they convert Binie jobs (with the `binie` format, or without a format when the payload is a valid Binie document) into a PDF laid out with the same rules as GDI: the paper size of the document when it defines one and the printer's default paper size otherwise, with the content kept inside the printable area of the printer and printed without scaling. The `media` option doesn't apply to them, as their pages are always laid out for that paper size. PDF documents and any other data are sent to CUPS untouched.
 
 ### Linux (CUPS) Printing
 

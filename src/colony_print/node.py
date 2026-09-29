@@ -377,7 +377,8 @@ class ColonyPrintNode(object):
         printer is used for an invalid or the default name.
         :type options: Dictionary
         :param options: The options of the job, that take precedence
-        over the ones calculated for the printer.
+        over the ones calculated for the printer, except for the media
+        that is always the one the document is laid out for.
         :rtype: Tuple
         :return: The base64 encoded PDF document and the options to be
         used for its printing.
@@ -417,10 +418,13 @@ class ColonyPrintNode(object):
         data_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
         # builds the options of the pdf document keeping the options of the
-        # job and requesting the media of the printer with no scaling
+        # job, except for the media that is always the one the document is
+        # laid out for (the one of the job would not match its pages), and
+        # requesting no scaling in case the job doesn't define one
         options = dict(options)
+        options.pop("media", None)
         if media:
-            options.setdefault("media", media)
+            options["media"] = media
         options.setdefault("scaling", "none")
         return data_b64, options
 
