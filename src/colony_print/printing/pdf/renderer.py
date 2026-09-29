@@ -75,6 +75,11 @@ class BinieRenderer(object):
     """ The margins of the page (left, bottom, right and top) in
     PDF points, the area outside of them is not printable """
 
+    custom = True
+    """ If the size defined by the binie document is used as the
+    (custom) size of its pages, otherwise the pages always use the
+    default size, as when the printer doesn't accept the size """
+
     fonts = {}
     """ The map associating the name and style of a font with the
     name and the metrics of the font loaded in the PDF context """
@@ -102,7 +107,7 @@ class BinieRenderer(object):
     """ The vertical offset (in twips) to be added to the elements
     as a result of the pages that have already been drawn """
 
-    def __init__(self, size=None, margins=None):
+    def __init__(self, size=None, margins=None, custom=True):
         """
         Constructor of the class.
 
@@ -112,10 +117,16 @@ class BinieRenderer(object):
         :type margins: Tuple
         :param margins: The margins (left, bottom, right and top in
         points) of the page, that delimit its printable area.
+        :type custom: bool
+        :param custom: If the size defined by the document is used as
+        the (custom) size of its pages, as the custom paper size of
+        windows, otherwise the pages always use the default size, as
+        when the printer doesn't accept the size of the document.
         """
 
         self.size = size or visitor.PAPER_SIZE
         self.margins = margins or (0.0, 0.0, 0.0, 0.0)
+        self.custom = custom
         self.fonts = {}
         self.canvas = None
         self.origin = None
@@ -128,8 +139,9 @@ class BinieRenderer(object):
         """
         Renders the provided binie document into the provided file as
         a PDF document, using the size defined in the document when it's
-        available (as windows does) and the default size otherwise, an
-        exception is raised in case the data is not a valid binie document.
+        available and used as a custom size (as windows does) and the
+        default size otherwise, an exception is raised in case the data
+        is not a valid binie document.
 
         :type data: String
         :param data: The binie document to be rendered as PDF.
@@ -152,9 +164,10 @@ class BinieRenderer(object):
         title, width, height, count = struct.unpack_from(DOCUMENT_HEADER_FORMAT, data)
 
         # uses the dimensions of the document as the size of the page
-        # in case both are defined (tenths of millimeter), just like the
-        # custom paper size of windows, otherwise uses the default size
-        if width > 0 and height > 0:
+        # in case both are defined (tenths of millimeter) and used as a
+        # custom size, just like the custom paper size of windows, otherwise
+        # uses the default size (eg: the paper the printer is loaded with)
+        if self.custom and width > 0 and height > 0:
             size = (width / 100.0 * visitor.SCALE, height / 100.0 * visitor.SCALE)
         else:
             size = self.size

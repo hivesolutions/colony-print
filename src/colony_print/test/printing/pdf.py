@@ -204,13 +204,15 @@ class BinieRendererTest(unittest.TestCase):
         renderer = colony_print.BinieRenderer()
         self.assertEqual(renderer.size, colony_print.printing.pdf.visitor.PAPER_SIZE)
         self.assertEqual(renderer.margins, (0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(renderer.custom, True)
         self.assertEqual(renderer.fonts, {})
 
         renderer = colony_print.BinieRenderer(
-            size=RECEIPT_SIZE, margins=RECEIPT_MARGINS
+            size=RECEIPT_SIZE, margins=RECEIPT_MARGINS, custom=False
         )
         self.assertEqual(renderer.size, RECEIPT_SIZE)
         self.assertEqual(renderer.margins, RECEIPT_MARGINS)
+        self.assertEqual(renderer.custom, False)
 
     def test_render(self):
         data = self._binie([self._text("Hello World")], title=b"hello_world")
@@ -237,6 +239,23 @@ class BinieRendererTest(unittest.TestCase):
         x, y, _font, _size, _text = self._texts(self._pages(result)[0])[0]
         self.assertAlmostEqual(x, 11.34, places=2)
         self.assertAlmostEqual(y, 283.46 - CALIBRI_ASCENT, places=2)
+
+    def test_render_document_size_ignored(self):
+        data = self._binie([self._text("Hello World")], width=800, height=80)
+        renderer = colony_print.BinieRenderer(
+            size=(595.28, 841.89), margins=(12.0, 12.0, 12.0, 12.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(self._media_box(result), (0.0, 0.0, 595.28, 841.89))
+        self.assertEqual(renderer.origin, (12.0, 829.89))
+        self.assertEqual(renderer.vertical_size, 288)
+        self.assertEqual(len(self._pages(result)), 1)
+
+        x, y, _font, _size, _text = self._texts(self._pages(result)[0])[0]
+        self.assertAlmostEqual(x, 12.0, places=2)
+        self.assertAlmostEqual(y, 829.89 - CALIBRI_ASCENT, places=2)
 
     def test_render_default_size(self):
         data = self._binie([self._text("Hello World")])

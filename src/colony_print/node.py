@@ -33,6 +33,11 @@ NODE_MODES = set(["normal", "email"])
 """ The set of running modes that are considered to be valid for
 the node, this is going to be used to validate the mode """
 
+SIZE_TOLERANCE = 72.0 / 25.4
+""" The tolerance (in points, one millimeter) of the comparison of
+the size of a document with the size of the media of a printer, as
+the sizes of the printers are rounded (eg: to points) """
+
 EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
 
@@ -366,9 +371,13 @@ class ColonyPrintNode(object):
         document laid out for the media and the printable area of the
         target printer, returning it together with the print options.
 
-        The media of the printer (or the size of the document, when it's
-        defined, as windows does) is explicitly requested and no scaling
-        is applied, as the document is already laid out for the printer.
+        The size of the document, when it's defined, is requested as a
+        custom paper size (as windows does) and used for its pages when
+        the printer accepts it, otherwise the document is laid out in the
+        media of the printer, from the top left corner of its printable
+        area, as the windows driver of the printer does. The resulting
+        media is explicitly requested and no scaling is applied, as the
+        document is already laid out for the printer.
 
         :type data_b64: String
         :param data_b64: The base64 encoded binie document.
@@ -405,20 +414,37 @@ class ColonyPrintNode(object):
                 device_length - device.get("top", device_length),
             )
 
+        # retrieves the size defined in the header of the (valid) document
+        # (tenths of millimeter), requested as a custom paper size (as windows
+        # does) that is used for the pages, with the margins of the custom
+        # sizes, only when the printer accepts it, otherwise the document is
+        # laid out in the media of the printer, as its windows driver does,
+        # note that the size is always used when the printer is unknown
+        width, height = 0, 0
+        if colony_print.valid_binie(data):
+            width, height = struct.unpack_from("<II", data, 256)
+        custom = width > 0 and height > 0
+        if custom and size:
+            custom = self._is_custom(
+                device, (width / 254.0 * 72.0, height / 254.0 * 72.0)
+            )
+            if custom:
+                margins = (
+                    device["custom"]["left"],
+                    device["custom"]["bottom"],
+                    device["custom"]["right"],
+                    device["custom"]["top"],
+                )
+        if custom:
+            media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
+
         # renders the binie document as a pdf document using the size and
-        # the margins of the printer (the document size takes precedence),
+        # the margins of the printer (or the custom size of the document),
         # an exception is raised in case the document is not valid
-        renderer = colony_print.BinieRenderer(size=size, margins=margins)
+        renderer = colony_print.BinieRenderer(size=size, margins=margins, custom=custom)
         buffer = appier.legacy.BytesIO()
         renderer.render(data, buffer)
         data_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-        # retrieves the size defined in the header of the (valid) document
-        # (tenths of millimeter), that is used as the media of the job when
-        # defined (as the custom paper size of windows)
-        width, height = struct.unpack_from("<II", data, 256)
-        if width > 0 and height > 0:
-            media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
 
         # builds the options of the pdf document keeping the options of the
         # job, except for the media that is always the one the document is
@@ -454,6 +480,42 @@ class ColonyPrintNode(object):
         if is_default and len(devices) == 1:
             return devices[0]
         return dict()
+
+    def _is_custom(self, device, size):
+        """
+        Verifies if the provided size (width and length in points) is used
+        as a custom paper size by the provided device (printer), as the
+        windows driver of the printer does with the custom paper size that
+        is requested for a document: the size must be in the range of the
+        custom sizes the device accepts, and a size that matches the one of
+        the media of the device is not a custom size, as it's the paper the
+        printer is loaded with.
+
+        The devices that don't report the custom sizes they accept (eg:
+        older versions of npcolony) are considered to accept none.
+
+        :type device: Dictionary
+        :param device: The information of the device (printer), with the
+        custom sizes it accepts, as reported by npcolony.
+        :type size: Tuple
+        :param size: The size (width and length in points) to be verified.
+        :rtype: bool
+        :return: If the size is used as a custom paper size by the device.
+        """
+
+        width, length = size
+        custom = device.get("custom", None)
+        if not custom:
+            return False
+        if (
+            abs(width - device.get("width", 0.0)) <= SIZE_TOLERANCE
+            and abs(length - device.get("length", 0.0)) <= SIZE_TOLERANCE
+        ):
+            return False
+        return (
+            custom["min_width"] <= width <= custom["max_width"]
+            and custom["min_length"] <= length <= custom["max_length"]
+        )
 
     def _handle_gravo(self, data_b64):
         if not self._has_gravo():
