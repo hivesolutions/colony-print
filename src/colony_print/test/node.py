@@ -230,6 +230,16 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(options, dict(media="A4", scaling="none"))
         self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 595.28, 841.89))
 
+    def test_handle_npcolony_binie_invalid(self):
+        data_b64 = base64.b64encode(b"%PDF-1.4 document").decode("utf-8")
+        self.assertRaises(
+            colony_print.InvalidBinie,
+            lambda: self.node._handle_npcolony(
+                data_b64, format="binie", printer="Receipt"
+            ),
+        )
+        self.assertEqual(MockNPColony.calls, [])
+
     def test_handle_npcolony_default(self):
         self.node._handle_npcolony(
             colony_print.controllers.node.HELLO_WORLD_B64, format="binie"

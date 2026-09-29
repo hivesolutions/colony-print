@@ -386,11 +386,8 @@ class ColonyPrintNode(object):
 
         import colony_print
 
-        # decodes the binie document and retrieves the size defined in its
-        # header (tenths of millimeter), that is used as the media of the
-        # job when defined (as the custom paper size of windows)
+        # decodes the binie document that is going to be converted
         data = base64.b64decode(data_b64)
-        width, height = struct.unpack_from("<II", data, 256)
 
         # retrieves the target device (printer) and calculates the size of
         # its media and its margins (in points) from its imageable area
@@ -407,15 +404,21 @@ class ColonyPrintNode(object):
                 device_width - device.get("right", device_width),
                 device_length - device.get("top", device_length),
             )
-        if width > 0 and height > 0:
-            media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
 
         # renders the binie document as a pdf document using the size and
-        # the margins of the printer (the document size takes precedence)
+        # the margins of the printer (the document size takes precedence),
+        # an exception is raised in case the document is not valid
         renderer = colony_print.BinieRenderer(size=size, margins=margins)
         buffer = appier.legacy.BytesIO()
         renderer.render(data, buffer)
         data_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        # retrieves the size defined in the header of the (valid) document
+        # (tenths of millimeter), that is used as the media of the job when
+        # defined (as the custom paper size of windows)
+        width, height = struct.unpack_from("<II", data, 256)
+        if width > 0 and height > 0:
+            media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
 
         # builds the options of the pdf document keeping the options of the
         # job, except for the media that is always the one the document is
