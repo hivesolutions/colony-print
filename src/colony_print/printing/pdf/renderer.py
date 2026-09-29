@@ -117,7 +117,8 @@ class BinieRenderer(object):
         """
         Renders the provided binie document into the provided file as
         a PDF document, using the size defined in the document when it's
-        available (as windows does) and the default size otherwise.
+        available (as windows does) and the default size otherwise, an
+        exception is raised in case the data is not a valid binie document.
 
         :type data: String
         :param data: The binie document to be rendered as PDF.
@@ -127,6 +128,13 @@ class BinieRenderer(object):
         """
 
         import reportlab.pdfgen.canvas
+
+        # verifies that the data is a (structurally) valid binie document
+        # before reading any of its structure, raising an exception otherwise
+        if not valid_binie(data):
+            raise exceptions.InvalidBinie(
+                "elements not matching the %d bytes of data" % len(data)
+            )
 
         # unpacks the header of the document that contains the title,
         # the (optional) dimensions and the number of elements

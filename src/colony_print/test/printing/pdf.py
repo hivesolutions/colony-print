@@ -255,6 +255,13 @@ class BinieRendererTest(unittest.TestCase):
         self.assertEqual(len(texts), 1)
         self.assertEqual(texts[0][4], b"Hello World")
 
+    def test_render_invalid(self):
+        data = self._binie([self._text("Hello World")])
+        self.assertRaises(colony_print.InvalidBinie, lambda: self._render(data[:-1]))
+        self.assertRaises(
+            colony_print.InvalidBinie, lambda: self._render(b"%PDF-1.4 document")
+        )
+
     def test_render_text(self):
         data = self._binie([self._text("Hello World")])
         renderer, result = self._render(data)
