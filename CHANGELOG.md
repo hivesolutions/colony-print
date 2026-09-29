@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Blank pages when printing PDF documents on recent Linux systems - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * Email mode for Binie documents on Linux nodes - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * Zero height pages when converting a document with only a width - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* PDF generation failing on Python 3.5, 3.7 and 3.8 with the reportlab releases installed by default - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 
 ## [0.20.0] - 2026-06-17
 
