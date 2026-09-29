@@ -31,3 +31,10 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual(
             response.headers["Access-Control-Allow-Headers"].startswith("*"), True
         )
+
+    def test_valid_options(self):
+        valid_options = colony_print.controllers.node.VALID_OPTIONS
+        self.assertEqual("media" in valid_options, True)
+        self.assertEqual("scaling" in valid_options, True)
+        self.assertEqual("title" in valid_options, False)
+        self.assertEqual("output_path" in valid_options, False)

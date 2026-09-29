@@ -21,6 +21,16 @@ else:
     INCH = reportlab.lib.units.inch
     CM = reportlab.lib.units.cm
 
+try:
+    import reportlab.rl_config
+except ImportError:
+    pass
+else:
+    # disables the ASCII85 encoding of the PDF streams, as some PDF
+    # processors (eg: the PDFio based pdftopdf filter of CUPS) are not
+    # able to transform pages with such streams, printing blank pages
+    reportlab.rl_config.useA85 = 0
+
 FONT_SCALE_FACTOR = 1
 """ The font scale factor """
 

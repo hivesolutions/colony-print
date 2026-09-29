@@ -35,7 +35,15 @@ setuptools.setup(
             "static/example/xml/*",
         ]
     },
-    install_requires=["appier", "appier-extras", "jinja2", "pillow", "reportlab"],
+    install_requires=[
+        "appier",
+        "appier-extras",
+        "jinja2",
+        "pillow",
+        'reportlab<3.5.54; python_version >= "3.0" and python_version < "3.6"',
+        'reportlab<4.4.3; python_version >= "3.6" and python_version < "3.9"',
+        'reportlab; python_version < "3.0" or python_version >= "3.9"',
+    ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Topic :: Utilities",

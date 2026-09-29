@@ -9,15 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Linux nodes print the same Binie documents as Windows nodes, laid out for the paper and printable area of the printer - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Paper size (of PDF documents) and scaling print options for Linux printers - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Substitution of the fonts missing on Linux nodes by the closest installed font - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Review of every pull request by Claude
 
 ### Changed
 
-*
+* Print jobs on Linux printers are named after the job in the printer queue - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 
 ### Fixed
 
-*
+* Blank pages when printing PDF documents on recent Linux systems - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Email mode for Binie documents on Linux nodes - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* Zero height pages when converting a document with only a width - [#24](https://github.com/hivesolutions/colony-print/issues/24)
+* PDF generation failing on Python 3.5, 3.7 and 3.8 with the reportlab releases installed by default - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 
 ## [0.20.0] - 2026-06-17
 
