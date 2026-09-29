@@ -35,8 +35,9 @@ the node, this is going to be used to validate the mode """
 
 SIZE_TOLERANCE = 72.0 / 25.4
 """ The tolerance (in points, one millimeter) of the comparison of
-the size of a document with the size of the media of a printer, as
-the sizes of the printers are rounded (eg: to points) """
+the size of a document with the size of the media of a printer and
+with the limits of its custom sizes, as the sizes of the printers
+are rounded (eg: to points) """
 
 EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
@@ -487,9 +488,9 @@ class ColonyPrintNode(object):
         as a custom paper size by the provided device (printer), as the
         windows driver of the printer does with the custom paper size that
         is requested for a document: the size must be in the range of the
-        custom sizes the device accepts, and a size that matches the one of
-        the media of the device is not a custom size, as it's the paper the
-        printer is loaded with.
+        custom sizes the device accepts (with a tolerance, as its limits are
+        rounded), and a size that matches the one of the media of the device
+        is not a custom size, as it's the paper the printer is loaded with.
 
         The devices that don't report the custom sizes they accept (eg:
         older versions of npcolony) are considered to accept none.
@@ -512,10 +513,11 @@ class ColonyPrintNode(object):
             and abs(length - device.get("length", 0.0)) <= SIZE_TOLERANCE
         ):
             return False
-        return (
-            custom["min_width"] <= width <= custom["max_width"]
-            and custom["min_length"] <= length <= custom["max_length"]
-        )
+        min_width = custom["min_width"] - SIZE_TOLERANCE
+        max_width = custom["max_width"] + SIZE_TOLERANCE
+        min_length = custom["min_length"] - SIZE_TOLERANCE
+        max_length = custom["max_length"] + SIZE_TOLERANCE
+        return min_width <= width <= max_width and min_length <= length <= max_length
 
     def _handle_gravo(self, data_b64):
         if not self._has_gravo():

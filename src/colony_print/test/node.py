@@ -542,9 +542,16 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(is_custom(OFFICE_DEVICE, (597.28, 843.89)), False)
         self.assertEqual(is_custom(OFFICE_DEVICE, (599.28, 841.89)), True)
         self.assertEqual(is_custom(OFFICE_DEVICE, (278.99, 419.5)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (277.0, 417.5)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (275.0, 419.5)), False)
         self.assertEqual(is_custom(OFFICE_DEVICE, (612.0, 1008.0)), True)
-        self.assertEqual(is_custom(OFFICE_DEVICE, (612.5, 1008.0)), False)
-        self.assertEqual(is_custom(OFFICE_DEVICE, (425.2, 1008.5)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (614.0, 1010.0)), True)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (615.0, 1008.0)), False)
+        self.assertEqual(is_custom(OFFICE_DEVICE, (425.2, 1011.0)), False)
+
+        custom = dict(RECEIPT_DEVICE["custom"], max_width=226.77)
+        device = dict(RECEIPT_DEVICE, custom=custom)
+        self.assertEqual(is_custom(device, (800 / 254.0 * 72.0, 283.46)), True)
 
         device = dict(OFFICE_DEVICE, custom=None)
         self.assertEqual(is_custom(device, (425.2, 566.93)), False)
