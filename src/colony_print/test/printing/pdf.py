@@ -257,6 +257,46 @@ class BinieRendererTest(unittest.TestCase):
         self.assertAlmostEqual(x, 12.0, places=2)
         self.assertAlmostEqual(y, 829.89 - CALIBRI_ASCENT, places=2)
 
+    def test_render_rounded_size(self):
+        data = self._binie(
+            [self._text("Top"), self._text("Bottom", y=-5461)], width=800, height=1000
+        )
+        renderer = colony_print.BinieRenderer(
+            size=(226.77, 283.46), margins=(0.0, 0.0, 0.0, 0.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(renderer.vertical_size, 100)
+        self.assertEqual(len(self._pages(result)), 1)
+
+        renderer = colony_print.BinieRenderer(
+            size=(226.77, 283.0), margins=(0.0, 0.0, 0.0, 0.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(renderer.vertical_size, 100)
+        self.assertEqual(len(self._pages(result)), 1)
+
+        renderer = colony_print.BinieRenderer(
+            size=(226.77, 282.9), margins=(0.0, 0.0, 0.0, 0.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(renderer.vertical_size, 99)
+        self.assertEqual(len(self._pages(result)), 2)
+
+        data = self._binie(
+            [self._text("Top"), self._text("Bottom", y=-16629)],
+            width=2100,
+            height=2970,
+        )
+        renderer, result = self._render(data, margins=(0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(renderer.vertical_size, 297)
+        self.assertEqual(len(self._pages(result)), 1)
+
     def test_render_default_size(self):
         data = self._binie([self._text("Hello World")])
         renderer = colony_print.BinieRenderer()
