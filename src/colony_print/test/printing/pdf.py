@@ -270,6 +270,24 @@ class BinieRendererTest(unittest.TestCase):
         self.assertEqual(renderer.vertical_size, 100)
         self.assertEqual(len(self._pages(result)), 1)
 
+        renderer = colony_print.BinieRenderer(
+            size=(226.77, 283.0), margins=(0.0, 0.0, 0.0, 0.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(renderer.vertical_size, 100)
+        self.assertEqual(len(self._pages(result)), 1)
+
+        renderer = colony_print.BinieRenderer(
+            size=(226.77, 282.9), margins=(0.0, 0.0, 0.0, 0.0), custom=False
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(renderer.vertical_size, 99)
+        self.assertEqual(len(self._pages(result)), 2)
+
         data = self._binie(
             [self._text("Top"), self._text("Bottom", y=-16629)],
             width=2100,

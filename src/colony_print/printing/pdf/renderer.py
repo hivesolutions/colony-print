@@ -175,9 +175,9 @@ class BinieRenderer(object):
         # calculates the printable area of the page (the page without
         # the margins), its top left corner is the origin of the binie
         # coordinates and its height controls the creation of new pages,
-        # in whole millimeters (as windows does) rounded to hundredths
-        # first, so that the rounding of the sizes of the printers (eg:
-        # 283.46 points for 100 mm) doesn't take a millimeter away
+        # in whole millimeters (as windows does) with half a point more,
+        # so that the rounding of the sizes of the printers to points (eg:
+        # 283 points for 100 mm) doesn't take a millimeter away
         page_width, page_height = size
         margin_left, margin_bottom, margin_right, margin_top = self.margins
         printable_width = page_width - margin_left - margin_right
@@ -190,7 +190,7 @@ class BinieRenderer(object):
             int(printable_height * FONT_SCALE_FACTOR) * -1,
         )
         self.vertical_size = max(
-            int(round(printable_height / visitor.INCH * MM_PER_INCH, 2)), 1
+            int((printable_height + 0.5) / visitor.INCH * MM_PER_INCH), 1
         )
         self.current_page = 0
         self.page_offset = 0
