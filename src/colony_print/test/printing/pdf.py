@@ -270,9 +270,14 @@ class BinieRendererTest(unittest.TestCase):
         self.assertEqual(renderer.vertical_size, 100)
         self.assertEqual(len(self._pages(result)), 1)
 
-        data = self._binie([self._text("Hello World")], width=2100, height=2970)
+        data = self._binie(
+            [self._text("Top"), self._text("Bottom", y=-16629)],
+            width=2100,
+            height=2970,
+        )
         renderer, result = self._render(data, margins=(0.0, 0.0, 0.0, 0.0))
         self.assertEqual(renderer.vertical_size, 297)
+        self.assertEqual(len(self._pages(result)), 1)
 
     def test_render_default_size(self):
         data = self._binie([self._text("Hello World")])
