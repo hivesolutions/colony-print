@@ -2,9 +2,9 @@ import React, { FC, useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
-import { JobInfo, JobFileInfo } from "../../../api/colony-print";
+import { JobInfo, JobFileInfo, JobFontInfo } from "../../../api/colony-print";
 import { Button, Link, Tag, Title, Text } from "../../atoms";
-import { ContentHeader, DetailGrid } from "../../molecules";
+import { ContentHeader, DataTable, DetailGrid } from "../../molecules";
 import { formatTimestamp } from "../../../utils";
 
 import "./job-show.css";
@@ -276,6 +276,46 @@ export const JobShow: FC = () => {
                                 </Text>
                             )
                         }))}
+                    />
+                </div>
+            )}
+            {job?.fonts && job.fonts.length > 0 && (
+                <div className="job-show-section">
+                    <Title level={3}>Fonts</Title>
+                    <DataTable
+                        columns={[
+                            {
+                                key: "name",
+                                header: "Name",
+                                render: (font: JobFontInfo) => font.name
+                            },
+                            {
+                                key: "style",
+                                header: "Style",
+                                render: (font: JobFontInfo) =>
+                                    font.style?.replace(/_/g, " ") || "-"
+                            },
+                            {
+                                key: "source",
+                                header: "Source",
+                                render: (font: JobFontInfo) =>
+                                    font.url ||
+                                    (font.data_length !== undefined
+                                        ? `Data (${formatBytes(
+                                              Math.floor(
+                                                  (font.data_length * 3) / 4
+                                              )
+                                          )})`
+                                        : "-")
+                            },
+                            {
+                                key: "md5",
+                                header: "MD5",
+                                render: (font: JobFontInfo) => font.md5 || "-"
+                            }
+                        ]}
+                        data={job.fonts}
+                        emptyMessage="No fonts"
                     />
                 </div>
             )}

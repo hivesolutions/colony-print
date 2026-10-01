@@ -2,7 +2,7 @@ import React, { FC, useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
-import { NodeInfo } from "../../../api/colony-print";
+import { NodeInfo, NodeFontInfo } from "../../../api/colony-print";
 import { Button, Link, Tag, Title, Text } from "../../atoms";
 import {
     ContentHeader,
@@ -97,6 +97,18 @@ export const NodeShow: FC = () => {
               {
                   label: "Engines",
                   value: (node.engines || []).join(", ") || "-"
+              },
+              {
+                  label: "Capabilities",
+                  value: node.capabilities?.length ? (
+                      <div className="node-show-tags">
+                          {node.capabilities.map((capability) => (
+                              <Tag key={capability}>{capability}</Tag>
+                          ))}
+                      </div>
+                  ) : (
+                      "-"
+                  )
               },
               { label: "Platform", value: node.platform || "-" },
               { label: "OS", value: node.os || "-" },
@@ -218,6 +230,64 @@ export const NodeShow: FC = () => {
                 <div className="node-show-section">
                     <Title level={3}>Print Diagnostics</Title>
                     <DetailGrid fields={lastFields} />
+                </div>
+            )}
+            {(node?.fonts?.length ||
+                node?.capabilities?.includes("dynamic-fonts")) && (
+                <div className="node-show-section">
+                    <Title level={3}>Fonts</Title>
+                    <DataTable
+                        columns={[
+                            {
+                                key: "name",
+                                header: "Name",
+                                render: (font: NodeFontInfo) => font.name
+                            },
+                            {
+                                key: "style",
+                                header: "Style",
+                                render: (font: NodeFontInfo) =>
+                                    font.style.replace(/_/g, " ")
+                            },
+                            {
+                                key: "md5",
+                                header: "MD5",
+                                render: (font: NodeFontInfo) => font.md5
+                            },
+                            {
+                                key: "url",
+                                header: "URL",
+                                render: (font: NodeFontInfo) => font.url || "-"
+                            },
+                            {
+                                key: "size",
+                                header: "Size",
+                                render: (font: NodeFontInfo) =>
+                                    `${(font.size / 1024).toFixed(1)} KB`
+                            },
+                            {
+                                key: "time",
+                                header: "Installed",
+                                render: (font: NodeFontInfo) =>
+                                    formatRelativeTime(font.time)
+                            },
+                            {
+                                key: "active",
+                                header: "Active",
+                                render: (font: NodeFontInfo) => (
+                                    <Tag
+                                        variant={
+                                            font.active ? "success" : "default"
+                                        }
+                                    >
+                                        {font.active ? "Yes" : "No"}
+                                    </Tag>
+                                )
+                            }
+                        ]}
+                        data={node?.fonts || []}
+                        emptyMessage="No fonts installed"
+                    />
                 </div>
             )}
             {engineEntries.map(([engine, info]) => {
