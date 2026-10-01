@@ -34,6 +34,10 @@ NODE_MODES = set(["normal", "email"])
 """ The set of running modes that are considered to be valid for
 the node, this is going to be used to validate the mode """
 
+FONTS_PATH = "~/.colony_print/fonts"
+""" The default path to the directory of the cache of the fonts
+installed on demand, the ones sent with the print jobs """
+
 SIZE_TOLERANCE = 72.0 / 25.4
 """ The tolerance (in points, one millimeter) of the comparison of
 the size of a document with the size of the media of a printer and
@@ -78,6 +82,8 @@ class ColonyPrintNode(object):
         self.node_mode = None
         self.node_printer = None
         self.node_email_receivers = None
+        self.font_cache = None
+        self.loaded_fonts = set()
 
     def loop(self):
         logging.basicConfig(
@@ -99,6 +105,9 @@ class ColonyPrintNode(object):
         logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
         logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
 
+        self.font_cache = self._build_font_cache()
+        self._load_fonts()
+
         headers = dict()
         if secret_key:
             headers["X-Secret-Key"] = secret_key
@@ -116,6 +125,8 @@ class ColonyPrintNode(object):
                         engines=self.engines,
                         engine_info=self.engine_info,
                         libraries=self.libraries,
+                        capabilities=self.capabilities,
+                        fonts=self.font_cache.installed(),
                         platform=appier.PLATFORM,
                         os=os.name,
                         system=self.system,
@@ -171,6 +182,7 @@ class ColonyPrintNode(object):
         printer = job.get("printer", None)
         format = job.get("format", None)
         options = job.get("options", dict())
+        fonts = job.get("fonts", None)
         save_output = options.get("save_output", False)
         send_email = options.get("send_email", True)
         safe_sleep = options.get("safe_sleep", 0.0)
@@ -194,7 +206,7 @@ class ColonyPrintNode(object):
             # sends the print job for handling using npcolony, this will make
             # sure that the job is printed in the current system
             self._handle_npcolony(
-                data_b64, format=format, printer=printer_s, options=options
+                data_b64, format=format, printer=printer_s, options=options, fonts=fonts
             )
 
             # does some busy waiting for the output file to be created
@@ -336,6 +348,42 @@ class ColonyPrintNode(object):
             system["distribution"] = distribution
         return system
 
+    @property
+    def capabilities(self):
+        """
+        The capabilities (features) supported by the node, as advertised
+        to the server, that depend on the available engines, on the system
+        (and its npcolony version) and on the mode of the node.
+
+        :rtype: List
+        :return: The names of the capabilities supported by the node.
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/capabilities.md
+        """
+
+        capabilities = list(self.engines)
+        if self._has_npcolony():
+            format = (
+                self.npcolony.get_format()
+                if hasattr(self.npcolony, "get_format")
+                else "binie"
+            )
+            capabilities.extend(["binie", "xmpl"])
+            if format == "pdf":
+                capabilities.append("pdf")
+            if format == "binie" or [
+                device for device in self.npcolony.get_devices() if "custom" in device
+            ]:
+                capabilities.append("custom-paper")
+            if format == "pdf" or hasattr(self.npcolony, "load_font"):
+                capabilities.append("dynamic-fonts")
+        if self._has_gravo():
+            capabilities.extend(
+                ["gravo-extra-fonts", "gravo-record", "gravo-check-path"]
+            )
+        if self.node_mode == "email":
+            capabilities.append("email")
+        return capabilities
+
     def _handle_job(self, job):
         # unpacks the complete set of job information to
         # be able to print the job in the current system
@@ -345,6 +393,7 @@ class ColonyPrintNode(object):
         type = job.get("type", None)
         format = job.get("format", None)
         options = job.get("options", dict())
+        fonts = job.get("fonts", None)
         printer_s = printer if printer else self.node_printer
 
         logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
@@ -354,7 +403,7 @@ class ColonyPrintNode(object):
         if type in (None, "npcolony"):
             options["title"] = name
             result = self._handle_npcolony(
-                data_b64, format=format, printer=printer_s, options=options
+                data_b64, format=format, printer=printer_s, options=options, fonts=fonts
             )
             return dict(
                 result="success", handler="npcolony", printer=printer_s, data=result
@@ -365,12 +414,31 @@ class ColonyPrintNode(object):
         elif type in ("text",):
             result = self._handle_text(data_b64)
             return dict(result="success", handler="text", data=result)
+        elif type in ("fonts",):
+            result = self._handle_fonts(data_b64)
+            return dict(result="success", handler="fonts", data=result)
 
         raise appier.OperationalError("Type '%s' not valid" % type)
 
-    def _handle_npcolony(self, data_b64, format=None, printer=None, options=dict()):
+    def _handle_npcolony(
+        self, data_b64, format=None, printer=None, options=dict(), fonts=None
+    ):
         if not self._has_npcolony():
             raise appier.OperationalError("npcolony engine is not available")
+
+        # in case the data is an XMPL document converts it into a binie
+        # document (printed by every system), together with the fonts
+        # declared by the document, that are added to the job ones
+        if format == "xmpl":
+            self._ensure_capability("xmpl")
+            data_b64, fonts = self._convert_xmpl(data_b64, fonts=fonts)
+            format = "binie"
+
+        # installs the fonts of the job (if any) so that they're used in
+        # the printing of the document, as the fonts of the system are
+        if fonts:
+            self._ensure_capability("dynamic-fonts")
+            self._install_fonts(fonts)
 
         # in case the data is a binie document and the current system only
         # prints pdf documents (eg: cups) converts the document into a pdf
@@ -497,9 +565,13 @@ class ColonyPrintNode(object):
             media = "Custom.%gx%gmm" % (width / 10.0, height / 10.0)
 
         # renders the binie document as a pdf document using the size and
-        # the margins of the printer (or the custom size of the document),
+        # the margins of the printer (or the custom size of the document)
+        # and the fonts installed on demand (before the ones of the system),
         # an exception is raised in case the document is not valid
-        renderer = colony_print.BinieRenderer(size=size, margins=margins, custom=custom)
+        font_files = self.font_cache.files() if self.font_cache else None
+        renderer = colony_print.BinieRenderer(
+            size=size, margins=margins, custom=custom, font_files=font_files
+        )
         buffer = appier.legacy.BytesIO()
         renderer.render(data, buffer)
         data_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
@@ -575,6 +647,39 @@ class ColonyPrintNode(object):
         min_length = custom["min_length"] - SIZE_TOLERANCE
         max_length = custom["max_length"] + SIZE_TOLERANCE
         return min_width <= width <= max_width and min_length <= length <= max_length
+
+    def _convert_xmpl(self, data_b64, fonts=None):
+        """
+        Converts the provided (base64 encoded) XMPL document into a binie
+        document, the format printed by every system, returning it together
+        with the fonts of the job, the ones declared by the document followed
+        by the provided ones (that take precedence, as installed after).
+
+        :type data_b64: String
+        :param data_b64: The base64 encoded XMPL document.
+        :type fonts: List
+        :param fonts: The fonts (entries) of the job, if any.
+        :rtype: Tuple
+        :return: The base64 encoded binie document and the fonts (entries)
+        to be installed for its printing.
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/xmpl.md
+        """
+
+        import colony_print
+
+        # decodes the XMPL document and retrieves the fonts it declares,
+        # an exception is raised in case the document is not valid
+        data = base64.b64decode(data_b64)
+        fonts = colony_print.xmpl_fonts(data) + (fonts or [])
+
+        # converts the XMPL document into a binie document using the binie
+        # printing handler of the printing manager
+        manager = colony_print.PrintingManager()
+        manager.load()
+        buffer = appier.legacy.BytesIO()
+        manager.print_language(data, dict(name="binie", file=buffer))
+        data_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return data_b64, fonts
 
     def _handle_gravo(self, data_b64):
         if not self._has_gravo():
@@ -713,6 +818,70 @@ class ColonyPrintNode(object):
             files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
         )
 
+    def _handle_fonts(self, data_b64):
+        self._ensure_capability("dynamic-fonts")
+        data_j = self._decode_payload(data_b64)
+        return dict(fonts=self._install_fonts(data_j["fonts"]))
+
+    def _build_font_cache(self):
+        """
+        Builds the cache of the fonts installed on demand of the node,
+        using the configured path and maximum size of the fonts, loading
+        the fonts already installed (in previous executions).
+
+        :rtype: FontCache
+        :return: The font cache of the node, with its fonts loaded.
+        """
+
+        import colony_print
+
+        fonts_path = appier.conf("FONTS_PATH", FONTS_PATH)
+        font_max_size = appier.conf(
+            "FONT_MAX_SIZE", colony_print.FONT_MAX_SIZE, cast=int
+        )
+        font_cache = colony_print.FontCache(
+            os.path.expanduser(fonts_path), max_size=font_max_size
+        )
+        font_cache.load()
+        return font_cache
+
+    def _install_fonts(self, fonts):
+        """
+        Installs the provided fonts (entries of a job) in the font cache
+        of the node, loading them in the system (when required) so that
+        they're used in the printing of the documents.
+
+        :type fonts: List
+        :param fonts: The fonts (entries) to be installed.
+        :rtype: List
+        :return: The information of the installed fonts.
+        """
+
+        fonts = [self.font_cache.install(font) for font in fonts]
+        self._load_fonts()
+        return fonts
+
+    def _load_fonts(self):
+        """
+        Loads the fonts used (active) by the font cache in the system (the
+        GDI of windows) through npcolony, unloading the ones loaded before
+        that are no longer used, so that the system prints with them.
+
+        The systems whose npcolony is not able to load fonts are left
+        untouched, as the CUPS ones that embed the fonts in the PDF
+        documents they print.
+        """
+
+        if not self._has_npcolony() or not hasattr(self.npcolony, "load_font"):
+            return
+        file_paths = set(self.font_cache.files().values())
+        for file_path in sorted(self.loaded_fonts - file_paths):
+            self.npcolony.unload_font(file_path)
+            self.loaded_fonts.discard(file_path)
+        for file_path in sorted(file_paths - self.loaded_fonts):
+            self.npcolony.load_font(file_path)
+            self.loaded_fonts.add(file_path)
+
     def _has_npcolony(self):
         try:
             __import__("npcolony")
@@ -783,15 +952,26 @@ class ColonyPrintNode(object):
         # tries to make sure that the format is compatible with the current
         # system, this is required to avoid problems with the printing of the
         # data in printers of the current system, note that binie documents
-        # are compatible with pdf systems as they are converted into pdf
+        # are compatible with pdf systems as they are converted into pdf and
+        # XMPL documents with every system as they are converted into binie
         if (
             format
             and hasattr(self.npcolony, "get_format")
             and not format == self.npcolony.get_format()
             and not (format == "binie" and self.npcolony.get_format() == "pdf")
+            and not format == "xmpl"
         ):
             raise appier.OperationalError(
                 "Format '%s' not compatible with system" % format
+            )
+
+    def _ensure_capability(self, capability):
+        # makes sure that the capability is supported by the node (as
+        # advertised), so that the jobs that require a capability the
+        # node doesn't support fail instead of being wrongly printed
+        if not capability in self.capabilities:
+            raise appier.OperationalError(
+                "Capability '%s' not supported by node" % capability
             )
 
 
