@@ -15,6 +15,7 @@ This project includes two main components:
 * PDF generation with custom fonts and images
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * [CUPS](https://en.wikipedia.org/wiki/CUPS) printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
+* Windows installer for the nodes, which update themselves from the server (see [Windows Node](#windows-node))
 
 ## Binie Specification
 
@@ -141,6 +142,68 @@ The `gravo` engine accepts a JSON payload submitted as base64 to the print endpo
 ### Text Print Payload
 
 The `text` engine is a virtual printer that does not talk to any physical device. Its payload is the plain text content carried in `data_b64`; the engine writes it to a `document.txt` file and returns that file (base64 encoded) in the job result. It has no JSON fields and ignores the printer, format and option values, which makes it convenient for testing and for capturing print output without hardware.
+
+## Windows Node
+
+Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It installs everything the node needs: an embedded Python, colony-print, [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi) for the native (GDI) printing, and their dependencies. The node runs as the `colony-print-node` Windows service, which starts with the machine and updates itself from the server every time it starts.
+
+### Building the Installer
+
+```powershell
+.\windows\build.ps1 -Python C:\Python314\python.exe
+```
+
+The build requires a 64 bit Python (the embedded Python is the same version), the Visual C++ Build Tools (npcolony is compiled from its sources) and [Inno Setup 6](https://jrsoftware.org/isinfo.php). It creates the installer (`dist\colony-print-node-setup-<version>.exe`) and the packages of the node (`dist\packages\*.whl`), which are uploaded to the server for the self-update. The `Windows Workflow` builds both on every push (the `colony-print-node-windows` artifact) and smoke tests the installer on a Windows runner.
+
+### Installing
+
+The installer asks for the server URL and the secret key, which it verifies against the server. It then asks for the mode (`normal` or `email`), the node name, location and printer, and, in email mode, the email receivers and the Mailme key. The node ID is derived from the name and kept on later installs. It may also run silently (e.g. for mass deployment), with the configuration given as parameters:
+
+```powershell
+colony-print-node-setup-0.20.0.exe /VERYSILENT /URL=https://print.example.com/ /KEY=$SECRET_KEY /NAME="Shop 1" /LOCATION=Porto /PRINTER="EPSON TM-T20II Receipt"
+```
+
+| Parameter    | Configuration          | Notes                                                                            |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------- |
+| `/URL`       | `BASE_URL`             | URL of the Colony Print server.                                                  |
+| `/KEY`       | `SECRET_KEY`           | Secret key of the server, written to the setup log with `/LOG` (see `/CONFIG`).  |
+| `/NAME`      | `NODE_NAME`            | Defaults to the computer name.                                                   |
+| `/ID`        | `NODE_ID`              | Defaults to the name in lower case, with dashes (e.g. `shop-1`).                 |
+| `/LOCATION`  | `NODE_LOCATION`        | Optional.                                                                        |
+| `/PRINTER`   | `NODE_PRINTER`         | Printer of the jobs that don't select one.                                       |
+| `/MODE`      | `NODE_MODE`            | `normal` (default) or `email`.                                                   |
+| `/EMAILS`    | `NODE_EMAIL_RECEIVERS` | Email receivers, separated by `;` (email mode).                                  |
+| `/MAILMEKEY` | `MAILME_KEY`           | Mailme key (email mode).                                                         |
+| `/MAILMEURL` | `MAILME_BASE_URL`      | Optional Mailme URL (email mode).                                                |
+| `/CONFIG`    |                        | Path to a `config.env` file with the values of the parameters that aren't given. |
+
+The parameters that aren't given keep the values of the existing configuration, so running a new installer over a node only replaces its files. The installer exits with code `10` when the service could not be installed or started.
+
+The service runs under the system account, so it only sees the printers installed for all users and has no default printer. The installer suggests the default printer of the user running it, and the printer should be set, otherwise the jobs that don't select one fail. In email mode the printer must be a PDF printer (e.g. `Microsoft Print to PDF`), as the jobs are printed to PDF files.
+
+The node is installed in `C:\Program Files\Colony Print Node`. Its configuration (`config.env`), logs and downloaded packages are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
+
+### Self-Update
+
+Every time the service starts, the node lists the packages hosted by the server and downloads the ones compatible with it. It then installs the newest version of each package it has installed (and of colony-print and npcolony) when that version differs from the installed one. A version is rolled out by uploading its packages and rolled back by removing them from the server. A failed update never prevents the node from running, as it keeps the installed packages. Updates may be disabled with `NODE_UPDATE=0` in `config.env`, and the packages may be hosted elsewhere with `PACKAGES_URL`.
+
+The packages (wheels) are managed with the following endpoints of the server, which require the secret key, and are stored in `PACKAGES_PATH` (`DATA_PATH/packages` by default, which must be persisted, e.g. as a Docker volume):
+
+| Endpoint                  | Notes                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `GET /packages`           | Lists the packages, with their name, version, size and SHA256 digest.          |
+| `POST /packages`          | Uploads packages, as `file` fields of a multipart request.                     |
+| `PUT /packages/<file>`    | Uploads a package, as the body of the request (`application/octet-stream`).    |
+| `GET /packages/<file>`    | Downloads a package.                                                           |
+| `DELETE /packages/<file>` | Removes a package.                                                             |
+
+To roll out a build, upload its packages and restart the nodes (or wait for their next boot):
+
+```bash
+for file in dist/packages/*.whl; do
+    curl -H "X-Secret-Key: $SECRET_KEY" -F "file=@$file" $BASE_URL/packages
+done
+```
 
 ## Admin UI
 

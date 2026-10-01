@@ -1,0 +1,25 @@
+<!--
+    WinSW (https://github.com/winsw/winsw) configuration of the Colony Print
+    node service, the service runs the boot script of the node, which updates
+    the packages of the node from the server and then runs the node itself.
+-->
+<service>
+    <id>colony-print-node</id>
+    <name>Colony Print Node</name>
+    <description>Receives the print jobs of the Colony Print server and prints them on the printers of this machine, updating itself from the server whenever it starts.</description>
+    <executable>%BASE%\python\python.exe</executable>
+    <arguments>-I -u "%BASE%\python\Lib\site-packages\colony_print\boot.py" --config "%ProgramData%\Colony Print Node\config.env"</arguments>
+    <workingdirectory>%ProgramData%\Colony Print Node</workingdirectory>
+    <logpath>%ProgramData%\Colony Print Node\logs</logpath>
+    <log mode="roll-by-size">
+        <sizeThreshold>10240</sizeThreshold>
+        <keepFiles>8</keepFiles>
+    </log>
+    <startmode>Automatic</startmode>
+    <depend>Spooler</depend>
+    <onfailure action="restart" delay="10 sec" />
+    <onfailure action="restart" delay="30 sec" />
+    <onfailure action="restart" delay="60 sec" />
+    <resetfailure>1 hour</resetfailure>
+    <stoptimeout>15 sec</stoptimeout>
+</service>
