@@ -13,9 +13,18 @@ import colony_print
 
 class JobControllerTest(unittest.TestCase):
     def setUp(self):
-        self.app = colony_print.ColonyPrintApp(level=logging.ERROR)
+        self.app = colony_print.ColonyPrintApp(
+            level=logging.ERROR, session_c=appier.MemorySession
+        )
+        self._notify = appier.notify
+        appier.notify = lambda *args, **kwargs: None
+        session = self.app.session_c.new()
+        session["username"] = "admin"
+        session["tokens"] = ["admin"]
+        self.headers = [("X-Session-Id", session.sid)]
 
     def tearDown(self):
+        appier.notify = self._notify
         self.app.unload()
         adapter = appier.get_adapter()
         adapter.drop_db()
@@ -75,6 +84,42 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual(
             response.headers["Access-Control-Allow-Headers"].startswith("*"), True
         )
+
+    def test_clone_fonts(self):
+        fonts = [dict(name="Colonia", data_b64="QUJD")]
+        self.app.jobs_info["name"] = dict(
+            id="name",
+            name="document",
+            node_id="node",
+            data_length=4,
+            format="binie",
+            fonts=[dict(name="Colonia", data_length=4)],
+            status="finished",
+            result=dict(result="success"),
+        )
+        self.app.jobs_data["name"] = "QUJD"
+        self.app.jobs_fonts["name"] = fonts
+        response = self.app.post("/jobs/name/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        clone_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(clone_info["status"], "queued")
+        self.assertEqual(clone_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual("result" in clone_info, False)
+        self.assertEqual(self.app.jobs_fonts[clone_info["id"]], fonts)
+        job = self.app.jobs["node"][0]
+        self.assertEqual(job["id"], clone_info["id"])
+        self.assertEqual(job["data_b64"], "QUJD")
+        self.assertEqual(job["fonts"], fonts)
+
+        # a job without fonts is cloned without any font
+        self.app.jobs_info["other"] = dict(id="other", name="other", node_id="node")
+        self.app.jobs_data["other"] = "QUJD"
+        response = self.app.post("/jobs/other/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        clone_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual("fonts" in clone_info, False)
+        self.assertEqual(clone_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual("fonts" in self.app.jobs["node"][1], False)
 
     def test_files(self):
         response = self.app.get("/jobs/name/files")

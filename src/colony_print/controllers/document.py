@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import os
 import base64
 
 import appier
@@ -24,6 +25,7 @@ class DocumentController(appier.Controller):
     def __init__(self, owner, *args, **kwargs):
         appier.Controller.__init__(self, owner, *args, **kwargs)
         self.manager = None
+        self.font_cache = None
 
     @appier.route("/documents/example.<format>", "GET")
     def example(self, format):
@@ -74,6 +76,8 @@ class DocumentController(appier.Controller):
         options = dict(name=format, file=file)
         if has_size:
             options["size"] = (width, height)
+        if format == "pdf":
+            options["font_files"] = self.get_font_files(data)
 
         manager.print_language(data, options)
         value = file.getvalue()
@@ -95,3 +99,46 @@ class DocumentController(appier.Controller):
         self.manager = colony_print.PrintingManager()
         self.manager.load()
         return self.manager
+
+    def get_font_files(self, data):
+        """
+        Installs the fonts declared by the provided XMPL document in the
+        font cache of the server, returning the files of the fonts of the
+        cache to be used in the conversion of the document.
+
+        As the fonts of the cache never expire (and may be downloaded) the
+        documents that declare fonts require the admin token.
+
+        :type data: String
+        :param data: The XMPL document to install the fonts.
+        :rtype: Dictionary
+        :return: The map associating the (lower cased) name and the style
+        of the fonts of the cache with the path to their files.
+        """
+
+        import colony_print
+
+        fonts = colony_print.xmpl_fonts(data)
+        appier.verify(
+            not fonts or appier.check_login(self, token="admin"),
+            message="Documents declaring fonts require the admin token",
+            code=403,
+        )
+        font_cache = self.get_font_cache()
+        for font in fonts:
+            font_cache.install(font)
+        return font_cache.files()
+
+    def get_font_cache(self):
+        import colony_print
+
+        if self.font_cache:
+            return self.font_cache
+        data_path = appier.conf("DATA_PATH", "./data")
+        fonts_path = appier.conf("FONTS_PATH", os.path.join(data_path, "fonts"))
+        font_max_size = appier.conf(
+            "FONT_MAX_SIZE", colony_print.FONT_MAX_SIZE, cast=int
+        )
+        self.font_cache = colony_print.FontCache(fonts_path, max_size=font_max_size)
+        self.font_cache.load()
+        return self.font_cache

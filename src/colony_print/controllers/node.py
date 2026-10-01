@@ -36,6 +36,14 @@ VALID_OPTIONS = set(
     ]
 )
 
+FONT_INFO_FIELDS = set(["name", "style", "url", "md5"])
+""" The set of fields of the fonts of a job that are kept in the
+information of the job, the (heavy) data of the fonts is not """
+
+FONT_FORMATS = set(["binie", "xmpl"])
+""" The set of formats of the documents that may be printed
+with fonts installed on demand (sent in the print request) """
+
 
 class NodeController(appier.Controller):
     @appier.route("/nodes", "GET", json=True)
@@ -107,6 +115,7 @@ class NodeController(appier.Controller):
         type = self.field("type", None)
         format = self.field("format", None)
         options = self.field("options", None, cast=dict)
+        fonts = self.field("fonts", None, cast=json.loads)
 
         appier.verify(
             data or data_b64,
@@ -125,6 +134,7 @@ class NodeController(appier.Controller):
             data_b64 = base64.b64encode(
                 appier.legacy.bytes(data, encoding="utf-8")
             ).decode("utf-8")
+        fonts_info = self._verify_fonts(id, data_b64, format=format, fonts=fonts)
 
         job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
@@ -135,14 +145,20 @@ class NodeController(appier.Controller):
             job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
+        if fonts_info:
+            job_info["fonts"] = fonts_info
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
+        if fonts:
+            self.owner.jobs_fonts[job_id] = fonts
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
         # the "heavy" data (base64 encoded) to it
         job = dict(job_info)
         job["data_b64"] = data_b64
+        if fonts:
+            job["fonts"] = fonts
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
@@ -190,6 +206,7 @@ class NodeController(appier.Controller):
         type = self.field("type", None)
         format = self.field("format", None)
         options = self.field("options", None, cast=dict)
+        fonts = self.field("fonts", None, cast=json.loads)
 
         appier.verify(
             data or data_b64,
@@ -208,6 +225,7 @@ class NodeController(appier.Controller):
             data_b64 = base64.b64encode(
                 appier.legacy.bytes(data, encoding="utf-8")
             ).decode("utf-8")
+        fonts_info = self._verify_fonts(id, data_b64, format=format, fonts=fonts)
 
         job_info = dict(
             id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
@@ -220,14 +238,20 @@ class NodeController(appier.Controller):
             job_info["options"] = dict(
                 (k, v) for k, v in options.items() if k in VALID_OPTIONS
             )
+        if fonts_info:
+            job_info["fonts"] = fonts_info
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
+        if fonts:
+            self.owner.jobs_fonts[job_id] = fonts
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
         # the "heavy" data (base64 encoded) to it
         job = dict(job_info)
         job["data_b64"] = data_b64
+        if fonts:
+            job["fonts"] = fonts
         jobs = self.owner.jobs.get(id, [])
         jobs.append(job)
         self.owner.jobs[id] = jobs
@@ -248,6 +272,41 @@ class NodeController(appier.Controller):
         self.set_field("data_b64", HELLO_WORLD_B64)
         self.set_field("name", "hello_world")
         return self.print_printer(id, printer)
+
+    @appier.route("/nodes/<str:id>/fonts", "GET", json=True)
+    @appier.ensure(token="admin")
+    def fonts(self, id):
+        self._ensure_capability(id, "dynamic-fonts")
+        return self.owner.nodes[id].get("fonts", [])
+
+    @appier.route("/nodes/<str:id>/fonts", "POST", json=True)
+    @appier.ensure(token="admin")
+    def install_fonts(self, id):
+        import colony_print
+
+        fonts = self.field("fonts", None, cast=json.loads)
+        appier.verify(
+            fonts and isinstance(fonts, list),
+            message="List of fonts must be provided",
+            code=400,
+        )
+        for font in fonts:
+            colony_print.verify_font(font, reference=False)
+        self._ensure_capability(id, "dynamic-fonts")
+
+        # sends the fonts to the node as a job of the fonts type, whose
+        # (JSON) payload contains the fonts to be installed by the node
+        self.set_field("data", json.dumps(dict(fonts=fonts)))
+        self.set_field("data_b64", None)
+        self.set_field("name", self.field("name", "fonts"))
+        self.set_field("type", "fonts")
+        self.set_field("format", None)
+        self.set_field("fonts", None)
+        return self.print_default(id)
+
+    @appier.route("/nodes/<str:id>/fonts", "OPTIONS")
+    def fonts_o(self, id):
+        return ""
 
     @appier.coroutine
     def wait_jobs(self, id):
@@ -273,3 +332,89 @@ class NodeController(appier.Controller):
         node = dict(node)
         node["stats"] = self.owner.node_stats(id)
         return node
+
+    def _verify_fonts(self, id, data_b64, format=None, fonts=None):
+        """
+        Verifies the fonts of a print job, the ones of the print request
+        and the ones declared by its document (for XMPL documents), and
+        that the node supports them, raising an exception otherwise.
+
+        XMPL documents are parsed so that invalid documents are refused
+        before being sent to the node.
+
+        :type id: String
+        :param id: The identifier of the node of the job.
+        :type data_b64: String
+        :param data_b64: The base64 encoded document of the job.
+        :type format: String
+        :param format: The format of the document of the job, if any.
+        :type fonts: List
+        :param fonts: The fonts (entries) of the print request, if any.
+        :rtype: List
+        :return: The (light) information of the fonts of the job, the
+        ones of the request and the ones declared by the document.
+        """
+
+        import colony_print
+
+        # verifies the fonts of the print request, that are only valid for
+        # the documents of the formats that may be printed with them
+        if fonts:
+            appier.verify(
+                isinstance(fonts, list),
+                message="Fonts must be a list",
+                code=400,
+            )
+            appier.verify(
+                format in FONT_FORMATS,
+                message="Fonts require one of the formats %s" % sorted(FONT_FORMATS),
+                code=400,
+            )
+            for font in fonts:
+                colony_print.verify_font(font)
+
+        # verifies that XMPL documents are supported by the node and that
+        # the document is valid, retrieving the fonts it declares
+        declared = []
+        if format == "xmpl":
+            self._ensure_capability(id, "xmpl")
+            try:
+                declared = colony_print.xmpl_fonts(base64.b64decode(data_b64))
+            except Exception:
+                raise appier.OperationalError(
+                    message="Document is not a valid XMPL document", code=400
+                )
+            for font in declared:
+                colony_print.verify_font(font)
+
+        # builds the information of the fonts without their (heavy) data
+        # and verifies that the node supports the fonts (if any)
+        fonts_info = []
+        for font in declared + (fonts or []):
+            font_info = dict((k, v) for k, v in font.items() if k in FONT_INFO_FIELDS)
+            if "data_b64" in font:
+                font_info["data_length"] = len(font["data_b64"])
+            fonts_info.append(font_info)
+        if fonts_info:
+            self._ensure_capability(id, "dynamic-fonts")
+        return fonts_info
+
+    def _ensure_capability(self, id, capability):
+        """
+        Ensures that the node with the provided identifier supports the
+        provided capability, as advertised by the node, raising an
+        exception otherwise (as when the node is unknown).
+
+        :type id: String
+        :param id: The identifier of the node.
+        :type capability: String
+        :param capability: The name of the capability (eg: xmpl).
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/capabilities.md
+        """
+
+        node = self.owner.nodes.get(id, dict())
+        appier.verify(
+            capability in node.get("capabilities", []),
+            message="Node '%s' doesn't support '%s'" % (id, capability),
+            code=409,
+        )

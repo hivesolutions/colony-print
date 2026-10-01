@@ -18,6 +18,7 @@ CLONE_FIELDS = set(
         "type",
         "format",
         "options",
+        "fonts",
     ]
 )
 
@@ -97,20 +98,26 @@ class JobController(appier.Controller):
 
         # builds the clone job info as a copy of the original one keeping
         # only the static fields and assigning a new identifier so that
-        # the clone starts its life cycle as a freshly queued job
+        # the clone starts its life cycle as a freshly queued job, with
+        # the same fonts (if any) as the original one
         job_info = self.owner.jobs_info[id]
         job_id = str(uuid.uuid4())
         node_id = job_info["node_id"]
+        fonts = self.owner.jobs_fonts.get(id, None)
         clone_info = dict((k, v) for k, v in job_info.items() if k in CLONE_FIELDS)
         clone_info["id"] = job_id
         self.owner.jobs_info[job_id] = clone_info
         self.owner.jobs_data[job_id] = data_b64
+        if fonts:
+            self.owner.jobs_fonts[job_id] = fonts
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
         # the "heavy" data (base64 encoded) to it
         job = dict(clone_info)
         job["data_b64"] = data_b64
+        if fonts:
+            job["fonts"] = fonts
         jobs = self.owner.jobs.get(node_id, [])
         jobs.append(job)
         self.owner.jobs[node_id] = jobs
