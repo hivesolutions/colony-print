@@ -245,6 +245,34 @@ class ColonyPrintNodeTest(unittest.TestCase):
             base64.b64decode(data_b64), base64.b64decode(result["output_data"])
         )
 
+    def test_print_job_email_result(self):
+        # the result of the job is posted to the server as JSON, so the
+        # saved output must be a (base64 encoded) string and not bytes
+        self.node.node_printer = "Receipt"
+        self.node.node_email_receivers = []
+        result = self.node.print_job_email(
+            dict(
+                data_b64=colony_print.controllers.node.HELLO_WORLD_B64,
+                name="hello_world",
+                format="binie",
+                options=dict(save_output=True, send_email=False),
+            )
+        )
+        result_j = json.loads(json.dumps(result))
+        self.assertEqual(result_j, result)
+        self.assertEqual(base64.b64decode(result_j["output_data"])[:5], b"%PDF-")
+
+        result = self.node.print_job_email(
+            dict(
+                data_b64=colony_print.controllers.node.HELLO_WORLD_B64,
+                name="hello_world",
+                format="binie",
+                options=dict(send_email=False),
+            )
+        )
+        self.assertEqual(json.loads(json.dumps(result)), result)
+        self.assertEqual(result["output_data"], None)
+
     def test_handle_job_title(self):
         data_b64 = base64.b64encode(b"%PDF-1.4 document").decode("utf-8")
         result = self.node._handle_job(

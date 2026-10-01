@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Result of the email mode jobs that save their output not reaching the server (as it was not JSON serializable) on Python 3 nodes
 * Blank pages when printing PDF documents on recent Linux systems - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * Email mode for Binie documents on Linux nodes - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * Zero height pages when converting a document with only a width - [#24](https://github.com/hivesolutions/colony-print/issues/24)
