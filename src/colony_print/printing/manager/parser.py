@@ -147,6 +147,10 @@ class PrintingLanguageParser(Parser):
             printing_document_child_nodes.append(
                 self.parse_image(printing_document_element)
             )
+        elif node_name == "font":
+            printing_document_child_nodes.append(
+                self.parse_font(printing_document_element)
+            )
 
     def parse_block(self, block):
         block_structure = ast.Block()
@@ -236,6 +240,14 @@ class PrintingLanguageParser(Parser):
         self.parse_element_attributes(image, image_structure)
 
         return image_structure
+
+    def parse_font(self, font):
+        font_structure = ast.Font()
+
+        # parses the element attributes
+        self.parse_element_attributes(font, font_structure)
+
+        return font_structure
 
 
 def valid_node(node):

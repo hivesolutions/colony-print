@@ -50,6 +50,36 @@ EXAMPLE = '<?xml version="1.0" encoding="UTF-8"?>\
 """ Example XML string that should display an hello world
 message using the XML printing language """
 
+EXAMPLE_FONT = '<?xml version="1.0" encoding="UTF-8"?>\
+    <printing_document name="hello_world" font="Colonia" font_size="9">\
+        <paragraph text_align="center">\
+            <line><text>Hello World</text></line>\
+            <line font_style="bold"><text>Hello World</text></line>\
+        </paragraph>\
+    </printing_document>'
+""" Example XML string that should display an hello world
+message using the Colonia font (in its regular and bold styles)
+using the XML printing language """
+
+
+def build_font(name="Colonia"):
+    """
+    Builds a true type font file from the Calibri font bundled with the
+    repository, renaming its family into the provided name, so that the
+    font is not installed in the system.
+
+    :type name: String
+    :param name: The name of the family of the font, with the same
+    size of the original name (Calibri), as the names are replaced.
+    :rtype: String
+    :return: The contents of the built font file.
+    """
+
+    with open(os.path.join(FONTS_PATH, "calibri.ttf"), "rb") as file:
+        data = file.read()
+    data = data.replace(b"Calibri", name.encode("utf-8"))
+    return data.replace("Calibri".encode("utf-16-be"), name.encode("utf-16-be"))
+
 
 class VisitorTest(unittest.TestCase):
     def setUp(self):
@@ -57,10 +87,12 @@ class VisitorTest(unittest.TestCase):
         colony_print.printing.pdf.visitor.FONT_PATHS = (os.path.join(FONTS_PATH, ""),)
         self.manager = colony_print.PrintingManager()
         self.manager.load()
+        self.target_dir = tempfile.mkdtemp(prefix="colony-print-visitor-test-")
 
     def tearDown(self):
         colony_print.printing.pdf.visitor.FONT_PATHS = self.font_paths
         self.manager.unload()
+        shutil.rmtree(self.target_dir, ignore_errors=True)
 
     def test_print_language(self):
         file = appier.legacy.BytesIO()
@@ -70,6 +102,39 @@ class VisitorTest(unittest.TestCase):
         self.assertEqual(result[:5], b"%PDF-")
         self.assertEqual(b"FlateDecode" in result, True)
         self.assertEqual(b"ASCII85Decode" in result, False)
+
+    def test_print_language_fonts(self):
+        file_path = os.path.join(self.target_dir, "colonia.ttf")
+        with open(file_path, "wb") as file:
+            file.write(build_font())
+
+        # the font of the document is only installed on demand, so it
+        # may not be printed without the file of the installed font
+        file = appier.legacy.BytesIO()
+        options = dict(name="pdf", file=file)
+        self.assertRaises(
+            colony_print.InvalidFont,
+            lambda: self.manager.print_language(EXAMPLE_FONT, options),
+        )
+
+        # prints the document with the installed font (in its regular
+        # style), that is also used for the bold style of the document
+        file = appier.legacy.BytesIO()
+        options = dict(
+            name="pdf", file=file, font_files={("colonia", "regular"): file_path}
+        )
+        self.manager.print_language(EXAMPLE_FONT, options)
+        result = file.getvalue()
+        self.assertEqual(result[:5], b"%PDF-")
+        self.assertEqual(b"Colonia" in result, True)
+
+        # the other fonts are not affected by the installed fonts
+        file = appier.legacy.BytesIO()
+        options = dict(
+            name="pdf", file=file, font_files={("colonia", "regular"): file_path}
+        )
+        self.manager.print_language(EXAMPLE, options)
+        self.assertEqual(b"Colonia" in file.getvalue(), False)
 
 
 class BinieRendererTest(unittest.TestCase):
@@ -205,14 +270,20 @@ class BinieRendererTest(unittest.TestCase):
         self.assertEqual(renderer.size, colony_print.printing.pdf.visitor.PAPER_SIZE)
         self.assertEqual(renderer.margins, (0.0, 0.0, 0.0, 0.0))
         self.assertEqual(renderer.custom, True)
+        self.assertEqual(renderer.font_files, {})
         self.assertEqual(renderer.fonts, {})
 
+        font_files = {("colonia", "regular"): "/fonts/colonia.ttf"}
         renderer = colony_print.BinieRenderer(
-            size=RECEIPT_SIZE, margins=RECEIPT_MARGINS, custom=False
+            size=RECEIPT_SIZE,
+            margins=RECEIPT_MARGINS,
+            custom=False,
+            font_files=font_files,
         )
         self.assertEqual(renderer.size, RECEIPT_SIZE)
         self.assertEqual(renderer.margins, RECEIPT_MARGINS)
         self.assertEqual(renderer.custom, False)
+        self.assertEqual(renderer.font_files, font_files)
 
     def test_render(self):
         data = self._binie([self._text("Hello World")], title=b"hello_world")
@@ -542,6 +613,31 @@ class BinieRendererTest(unittest.TestCase):
 
         renderer.fonts[("Calibri", "regular")] = ("cached", 1, 2, 3)
         self.assertEqual(renderer.ensure_font("Calibri"), ("cached", 1, 2, 3))
+
+    def test_ensure_font_files(self):
+        file_path = os.path.join(self.target_dir, "a" * 32 + ".ttf")
+        with open(file_path, "wb") as file:
+            file.write(build_font())
+
+        renderer = colony_print.BinieRenderer(
+            font_files={("colonia", "regular"): file_path}
+        )
+        renderer._match_font = lambda font_name, bold=False, italic=False: None
+        name, units_per_em, win_ascent, win_descent = renderer.ensure_font("Colonia")
+        self.assertEqual(name, "a" * 32)
+        self.assertEqual((units_per_em, win_ascent, win_descent), (2048, 1950, 550))
+        self.assertEqual(renderer.ensure_font("COLONIA", bold=True)[0], "a" * 32)
+        self.assertEqual(renderer.ensure_font("Calibri")[0], "calibri")
+
+        data = self._binie([self._text("Hello World", font=b"Colonia")])
+        renderer = colony_print.BinieRenderer(
+            size=RECEIPT_SIZE,
+            margins=RECEIPT_MARGINS,
+            font_files={("colonia", "regular"): file_path},
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        self.assertEqual(b"Colonia" in file.getvalue(), True)
 
     def test_ensure_font_fallback(self):
         colony_print.printing.pdf.visitor.FONT_PATHS = (

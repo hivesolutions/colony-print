@@ -9,6 +9,7 @@ import PIL.Image
 
 from . import exceptions
 
+from ..common import fonts
 from ..common.base import *
 from ..manager.ast import *
 
@@ -407,10 +408,14 @@ class Visitor(object):
 
             # retrieves the proper suffix for the requested font style
             # and uses it to create the complete font name ensuring that
-            # it's currently loaded in the PDF context
+            # it's currently loaded in the PDF context, using the file of
+            # the font installed on demand for the font (if any)
             suffix = FONT_SUFFIX_MAP.get(font_style, "")
             font_name_c = font_name + suffix
-            self.ensure_font(font_name_c)
+            file_path = fonts.font_file(
+                self.options.get("font_files", None), font_name, font_style
+            )
+            self.ensure_font(font_name_c, file_path=file_path)
 
             # sets the complete computed font in the current canvas context
             # note that the leading value is overridden to avoid font sizing
@@ -722,8 +727,10 @@ class Visitor(object):
         error = True
 
         # iterates over all the font paths trying to find a path
-        # that can correctly load the requested font
-        for font_path in FONT_PATHS:
+        # that can correctly load the requested font, note that an
+        # absolute path is used as it is (not in the font paths)
+        font_paths = ("",) if os.path.isabs(file_path) else FONT_PATHS
+        for font_path in font_paths:
             try:
                 # creates the complete font path with the current
                 # base path in iteration and the font name in case

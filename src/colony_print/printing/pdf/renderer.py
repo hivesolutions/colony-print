@@ -13,6 +13,8 @@ import PIL.Image
 from . import visitor
 from . import exceptions
 
+from ..common import fonts
+
 FONT_SCALE_FACTOR = 20
 """ The scale factor that converts PDF points (eg: the
 font size) into twips, the logical unit of binie documents """
@@ -80,6 +82,11 @@ class BinieRenderer(object):
     (custom) size of its pages, otherwise the pages always use the
     default size, as when the printer doesn't accept the size """
 
+    font_files = {}
+    """ The map associating the (lower cased) name and the style of
+    the fonts installed on demand with the path to their files, the
+    fonts that are used before the ones installed in the system """
+
     fonts = {}
     """ The map associating the name and style of a font with the
     name and the metrics of the font loaded in the PDF context """
@@ -107,7 +114,7 @@ class BinieRenderer(object):
     """ The vertical offset (in twips) to be added to the elements
     as a result of the pages that have already been drawn """
 
-    def __init__(self, size=None, margins=None, custom=True):
+    def __init__(self, size=None, margins=None, custom=True, font_files=None):
         """
         Constructor of the class.
 
@@ -122,11 +129,16 @@ class BinieRenderer(object):
         the (custom) size of its pages, as the custom paper size of
         windows, otherwise the pages always use the default size, as
         when the printer doesn't accept the size of the document.
+        :type font_files: Dictionary
+        :param font_files: The map associating the (lower cased) name
+        and the style of the fonts installed on demand with the path to
+        their files, used before the fonts installed in the system.
         """
 
         self.size = size or visitor.PAPER_SIZE
         self.margins = margins or (0.0, 0.0, 0.0, 0.0)
         self.custom = custom
+        self.font_files = font_files or {}
         self.fonts = {}
         self.canvas = None
         self.origin = None
@@ -430,9 +442,10 @@ class BinieRenderer(object):
         in the PDF context, returning its name in the context and the
         metrics used by windows to size the font.
 
-        The font file is searched with the file name convention of the
-        PDF visitor and, in case it's not found, the closest font installed
-        in the system is used instead, as windows substitutes missing fonts.
+        The font file is searched in the fonts installed on demand, then
+        with the file name convention of the PDF visitor and, in case it's
+        not found, the closest font installed in the system is used instead,
+        as windows substitutes missing fonts.
 
         :type font_name: String
         :param font_name: The name of the font to be loaded (eg: Calibri).
@@ -464,13 +477,15 @@ class BinieRenderer(object):
             return self.fonts[key]
 
         # creates the sequence of paths of the font files to be tried, first
-        # the ones following the file name convention of the PDF visitor and
-        # then the closest font installed in the system (substitution)
+        # the one of the font installed on demand (if any), then the ones
+        # following the file name convention of the PDF visitor and then
+        # the closest font installed in the system (substitution)
         file_name = font_name.lower() + visitor.FONT_SUFFIX_MAP[style] + ".ttf"
-        file_paths = [
+        file_paths = [fonts.font_file(self.font_files, font_name, style)]
+        file_paths.extend(
             os.path.expanduser(font_path + file_name)
             for font_path in visitor.FONT_PATHS
-        ]
+        )
         file_paths.append(self._match_font(font_name, bold=bold, italic=italic))
 
         # iterates over the paths of the font files trying to load the font
