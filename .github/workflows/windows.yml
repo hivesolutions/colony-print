@@ -1,7 +1,13 @@
 name: Windows Workflow
 on:
   push:
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      release:
+        description: Tag of the (existing) release to attach the installer to
+        required: false
 jobs:
   build:
     name: Build Node Installer
@@ -13,6 +19,8 @@ jobs:
       INNO_SETUP_SHA256: "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release }}
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -40,3 +48,29 @@ jobs:
             dist/*.exe
             dist/packages/*.whl
           if-no-files-found: ignore
+  release:
+    name: Attach Installer to Release
+    needs: build
+    if: github.event_name == 'release' || inputs.release != ''
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: colony-print-node-windows
+          path: dist
+      - name: Upload installer
+        run: |
+          installer="dist/colony-print-node-setup-${RELEASE_TAG#v}.exe"
+          if [ ! -f "$installer" ]; then
+            echo "No installer for '$RELEASE_TAG', the tag must match the version in setup.py" >&2
+            ls dist >&2
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "$installer" --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

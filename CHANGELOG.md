@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Windows installer (`setup.exe`) for the nodes, which installs an embedded Python with colony-print, npcolony and their dependencies and runs the node as a Windows service
 * Self-update of the Windows nodes whenever their service starts, from the packages hosted by the server
 * Hosting of the node packages (wheels) by the server through the `/packages` endpoints
-* Windows workflow that builds and smoke tests the node installer
+* Windows workflow that builds and smoke tests the node installer, attaching it to the GitHub release of each version
 
 ### Changed
 

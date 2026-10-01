@@ -153,7 +153,7 @@ Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It 
 .\windows\build.ps1 -Python C:\Python314\python.exe
 ```
 
-The build requires a 64 bit Python (the embedded Python is the same version), the Visual C++ Build Tools (npcolony is compiled from its sources) and [Inno Setup 6](https://jrsoftware.org/isinfo.php). It creates the installer (`dist\colony-print-node-setup-<version>.exe`) and the packages of the node (`dist\packages\*.whl`), which are uploaded to the server for the self-update. The `Windows Workflow` builds both on every push (the `colony-print-node-windows` artifact) and smoke tests the installer on a Windows runner.
+The build requires a 64 bit Python (the embedded Python is the same version), the Visual C++ Build Tools (npcolony is compiled from its sources) and [Inno Setup 6](https://jrsoftware.org/isinfo.php). It creates the installer (`dist\colony-print-node-setup-<version>.exe`) and the packages of the node (`dist\packages\*.whl`), which are uploaded to the server for the self-update. The `Windows Workflow` builds both on every push (the `colony-print-node-windows` artifact) and smoke tests the installer on a Windows runner. When a release is published, it also attaches the installer to the release, for which the tag of the release must match the version in `setup.py` (e.g. `0.21.0`). A failed attach can be retried by running the workflow manually with the tag of the release.
 
 ### Installing
 
