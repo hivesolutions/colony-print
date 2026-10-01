@@ -13,12 +13,13 @@ WHEEL_REGEX = re.compile(
     r"(?:-(?P<build>[0-9][A-Za-z0-9_.]*))?"
     r"-(?P<python>[A-Za-z0-9_.]+)"
     r"-(?P<abi>[A-Za-z0-9_.]+)"
-    r"-(?P<platform>[A-Za-z0-9_.]+)\.whl$"
+    r"-(?P<platform>[A-Za-z0-9_.]+)\.whl\Z"
 )
 """ The regular expression that validates the file name of a
 wheel package (PEP 427), the only kind of package hosted by the
 server, and that extracts its (distribution) name and version,
-notice that no path separators are allowed in the file name """
+notice that no path separators (nor line breaks) are allowed in
+the file name """
 
 NAME_REGEX = re.compile(r"[-_.]+")
 """ The regular expression used in the normalization of the
@@ -59,12 +60,13 @@ class PackageController(appier.Controller):
     def upload(self):
         # retrieves the complete set of files sent in the (multipart)
         # request and stores each of them as a package, notice that
-        # all the file names are validated before storing any of them
+        # all the files are validated before storing any of them
         files = self.field("file", [], multiple=True)
         files = [file for file in files if isinstance(file, tuple)]
         appier.verify(files, message="No package files provided", code=400)
         for file in files:
             self.verify_name(file[0])
+            appier.verify(file[2], message="No package data provided", code=400)
         return [self.store(file[0], file[2]) for file in files]
 
     @appier.route("/packages/<str:name>", "GET")
@@ -78,6 +80,10 @@ class PackageController(appier.Controller):
             code=404,
         )
         return self.send_path(file_path, name=name)
+
+    @appier.route("/packages/<str:name>", "OPTIONS")
+    def show_o(self, name):
+        return ""
 
     @appier.route("/packages/<str:name>", "PUT", json=True)
     @appier.ensure(token="admin")
@@ -101,10 +107,6 @@ class PackageController(appier.Controller):
         )
         os.remove(file_path)
         self.digests.pop(name, None)
-
-    @appier.route("/packages/<str:name>", "OPTIONS")
-    def show_o(self, name):
-        return ""
 
     def packages(self):
         """

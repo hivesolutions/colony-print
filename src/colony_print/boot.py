@@ -1,18 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""
-Boot sequence of the (Windows) nodes, that updates the packages of
-the node with the ones hosted by the Colony Print server and then
-runs the node, being the entry point of the node (Windows) service.
-
-This file is meant to be run as a script (not imported as part of the
-package) and uses only the standard library until the update is done,
-so that no package that may be updated is loaded (and locked) by it,
-which allows the update of every package (eg: npcolony), including
-the one that contains this file.
-"""
-
 import os
 import re
 import sys
@@ -21,9 +9,9 @@ import time
 import codecs
 import hashlib
 import logging
+import argparse
 import importlib
 import sysconfig
-import argparse
 import subprocess
 
 try:
@@ -70,11 +58,11 @@ WHEEL_REGEX = re.compile(
     r"(?:-(?P<build>[0-9][A-Za-z0-9_.]*))?"
     r"-(?P<python>[A-Za-z0-9_.]+)"
     r"-(?P<abi>[A-Za-z0-9_.]+)"
-    r"-(?P<platform>[A-Za-z0-9_.]+)\.whl$"
+    r"-(?P<platform>[A-Za-z0-9_.]+)\.whl\Z"
 )
 """ The regular expression that validates the file name of a wheel
 package (PEP 427), extracting its name, version and tags, notice that
-no path separators are allowed in the file name """
+no path separators (nor line breaks) are allowed in the file name """
 
 NAME_REGEX = re.compile(r"[-_.]+")
 """ The regular expression used in the normalization of the name
@@ -109,6 +97,18 @@ phase) has a rank of 4, between the pre and the post releases """
 
 
 class ColonyPrintBoot(object):
+    """
+    Boot sequence of the (Windows) nodes, that updates the packages of
+    the node with the ones hosted by the Colony Print server and then
+    runs the node, being the entry point of the node (Windows) service.
+
+    The module is meant to be run as a script (not imported as part of
+    the package) and uses only the standard library until the update is
+    done, so that no package that may be updated is loaded (and locked)
+    by it, which allows the update of every package (eg: npcolony),
+    including the one that contains this file.
+    """
+
     def __init__(self, environ=None, retries=RETRIES, retry_delay=RETRY_DELAY):
         self.environ = os.environ if environ == None else environ
         self.retries = retries
@@ -216,12 +216,14 @@ class ColonyPrintBoot(object):
         # retrieves the listing of the packages retrying in case the server
         # can't be reached (eg: network not ready on boot), notice that the
         # errors returned by the server itself (HTTP errors) are not retried
-        for attempt in range(self.retries):
+        # and that there's always (at least) one attempt
+        retries = max(self.retries, 1)
+        for attempt in range(retries):
             try:
                 data = self.request(self.packages_url, timeout=TIMEOUT)
                 break
             except Exception as exception:
-                if attempt == self.retries - 1 or hasattr(exception, "code"):
+                if attempt == retries - 1 or hasattr(exception, "code"):
                     raise
                 logging.warning(
                     "Problem retrieving packages (%s), retrying in %.2f seconds"
@@ -235,8 +237,7 @@ class ColonyPrintBoot(object):
         return [
             package
             for package in packages
-            if isinstance(package, dict)
-            and WHEEL_REGEX.match(package.get("file", None) or "")
+            if isinstance(package, dict) and self.match_wheel(package.get("file", None))
         ]
 
     def sync(self, packages_path, packages):
@@ -315,7 +316,7 @@ class ColonyPrintBoot(object):
 
         versions = dict()
         for package in packages:
-            match = WHEEL_REGEX.match(package["file"])
+            match = self.match_wheel(package["file"])
             name = self.normalize(match.group("name"))
             version = match.group("version").replace("_", "-")
             current = versions.get(name, None)
@@ -382,15 +383,15 @@ class ColonyPrintBoot(object):
         :return: If the package may be installed in the current system.
         """
 
-        match = WHEEL_REGEX.match(package.get("file", None) or "")
+        match = self.match_wheel(package.get("file", None))
         if not match:
             return False
-        pythons, abis, platforms = self.tags
-        return (
-            any(tag in pythons for tag in match.group("python").split("."))
-            and any(tag in abis for tag in match.group("abi").split("."))
-            and any(tag in platforms for tag in match.group("platform").split("."))
-        )
+        pairs, platforms = self.tags
+        return any(
+            (python, abi) in pairs
+            for python in match.group("python").split(".")
+            for abi in match.group("abi").split(".")
+        ) and any(tag in platforms for tag in match.group("platform").split("."))
 
     def installed_version(self, name):
         try:
@@ -436,6 +437,8 @@ class ColonyPrintBoot(object):
             key, value = line.split("=", 1)
             key = key.strip()
             value = value.strip()
+            if not key:
+                continue
             if len(value) > 1 and value[0] == value[-1] and value[0] in ("'", '"'):
                 value = value[1:-1].replace('\\"', '"')
             config[key] = value
@@ -475,6 +478,24 @@ class ColonyPrintBoot(object):
                 hash.update(chunk)
         return hash.hexdigest()
 
+    def match_wheel(self, name):
+        """
+        Matches the provided (file) name against the regular expression
+        of the wheel packages, so that its name, version and tags may be
+        extracted from it.
+
+        :type name: String
+        :param name: The (file) name of the package to be matched.
+        :rtype: Match
+        :return: The match of the name or an invalid value in case the
+        name is not the one of a wheel package (or not even a string).
+        """
+
+        try:
+            return WHEEL_REGEX.match(name)
+        except TypeError:
+            return None
+
     def normalize(self, name):
         return NAME_REGEX.sub("-", name).lower()
 
@@ -507,18 +528,19 @@ class ColonyPrintBoot(object):
 
     @property
     def tags(self):
+        # builds the pairs of python and abi tags supported by the current
+        # interpreter, as pip does (PEP 425), the ones of its version, the
+        # stable ABI (abi3) of the versions up to it and the pure ones of
+        # the versions up to it, together with the supported platforms
         major, minor = sys.version_info[0], sys.version_info[1]
-        pythons = set(
-            [
-                "py%d" % major,
-                "py%d%d" % (major, minor),
-                "cp%d%d" % (major, minor),
-            ]
-        )
-        abis = set(["none", "abi3", "cp%d%d" % (major, minor)])
+        current = "cp%d%d" % (major, minor)
+        pairs = set([(current, current), (current, "none"), ("py%d" % major, "none")])
+        for index in range(minor + 1):
+            pairs.add(("py%d%d" % (major, index), "none"))
+            if major == 3 and index > 1:
+                pairs.add(("cp%d%d" % (major, index), "abi3"))
         platform = sysconfig.get_platform().replace("-", "_").replace(".", "_")
-        platforms = set(["any", platform])
-        return pythons, abis, platforms
+        return pairs, set(["any", platform])
 
     @property
     def base_url(self):

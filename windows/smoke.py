@@ -1,17 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""
-Smoke test of the Windows installer of the Colony Print node, meant to be
-run (as administrator) on a disposable machine (eg: the CI runner) after
-the windows\\build.ps1 script, as it installs and uninstalls the node.
-
-Runs a local Colony Print server, that hosts the packages of the node with
-a newer version of colony-print, silently installs the node pointing to
-the server and verifies that the node updates itself, registers itself
-and prints a document, re-installing and uninstalling it at the end.
-"""
-
 import os
 import re
 import sys
@@ -61,6 +50,18 @@ print(account.key)
 
 
 class Smoke(object):
+    """
+    Smoke test of the Windows installer of the Colony Print node, meant to
+    be run (as administrator) on a disposable machine (eg: the CI runner)
+    after the windows\\build.ps1 script, as it installs and uninstalls the
+    node and its service.
+
+    Runs a local Colony Print server, that hosts the packages of the node
+    with a newer version of colony-print, silently installs the node with
+    the server and verifies that the node updates itself, registers itself
+    and prints a document, re-installing and uninstalling it at the end.
+    """
+
     def __init__(self):
         self.key = None
         self.server = None
