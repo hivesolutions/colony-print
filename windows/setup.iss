@@ -57,6 +57,10 @@ Type: filesandordirs; Name: "{app}\python"
 [Files]
 Source: "{#BuildDir}\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#BuildDir}\{#ServiceName}.exe"; DestDir: "{app}"; Flags: ignoreversion
+; the boot script is run from a copy outside of the packages updated by it,
+; so that an interrupted (or broken) update never prevents the service from
+; starting and updating the packages once more
+Source: "{#BuildDir}\boot.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "service.xml"; DestDir: "{app}"; DestName: "{#ServiceName}.xml"; Flags: ignoreversion
 
 [Dirs]
@@ -220,6 +224,91 @@ begin
   Result := (Pos('http://', Lowercase(Url)) = 1) or (Pos('https://', Lowercase(Url)) = 1);
 end;
 
+{ Extracts the (lower cased) host of the provided URL, keeping the brackets
+  of the IPv6 addresses, so that it can be compared with the local ones }
+function UrlHost(const Url: String): String;
+var
+  Index: Integer;
+begin
+  Result := Lowercase(Url);
+  Index := Pos('://', Result);
+  if Index > 0 then
+    Result := Copy(Result, Index + 3, Length(Result));
+  Index := Pos('/', Result);
+  if Index > 0 then
+    Result := Copy(Result, 1, Index - 1);
+  Index := Pos('@', Result);
+  if Index > 0 then
+    Result := Copy(Result, Index + 1, Length(Result));
+  if (Result <> '') and (Result[1] = '[') then
+    Index := Pos(']', Result) + 1
+  else
+    Index := Pos(':', Result);
+  if Index > 1 then
+    Result := Copy(Result, 1, Index - 1);
+end;
+
+{ Verifies if the provided URL is secure for the node, either because it
+  uses HTTPS or because it targets the local machine (loopback), as the
+  secret key is sent to the server and the packages installed by the
+  service are retrieved from it (only through HTTPS, by default) }
+function SecureUrl(const Url: String): Boolean;
+var
+  Host: String;
+  I: Integer;
+begin
+  Result := Pos('https://', Lowercase(Url)) = 1;
+  if Result then
+    Exit;
+  Host := UrlHost(Url);
+  Result := (Host = 'localhost') or (Host = '[::1]');
+  if Result or (Pos('127.', Host) <> 1) then
+    Exit;
+  Result := True;
+  for I := 1 to Length(Host) do
+    if not (((Host[I] >= '0') and (Host[I] <= '9')) or (Host[I] = '.')) then
+      Result := False;
+end;
+
+{ Verifies if the provided file (or directory) is owned by the system account
+  or by the administrators, the only ones allowed to write the data directory
+  of the node, as one created by any other user (eg: before the node was
+  installed) can't be trusted, notice that only a distinct exit code (and not
+  a failure or a PowerShell that runs nothing) is considered as trusted, as
+  Inno Setup has no way of retrieving the owner }
+function TrustedOwner(const Path: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "if ((Get-Acl -LiteralPath ''' + Path +
+    ''').GetOwner([System.Security.Principal.SecurityIdentifier]).Value -in ' +
+    '@(''S-1-5-18'', ''S-1-5-32-544'')) { exit 64 } else { exit 1 }"', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) and (ResultCode = 64);
+end;
+
+{ Runs icacls with the provided parameters, returning if it succeeded }
+function Icacls(const Params: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{sys}\icacls.exe'), Params, '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+{ Removes a data directory that was not created by the installer (its owner
+  is not trusted), taking its ownership and resetting its access first, as
+  its creator may have denied the access to the administrators, so that its
+  contents (eg: a configuration pointing to other packages) are never used }
+procedure RemoveUntrustedDataDir;
+begin
+  Log('Removing the untrusted data directory ' + DataDir);
+  Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /T /C /Q');
+  Icacls('"' + DataDir + '" /reset /T /C /Q');
+  if not DelTree(DataDir, True, True, True) then
+    RaiseException('Could not remove the untrusted data directory ' + DataDir);
+end;
+
 { Retrieves the default printer of the user running the installer, as the
   service runs under the system account, which has no default printer }
 function UserDefaultPrinter: String;
@@ -306,8 +395,18 @@ procedure InitializeWizard;
 var
   Mode, ParamPath: String;
 begin
+  { only the configuration written by the installer (or by the system and
+    administrators) is used, as a data directory or configuration created
+    by any other user (eg: before the node was installed) can't be trusted }
+  if DirExists(DataDir) and not TrustedOwner(DataDir) then
+    RemoveUntrustedDataDir;
   if FileExists(ConfigPath) then
-    LoadStringsFromFile(ConfigPath, Config);
+  begin
+    if TrustedOwner(ConfigPath) then
+      LoadStringsFromFile(ConfigPath, Config)
+    else
+      Log('Ignoring the untrusted configuration file ' + ConfigPath);
+  end;
   ParamPath := ExpandConstant('{param:CONFIG|}');
   if ParamPath <> '' then
     if not LoadStringsFromFile(ParamPath, ParamConfig) then
@@ -390,6 +489,13 @@ begin
       SuppressibleMsgBox(Message, mbError, MB_OK, IDOK);
       Result := False;
     end
+    else if not SecureUrl(ServerPage.Values[0]) and (SuppressibleMsgBox(
+      'The server URL does not use HTTPS, so the secret key is sent unencrypted ' +
+      'and the node does not update itself from the server (unless the insecure ' +
+      'update is allowed with NODE_UPDATE_INSECURE=1).' + #13#10#13#10 +
+      'Continue with this server URL anyway?', mbConfirmation, MB_YESNO,
+      IDYES) <> IDYES) then
+      Result := False
     else if not TestServer(ServerPage.Values[0], Trim(ServerPage.Values[1]), Message) then
     begin
       { silent installs continue, as the server may not be reachable
@@ -515,11 +621,14 @@ begin
 
   { restricts the access to the data directory (that contains the secret
     key and the packages installed by the service) to the system account
-    and to the administrators, before writing the configuration to it }
-  if not Exec(ExpandConstant('{sys}\icacls.exe'), '"' + DataDir + '" /inheritance:r ' +
-    '/grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F', '', SW_HIDE,
-    ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    and to the administrators, before writing the configuration to it, and
+    takes the ownership and resets the access of its contents, so that the
+    files created while it was open (since its creation) are not kept }
+  if not Icacls('"' + DataDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F ' +
+    '*S-1-5-32-544:(OI)(CI)F') then
     RaiseException('Could not restrict the access to ' + DataDir);
+  Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /T /C /Q');
+  Icacls('"' + DataDir + '\*" /reset /T /C /Q');
   WriteConfig;
 
   if not ServiceExists then

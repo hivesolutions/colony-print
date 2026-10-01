@@ -33,6 +33,7 @@ NODE_ID = "ci-node"
 PDF_PRINTER = "Microsoft Print to PDF"
 PORT = 8686
 BASE_URL = "http://127.0.0.1:%d/" % PORT
+PLANTED_URL = b"http://127.0.0.1:1/packages"
 
 ACCOUNT_SCRIPT = """
 import logging, appier_extras, colony_print
@@ -178,6 +179,18 @@ class Smoke(object):
         return version, glob.glob(os.path.join(wheels_path, "*.whl"))[0]
 
     def test_install(self, version):
+        # plants a data directory and a configuration owned (and writable) by
+        # the users, as created by any user before the node is installed, that
+        # points the node to other packages, which the installer must not use
+        config_path = os.path.join(DATA_PATH, "config.env")
+        os.makedirs(DATA_PATH)
+        with open(config_path, "wb") as file:
+            file.write(b"PACKAGES_URL=%s\r\nNODE_NAME=Planted\r\n" % PLANTED_URL)
+        subprocess.check_call(
+            ["icacls", DATA_PATH, "/grant", "*S-1-5-32-545:(OI)(CI)F"]
+        )
+        subprocess.check_call(["icacls", DATA_PATH, "/setowner", "*S-1-5-32-545", "/T"])
+
         # installs the node in email mode when there's a PDF printer, so that
         # the printing of a document may be verified (without email)
         args = [
@@ -196,13 +209,16 @@ class Smoke(object):
         self.install(args)
 
         assert self.service_state() == "RUNNING", "Service is not running"
-        config = read(os.path.join(DATA_PATH, "config.env"))
+        config = read(config_path)
         assert "NODE_ID=%s" % NODE_ID in config, config
         assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
+        assert not "PACKAGES_URL" in config, "Planted configuration used"
+        assert not "Planted" in config, "Planted configuration used"
 
-        acl = subprocess.check_output(["icacls", DATA_PATH]).decode("utf-8", "ignore")
-        log(acl)
-        assert not "BUILTIN\\Users" in acl, "Data directory readable by users"
+        for path in (DATA_PATH, config_path):
+            acl = subprocess.check_output(["icacls", path]).decode("utf-8", "ignore")
+            log(acl)
+            assert not "BUILTIN\\Users" in acl, "%s accessible by users" % path
 
         node = self.wait_node(version)
         assert "npcolony" in node["engines"], node["engines"]

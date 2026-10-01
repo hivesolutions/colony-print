@@ -19,6 +19,11 @@ try:
 except ImportError:
     import urllib2 as urllib_request
 
+try:
+    import urllib.parse as urllib_parse
+except ImportError:
+    import urlparse as urllib_parse
+
 NAME = "colony-print-boot"
 """ The name of the boot program, used as the user agent of the
 requests made to the server """
@@ -51,6 +56,21 @@ packages and when calculating their digest """
 
 FALSE_VALUES = ("0", "false", "no", "off")
 """ The (lower cased) configuration values considered to be false """
+
+TRUE_VALUES = ("1", "true", "yes", "on")
+""" The (lower cased) configuration values considered to be true """
+
+PORTS = dict(http=80, https=443)
+""" The default port of each scheme, used in the comparison of the
+origins of the URLs """
+
+LOOPBACK_HOSTS = ("localhost", "::1")
+""" The names of the loopback hosts, besides the 127.0.0.0/8 network,
+whose packages are trusted even without HTTPS (eg: tests) """
+
+LOOPBACK_REGEX = re.compile(r"^127\.\d{1,3}\.\d{1,3}\.\d{1,3}\Z")
+""" The regular expression that matches the addresses of the loopback
+network (127.0.0.0/8), and not the host names that start like them """
 
 WHEEL_REGEX = re.compile(
     r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._]*[A-Za-z0-9])?)"
@@ -94,6 +114,26 @@ PHASES = dict(
 )
 """ The rank of each phase of a version, the final version (no
 phase) has a rank of 4, between the pre and the post releases """
+
+
+class SecretRedirectHandler(urllib_request.HTTPRedirectHandler):
+    """
+    Redirect handler that drops the secret key from the redirected
+    requests that leave the origin of the original request (eg: to
+    another host or from HTTPS to HTTP), as urllib copies every header
+    of the original request into the redirected one.
+    """
+
+    def __init__(self, boot):
+        self.boot = boot
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        request = urllib_request.HTTPRedirectHandler.redirect_request(
+            self, req, fp, code, msg, headers, newurl
+        )
+        if request and not self.boot.same_origin(req.get_full_url(), newurl):
+            request.headers.pop("X-secret-key", None)
+        return request
 
 
 class ColonyPrintBoot(object):
@@ -193,6 +233,15 @@ class ColonyPrintBoot(object):
         :return: The requirements (name and version) that were installed.
         """
 
+        # the packages are installed and run by the service, so they're
+        # only retrieved from a server that is authenticated (HTTPS) or
+        # local, unless the insecure update is explicitly allowed
+        if not self.packages_secure:
+            logging.warning(
+                "Skipping update, packages URL '%s' is not HTTPS" % self.packages_url
+            )
+            return []
+
         logging.info("Retrieving packages from '%s'" % self.packages_url)
         packages = self.fetch_packages()
         packages = [package for package in packages if self.compatible(package)]
@@ -290,6 +339,10 @@ class ColonyPrintBoot(object):
                         break
                     hash.update(chunk)
                     file.write(chunk)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise
         finally:
             response.close()
 
@@ -461,12 +514,38 @@ class ColonyPrintBoot(object):
             response.close()
 
     def open(self, url, timeout=TIMEOUT):
+        # sends the secret key only to the server (the origin of the base
+        # URL) and never to other hosts, including the ones the requests
+        # are redirected to (eg: when the packages are hosted elsewhere)
         headers = {"User-Agent": NAME}
         secret_key = self.environ.get("SECRET_KEY", None)
-        if secret_key:
+        if secret_key and self.same_origin(url, self.base_url):
             headers["X-Secret-Key"] = secret_key
         request = urllib_request.Request(url, headers=headers)
-        return urllib_request.urlopen(request, timeout=timeout)
+        opener = urllib_request.build_opener(SecretRedirectHandler(self))
+        return opener.open(request, timeout=timeout)
+
+    def same_origin(self, url, other):
+        """
+        Verifies if the provided URLs have the same origin, meaning the
+        same scheme, host and port (the default one of the scheme when
+        not defined), as used by browsers.
+
+        :type url: String
+        :param url: The URL to be verified.
+        :type other: String
+        :param other: The other URL to be compared with.
+        :rtype: bool
+        :return: If both URLs have the same origin.
+        """
+
+        url, other = urllib_parse.urlparse(url), urllib_parse.urlparse(other)
+        return (
+            url.scheme == other.scheme
+            and url.hostname == other.hostname
+            and (url.port or PORTS.get(url.scheme, None))
+            == (other.port or PORTS.get(other.scheme, None))
+        )
 
     def digest(self, file_path):
         hash = hashlib.sha256()
@@ -554,6 +633,19 @@ class ColonyPrintBoot(object):
         packages_url = self.environ.get("PACKAGES_URL", None)
         packages_url = packages_url or self.base_url + "packages"
         return packages_url.rstrip("/")
+
+    @property
+    def packages_secure(self):
+        value = self.environ.get("NODE_UPDATE_INSECURE", "0")
+        if value.strip().lower() in TRUE_VALUES:
+            return True
+        url = urllib_parse.urlparse(self.packages_url)
+        if url.scheme == "https":
+            return True
+        host = url.hostname or ""
+        return url.scheme == "http" and (
+            host in LOOPBACK_HOSTS or bool(LOOPBACK_REGEX.match(host))
+        )
 
     @property
     def update_enabled(self):

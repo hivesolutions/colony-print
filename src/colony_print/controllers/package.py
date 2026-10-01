@@ -153,9 +153,16 @@ class PackageController(appier.Controller):
         temp_path = file_path + ".tmp"
         with open(temp_path, "wb") as file:
             file.write(data)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        os.rename(temp_path, file_path)
+
+        # moves the temporary file into place atomically, so that the package
+        # is never missing while replaced, notice that Python 2 has no atomic
+        # replace (and its rename fails on Windows when the target exists)
+        if hasattr(os, "replace"):
+            os.replace(temp_path, file_path)
+        else:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            os.rename(temp_path, file_path)
 
         self.digests.pop(name, None)
         return self.package_info(name)

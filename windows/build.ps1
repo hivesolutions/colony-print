@@ -34,6 +34,13 @@ $SitePackages = Join-Path $PythonDir "Lib\site-packages"
 $DistDir = Join-Path $Root "dist"
 $PackagesDir = Join-Path $DistDir "packages"
 
+# the digests (SHA256) of the embedded Python distributions supported by the
+# build, as published by python.org, so that a tampered (or corrupted) Python,
+# that runs as the system account in the nodes, is never installed by it
+$EmbedDigests = @{
+    "3.14.8" = "a93abe456ab01bd96d7a085b3cdb6566b3063f4241360d114142fbdb07f0a310"
+}
+
 # the packages installed in the node, besides colony-print (built from the
 # repository) and npcolony, notice that netius is required as it's the HTTP
 # client used by appier, that would otherwise try to install it on runtime
@@ -67,6 +74,9 @@ $PythonTag = Get-NativeOutput $Python @("-c", "import sys; print('python%d%d' % 
 if ($PythonBits -ne "64") {
     throw "A 64 bit Python interpreter is required (found $PythonBits bit)"
 }
+if (-not $EmbedDigests.ContainsKey($PythonVersion)) {
+    throw "No digest of the embedded Python $PythonVersion, add it to the build"
+}
 Write-Host "Building Colony Print node $Version with Python $PythonVersion"
 
 if (Test-Path $BuildDir) {
@@ -91,6 +101,10 @@ Write-Host "Downloading embedded Python $PythonVersion"
 $EmbedZip = Join-Path $BuildDir "python-embed.zip"
 $EmbedUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-embed-amd64.zip"
 Invoke-WebRequest -Uri $EmbedUrl -OutFile $EmbedZip
+$EmbedHash = (Get-FileHash -Path $EmbedZip -Algorithm SHA256).Hash.ToLower()
+if ($EmbedHash -ne $EmbedDigests[$PythonVersion]) {
+    throw "Invalid embedded Python digest $EmbedHash (expected $($EmbedDigests[$PythonVersion]))"
+}
 Expand-Archive -Path $EmbedZip -DestinationPath $PythonDir
 Remove-Item $EmbedZip
 Set-Content -Path (Join-Path $PythonDir "$PythonTag._pth") -Encoding Ascii -Value @(
@@ -123,6 +137,10 @@ Invoke-Native $EmbedPython @(
     "print('npcolony %s (%s)' % (getattr(npcolony, 'VERSION', '?'), npcolony.get_format())); " +
     "print([device['name'] for device in npcolony.get_devices()])"
 )
+
+# copies the boot script, that is run by the service from outside of the
+# packages it updates, so that a failed update never prevents it from running
+Copy-Item -Path (Join-Path $Root "src\colony_print\boot.py") -Destination (Join-Path $BuildDir "boot.py")
 
 # downloads the WinSW service wrapper, verifying its digest, that is renamed
 # after the service, as WinSW loads the configuration file with its name
