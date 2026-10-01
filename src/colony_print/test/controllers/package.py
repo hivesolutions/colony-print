@@ -341,11 +341,16 @@ class PackageControllerTest(unittest.TestCase):
         self.assertEqual(list(self.controller.digests.keys()), [WHEEL_NAME])
 
         # the digest is kept while the size and the modification time of
-        # the package are the same, so it's not calculated on every listing
+        # the package are the same, so it's not calculated on every listing,
+        # notice that the modification time is set in whole seconds so that
+        # it's kept exactly (Python 2 sets it with microseconds precision)
         file_path = os.path.join(self.packages_path, WHEEL_NAME)
-        modified = os.path.getmtime(file_path)
+        os.utime(file_path, (1700000000, 1700000000))
+        self.assertEqual(
+            self.controller.digest(WHEEL_NAME), hashlib.sha256(b"wheel").hexdigest()
+        )
         self._write(WHEEL_NAME, b"WHEEL")
-        os.utime(file_path, (modified, modified))
+        os.utime(file_path, (1700000000, 1700000000))
         self.assertEqual(
             self.controller.digest(WHEEL_NAME), hashlib.sha256(b"wheel").hexdigest()
         )
