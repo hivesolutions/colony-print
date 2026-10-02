@@ -840,6 +840,9 @@ class ColonyPrintNode(object):
         using the configured path and maximum size of the fonts, loading
         the fonts already installed (in previous executions).
 
+        An index of the cache that fails to load (eg: corrupted) is logged
+        and the cache starts empty, so that the node keeps running.
+
         :rtype: FontCache
         :return: The font cache of the node, with its fonts loaded.
         """
@@ -859,7 +862,13 @@ class ColonyPrintNode(object):
         font_cache = colony_print.FontCache(
             os.path.expanduser(fonts_path), max_size=font_max_size
         )
-        font_cache.load()
+        try:
+            font_cache.load()
+        except Exception as exception:
+            logging.warning(
+                "Problem loading font cache '%s': %s"
+                % (font_cache.path, str(exception))
+            )
         return font_cache
 
     def _install_fonts(self, fonts):

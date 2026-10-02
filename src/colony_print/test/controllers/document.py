@@ -158,3 +158,33 @@ class DocumentControllerTest(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(response.code, 400)
+
+    def test_get_font_cache(self):
+        controller = colony_print.controllers.DocumentController(self.app)
+        font_cache = controller.get_font_cache()
+        self.assertEqual(font_cache.path, self.target_dir)
+        self.assertEqual(font_cache.max_size, colony_print.FONT_MAX_SIZE)
+        self.assertEqual(controller.get_font_cache(), font_cache)
+
+        # an index of the font cache that fails to load (eg: corrupted by a
+        # power loss) is logged and the documents are converted with an empty
+        # cache, where the fonts are installed again
+        with open(os.path.join(self.target_dir, "index.json"), "wb") as file:
+            file.write(b"\x00" * 64)
+        controller = colony_print.controllers.DocumentController(self.app)
+        font_cache = controller.get_font_cache()
+        self.assertEqual(font_cache.installed(), [])
+
+        font = '<font name="Colonia" data_b64="%s"/>' % base64.b64encode(
+            build_font()
+        ).decode("utf-8")
+        response = self.app.post(
+            "/documents.pdf",
+            data=appier.legacy.bytes(XMPL % font),
+            headers=self.headers,
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"Colonia" in response.data, True)
+        response = self.app.post("/documents.pdf", data=appier.legacy.bytes(XMPL % ""))
+        self.assertEqual(response.code, 200)
+        self.assertEqual(b"Colonia" in response.data, True)

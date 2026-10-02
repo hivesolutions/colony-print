@@ -140,5 +140,10 @@ class DocumentController(appier.Controller):
             "FONT_MAX_SIZE", colony_print.FONT_MAX_SIZE, cast=int
         )
         self.font_cache = colony_print.FontCache(fonts_path, max_size=font_max_size)
-        self.font_cache.load()
+        try:
+            self.font_cache.load()
+        except Exception as exception:
+            self.owner.logger.warning(
+                "Problem loading font cache '%s': %s" % (fonts_path, str(exception))
+            )
         return self.font_cache

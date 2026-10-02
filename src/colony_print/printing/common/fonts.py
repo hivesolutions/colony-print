@@ -382,6 +382,10 @@ class FontCache(object):
         """
         Loads the index of the cache from its directory, keeping the
         cache empty in case there's no index (first use).
+
+        An index that is not valid (eg: corrupted by a power loss or
+        edited by hand) raises an exception and leaves the cache as it
+        is, the font files being kept for their next installation.
         """
 
         index_path = os.path.join(self.path, INDEX_NAME)
@@ -389,8 +393,28 @@ class FontCache(object):
             return
         with open(index_path, "rb") as file:
             index = json.loads(file.read().decode("utf-8"))
-        self.fonts = index.get("fonts", {})
-        self.urls = index.get("urls", {})
+
+        # verifies the information of the fonts of the index (as used to
+        # select the active fonts) and the fonts of its URLs, so that an
+        # invalid index is refused instead of failing later operations
+        fonts = index.get("fonts", {})
+        urls = index.get("urls", {})
+        for md5, info in fonts.items():
+            appier.verify(
+                MD5_REGEX.match(md5)
+                and appier.legacy.is_string(info["name"])
+                and info["style"] in FONT_STYLES
+                and isinstance(info["time"], (int, float))
+                and isinstance(info.get("order", 0), int),
+                message="Font '%s' of the index is not valid" % md5,
+            )
+        for url, md5 in urls.items():
+            appier.verify(
+                md5 in fonts,
+                message="Font of the URL '%s' of the index is not valid" % url,
+            )
+        self.fonts = fonts
+        self.urls = urls
 
     def install(self, font):
         """
@@ -616,8 +640,9 @@ class FontCache(object):
     def _write(self, path, data):
         """
         Writes the provided data into the file of the provided path in
-        an atomic fashion, writing a temporary file that then replaces
-        the file, so that an interrupted write never corrupts the file.
+        an atomic fashion, writing a temporary file (flushed to the disk)
+        that then replaces the file, so that an interrupted write (even by
+        a power loss) never corrupts the file.
 
         :type path: String
         :param path: The path to the file to be written.
@@ -630,6 +655,8 @@ class FontCache(object):
         temp_path = "%s.%s.tmp" % (path, str(uuid.uuid4()))
         with open(temp_path, "wb") as file:
             file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
 
         # replaces the file with the temporary one, note that older
         # versions of python are not able to replace (rename into) an

@@ -464,6 +464,58 @@ class FontCacheTest(unittest.TestCase):
         loaded.install(dict(name="Colonia", url="https://fonts.hive.pt/colonia.ttf"))
         self.assertEqual(len(self.downloads), 1)
 
+    def test_load_invalid(self):
+        url = "https://fonts.hive.pt/colonia.ttf"
+        self.responses[url] = build_font()
+        font_cache = colony_print.FontCache(self.path)
+        font_cache.install(dict(name="Colonia", url=url))
+        md5, info = list(font_cache.fonts.items())[0]
+
+        # the indexes that are not valid (corrupted by a power loss or edited
+        # by hand) raise an exception and leave the cache (empty) as it is
+        invalid = [
+            b"\x00" * 64,
+            b'{"fonts": {"%s": {"name": "Col' % md5.encode("utf-8"),
+            b"[]",
+        ] + [
+            json.dumps(index).encode("utf-8")
+            for index in (
+                dict(fonts=[info]),
+                dict(fonts={md5: "Colonia"}),
+                dict(fonts={"../../index": info}),
+                dict(fonts={md5: dict(info, name=1)}),
+                dict(fonts={md5: dict(info, style="black")}),
+                dict(fonts={md5: dict((k, v) for k, v in info.items() if k != "time")}),
+                dict(fonts={md5: dict(info, time="1")}),
+                dict(fonts={md5: dict(info, order="1")}),
+                dict(fonts={md5: info}, urls=[url]),
+                dict(fonts={md5: info}, urls={url: "a" * 32}),
+            )
+        ]
+        for data in invalid:
+            with open(os.path.join(self.path, "index.json"), "wb") as file:
+                file.write(data)
+            loaded = colony_print.FontCache(self.path)
+            self.assertRaises(Exception, loaded.load)
+            self.assertEqual(loaded.fonts, {})
+            self.assertEqual(loaded.urls, {})
+            self.assertEqual(loaded.installed(), [])
+
+        # the fonts are no longer referenced by their MD5 alone, but their
+        # files are kept and they're installed again by their URL (downloaded
+        # again, as the URLs of the index are lost) rewriting the index
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: loaded.install(dict(name="Colonia", md5=md5)),
+        )
+        info = loaded.install(dict(name="Colonia", url=url))
+        self.assertEqual(info["md5"], md5)
+        self.assertEqual(len(self.downloads), 2)
+        loaded = colony_print.FontCache(self.path)
+        loaded.load()
+        self.assertEqual(list(loaded.fonts.keys()), [md5])
+        self.assertEqual(loaded.urls, {url: md5})
+
     def test_install(self):
         data = build_font()
         md5 = hashlib.md5(data).hexdigest()

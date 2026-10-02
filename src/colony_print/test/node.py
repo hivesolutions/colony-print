@@ -1348,6 +1348,24 @@ class ColonyPrintNodeTest(unittest.TestCase):
             os.path.realpath(os.path.join(self.target_dir, "fonts")),
         )
 
+    def test_build_font_cache_invalid(self):
+        # an index of the font cache that fails to load (eg: corrupted by a
+        # power loss) doesn't prevent the node from running, that starts with
+        # an empty cache where the fonts are installed again
+        self.node.font_cache.install(self._font())
+        with open(os.path.join(self.fonts_dir, "index.json"), "wb") as file:
+            file.write(b"\x00" * 64)
+        appier.conf_s("FONTS_PATH", self.fonts_dir)
+        try:
+            font_cache = self.node._build_font_cache()
+        finally:
+            appier.conf_r("FONTS_PATH")
+        self.assertEqual(font_cache.path, self.fonts_dir)
+        self.assertEqual(font_cache.installed(), [])
+        self.assertEqual(font_cache.files(), {})
+        font = font_cache.install(self._font())
+        self.assertEqual(font_cache.installed()[0]["md5"], font["md5"])
+
     def test_install_fonts(self):
         fonts = self.node._install_fonts([self._font(), self._font(name="Binaria")])
         self.assertEqual([font["name"] for font in fonts], ["Colonia", "Binaria"])
