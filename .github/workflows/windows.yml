@@ -1,0 +1,76 @@
+name: Windows Workflow
+on:
+  push:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Tag of the (existing) release to attach the installer to
+        required: false
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build Node Installer
+    timeout-minutes: 30
+    runs-on: windows-latest
+    env:
+      PYTHON_VERSION: "3.14.8"
+      INNO_SETUP_VERSION: "6.7.3"
+      INNO_SETUP_SHA256: "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
+      - name: Install Inno Setup
+        run: |
+          $Version = $env:INNO_SETUP_VERSION
+          $Url = "https://github.com/jrsoftware/issrc/releases/download/is-$($Version.Replace('.', '_'))/innosetup-$Version.exe"
+          Invoke-WebRequest -Uri $Url -OutFile innosetup.exe
+          $Hash = (Get-FileHash -Path innosetup.exe -Algorithm SHA256).Hash.ToLower()
+          if ($Hash -ne $env:INNO_SETUP_SHA256) { throw "Invalid Inno Setup digest $Hash" }
+          Start-Process -Wait -FilePath .\innosetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=C:\InnoSetup"
+          Remove-Item innosetup.exe
+      - name: Build installer
+        run: .\windows\build.ps1 -Iscc C:\InnoSetup\ISCC.exe
+      - name: Smoke test installer
+        run: |
+          python -m pip install . tinydb netius
+          python windows\smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: colony-print-node-windows
+          path: dist/*.exe
+          if-no-files-found: ignore
+  release:
+    name: Attach Installer to Release
+    needs: build
+    if: github.event_name == 'release' || inputs.release != ''
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: colony-print-node-windows
+          path: dist
+      - name: Upload installer
+        run: |
+          installer="dist/colony-print-node-setup-${RELEASE_TAG#v}.exe"
+          if [ ! -f "$installer" ]; then
+            echo "No installer for '$RELEASE_TAG', the tag must match the version in setup.py" >&2
+            ls dist >&2
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "$installer" --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

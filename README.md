@@ -15,6 +15,7 @@ This project includes two main components:
 * PDF generation with custom fonts and images
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * [CUPS](https://en.wikipedia.org/wiki/CUPS) printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
+* Windows installer for the nodes, which update themselves from PyPI (see [Windows Node](#windows-node))
 
 ## Binie Specification
 
@@ -141,6 +142,61 @@ The `gravo` engine accepts a JSON payload submitted as base64 to the print endpo
 ### Text Print Payload
 
 The `text` engine is a virtual printer that does not talk to any physical device. Its payload is the plain text content carried in `data_b64`; the engine writes it to a `document.txt` file and returns that file (base64 encoded) in the job result. It has no JSON fields and ignores the printer, format and option values, which makes it convenient for testing and for capturing print output without hardware.
+
+## Windows Node
+
+Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It installs everything the node needs: an embedded Python, colony-print, [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi) for the native (GDI) printing, and their dependencies. The node runs as the `colony-print-node` Windows service, which starts with the machine and updates itself from [PyPI](https://pypi.org) every time it starts.
+
+### Building the Installer
+
+```powershell
+.\windows\build.ps1 -Python C:\Python314\python.exe
+```
+
+The build requires a 64 bit Python (the embedded Python is the same version), whose version must have the digest of its embedded distribution pinned in `build.ps1` (currently 3.14.8, the digest of another version is published by python.org), and [Inno Setup 6](https://jrsoftware.org/isinfo.php), as npcolony and the other dependencies are installed from their PyPI wheels (nothing is compiled). It creates the installer (`dist\colony-print-node-setup-<version>.exe`), which bundles the packages, so that it installs the node without internet access. The `Windows Workflow` builds it on every push (the `colony-print-node-windows` artifact) and smoke tests the installer on a Windows runner. When a release is published, it also attaches the installer to the release, for which the tag of the release must match the version in `setup.py` (e.g. `0.21.0`). A failed attach can be retried by running the workflow manually with the tag of the release.
+
+### Installing
+
+The installer asks for the server URL and the secret key, which it verifies against the server. It then asks for the mode (`normal` or `email`), the node name, location and printer, and, in email mode, the email receivers and the Mailme key. The node ID is derived from the name and kept on later installs. It may also run silently (e.g. for mass deployment), with the configuration given as parameters:
+
+```powershell
+colony-print-node-setup-0.20.0.exe /VERYSILENT /URL=https://print.example.com/ /KEY=$SECRET_KEY /NAME="Shop 1" /LOCATION=Porto /PRINTER="EPSON TM-T20II Receipt"
+```
+
+| Parameter    | Configuration          | Notes                                                                            |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------- |
+| `/URL`       | `BASE_URL`             | URL of the Colony Print server.                                                  |
+| `/KEY`       | `SECRET_KEY`           | Secret key of the server, written to the setup log with `/LOG` (see `/CONFIG`).  |
+| `/NAME`      | `NODE_NAME`            | Defaults to the computer name.                                                   |
+| `/ID`        | `NODE_ID`              | Defaults to the name in lower case, with dashes (e.g. `shop-1`).                 |
+| `/LOCATION`  | `NODE_LOCATION`        | Optional.                                                                        |
+| `/PRINTER`   | `NODE_PRINTER`         | Printer of the jobs that don't select one.                                       |
+| `/MODE`      | `NODE_MODE`            | `normal` (default) or `email`.                                                   |
+| `/EMAILS`    | `NODE_EMAIL_RECEIVERS` | Email receivers, separated by `;` (email mode).                                  |
+| `/MAILMEKEY` | `MAILME_KEY`           | Mailme key (email mode).                                                         |
+| `/MAILMEURL` | `MAILME_BASE_URL`      | Optional Mailme URL (email mode).                                                |
+| `/CONFIG`    |                        | Path to a `config.env` file with the values of the parameters that aren't given. |
+
+The parameters that aren't given keep the values of the existing configuration, so running a new installer over a node only replaces its files. The installer exits with code `10` when the service could not be installed or started.
+
+The service runs under the system account, so it only sees the printers installed for all users and has no default printer. The installer suggests the default printer of the user running it, and the printer should be set, otherwise the jobs that don't select one fail. In email mode the printer must be a PDF printer (e.g. `Microsoft Print to PDF`), as the jobs are printed to PDF files.
+
+The node is installed in `C:\Program Files\Colony Print Node` (other directories are refused, as the service runs its files as the system account). Its configuration (`config.env`) and logs are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
+
+### Self-Update
+
+Every time the service starts, the node updates colony-print and npcolony to their newest versions in PyPI (`pip install --upgrade`), only installing their wheels (nothing is compiled in the node) and skipping the versions that don't support its Python (`Requires-Python`). Their dependencies are only updated when required. pip ignores its configuration files (e.g. `C:\ProgramData\pip\pip.ini`, which any user may create), but may be configured with `PIP_*` values in `config.env` (e.g. `PIP_PROXY`). A failed update (e.g. without internet access) only logs a warning and never prevents the node from running, as it keeps the installed packages, and the service runs the boot script from a copy outside of the packages (`C:\Program Files\Colony Print Node\boot.py`), so a broken or interrupted update never prevents it from starting.
+
+The update is configured in `config.env`:
+
+| Configuration           | Notes                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `NODE_UPDATE`           | `0` disables the update.                                                                          |
+| `NODE_VERSION`          | Version of colony-print, an exact version (e.g. `0.21.0`) or a specifier (e.g. `<0.22`, `==0.21.*`). |
+| `NODE_NPCOLONY_VERSION` | Version of npcolony, as `NODE_VERSION`.                                                           |
+| `NODE_INDEX_URL`        | URL of the package index to use instead of PyPI (e.g. a private mirror).                          |
+
+The versions pin a node (or roll it back), as the node installs the newest version they allow, including an older one.
 
 ## Admin UI
 
