@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Note on the printer settings used by the Windows node service, the `Printing Defaults` of the printer and not the `Printing Preferences` of a user
 
 ### Changed
 
