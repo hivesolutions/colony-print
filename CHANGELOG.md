@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Printing of XMPL documents, converted into Binie documents by the nodes - [#29](https://github.com/hivesolutions/colony-print/issues/29)
 * Capabilities and installed fonts of the nodes, and fonts of the jobs, in the admin UI - [#29](https://github.com/hivesolutions/colony-print/issues/29)
 * Coverage report of the unit tests in the continuous integration
+* Note on the printer settings used by the Windows node service, the `Printing Defaults` of the printer and not the `Printing Preferences` of a user
 
 ### Changed
 
