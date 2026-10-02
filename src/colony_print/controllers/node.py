@@ -138,6 +138,15 @@ class NodeController(appier.Controller):
             id, data_b64, type=type, format=format, fonts=fonts
         )
 
+        # in case the node doesn't support the fonts (eg: an older node) the
+        # fonts of the request are not sent to it, as the node prints the
+        # document with its own fonts, the fonts being marked as skipped in
+        # the information of the job
+        skipped = False
+        if fonts_info and not self._has_capability(id, "dynamic-fonts"):
+            skipped = True
+            fonts = None
+
         job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
             job_info["type"] = type
@@ -149,6 +158,8 @@ class NodeController(appier.Controller):
             )
         if fonts_info:
             job_info["fonts"] = fonts_info
+        if skipped:
+            job_info["fonts_skipped"] = True
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
         self.owner.jobs_fonts[job_id] = fonts
@@ -233,6 +244,15 @@ class NodeController(appier.Controller):
             id, data_b64, type=type, format=format, fonts=fonts
         )
 
+        # in case the node doesn't support the fonts (eg: an older node) the
+        # fonts of the request are not sent to it, as the node prints the
+        # document with its own fonts, the fonts being marked as skipped in
+        # the information of the job
+        skipped = False
+        if fonts_info and not self._has_capability(id, "dynamic-fonts"):
+            skipped = True
+            fonts = None
+
         job_info = dict(
             id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
         )
@@ -246,6 +266,8 @@ class NodeController(appier.Controller):
             )
         if fonts_info:
             job_info["fonts"] = fonts_info
+        if skipped:
+            job_info["fonts_skipped"] = True
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
         self.owner.jobs_fonts[job_id] = fonts
@@ -337,7 +359,11 @@ class NodeController(appier.Controller):
         Verifies the fonts of a print job, the ones of the print request
         and the ones declared by its document (for XMPL documents) or by
         its payload (for the jobs of the fonts type), and that the node
-        supports them, raising an exception otherwise.
+        supports the fonts of the jobs of the fonts type, raising an
+        exception otherwise.
+
+        The other jobs are accepted for the nodes that don't support the
+        fonts, that print their documents with the fonts of the node.
 
         XMPL documents are verified (converted as the node does) so that
         invalid documents are refused before being sent to the node.
@@ -423,14 +449,17 @@ class NodeController(appier.Controller):
                 colony_print.verify_font(font, reference=False)
 
         # builds the information of the fonts without their (heavy) data
-        # and verifies that the node supports the fonts (if any)
+        # and verifies that the node supports the fonts of the jobs of the
+        # fonts type, that only install them, the other jobs being printed
+        # by the nodes that don't support the fonts with the fonts of the
+        # node (eg: an older node), so that a client may always send them
         fonts_info = []
         for font in declared + (fonts or []):
             font_info = dict((k, v) for k, v in font.items() if k in FONT_INFO_FIELDS)
             if "data_b64" in font:
                 font_info["data_length"] = len(font["data_b64"])
             fonts_info.append(font_info)
-        if fonts_info:
+        if fonts_info and type == "fonts":
             self._ensure_capability(id, "dynamic-fonts")
         return fonts_info
 
@@ -468,9 +497,26 @@ class NodeController(appier.Controller):
         :see: https://github.com/hivesolutions/colony-print/blob/master/doc/capabilities.md
         """
 
-        node = self.owner.nodes.get(id, dict())
         appier.verify(
-            capability in node.get("capabilities", []),
+            self._has_capability(id, capability),
             message="Node '%s' doesn't support '%s'" % (id, capability),
             code=409,
         )
+
+    def _has_capability(self, id, capability):
+        """
+        Verifies if the node with the provided identifier supports the
+        provided capability, as advertised by the node, an unknown node
+        (or a node released before the capabilities) supporting none.
+
+        :type id: String
+        :param id: The identifier of the node.
+        :type capability: String
+        :param capability: The name of the capability (eg: dynamic-fonts).
+        :rtype: bool
+        :return: If the node advertises the capability.
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/capabilities.md
+        """
+
+        node = self.owner.nodes.get(id, dict())
+        return capability in node.get("capabilities", [])
