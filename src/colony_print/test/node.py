@@ -12,7 +12,10 @@ import struct
 import tempfile
 import unittest
 
+import PIL
 import appier
+import reportlab
+import appier_extras
 
 import colony_print.node
 
@@ -162,6 +165,42 @@ class MockNPColonyLegacy(object):
         pass
 
 
+class MockLibrary(object):
+    """
+    Stand-in for the module of a library that exposes only its version,
+    so that the versions of the libraries reported by the node can be
+    verified without the real dependency installed.
+    """
+
+    VERSION = "1.0.0"
+
+
+class MockInterrupt(BaseException):
+    """
+    Interruption raised by the stand-in of the server, that is not
+    handled by the (endless) loop of the node, so that the loop can be
+    exercised for a single iteration.
+    """
+
+    pass
+
+
+class MockServer(object):
+    """
+    Stand-in for the post operation of appier that records the requests
+    posted to the server and then interrupts the node, so that the
+    information submitted by the loop of the node can be inspected
+    without a server.
+    """
+
+    calls = []
+
+    @staticmethod
+    def post(url, data_j=None, headers=None):
+        MockServer.calls.append((url, data_j, headers))
+        raise MockInterrupt()
+
+
 class ColonyPrintNodeTest(unittest.TestCase):
     def setUp(self):
         self.node = colony_print.node.ColonyPrintNode()
@@ -174,6 +213,8 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColony.calls = []
         self._npcolony = sys.modules.get("npcolony")
         sys.modules["npcolony"] = MockNPColony
+        MockServer.calls = []
+        self._post = appier.post
         self._font_paths = colony_print.printing.pdf.visitor.FONT_PATHS
         colony_print.printing.pdf.visitor.FONT_PATHS = (os.path.join(FONTS_PATH, ""),)
 
@@ -187,6 +228,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
             sys.modules.pop("npcolony", None)
         else:
             sys.modules["npcolony"] = self._npcolony
+        appier.post = self._post
         colony_print.printing.pdf.visitor.FONT_PATHS = self._font_paths
 
     def _gravo_payload(self, **kwargs):
@@ -220,6 +262,24 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 continue
             contents.append(content)
         return contents
+
+    def test_loop_libraries(self):
+        # the information of the node is posted to the server as JSON,
+        # so the versions of its libraries must be JSON serializable,
+        # note that the invalid sleep time makes any other problem fail
+        # the test, instead of being retried forever by the loop
+        sys.modules["gravo_pilot"] = MockLibrary
+        appier.post = MockServer.post
+        self.node.sleep_time = None
+        self.assertRaises(MockInterrupt, self.node.loop)
+        self.assertEqual(len(MockServer.calls), 1)
+
+        url, data_j, _headers = MockServer.calls[0]
+        self.assertEqual("nodes/" in url, True)
+        self.assertEqual(data_j["version"], colony_print.node.VERSION)
+        self.assertEqual(data_j["libraries"], self.node.libraries)
+        self.assertEqual(data_j["libraries"]["gravo_pilot"], "1.0.0")
+        self.assertEqual(json.loads(json.dumps(data_j)), data_j)
 
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
@@ -272,6 +332,47 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(json.loads(json.dumps(result)), result)
         self.assertEqual(result["output_data"], None)
+
+    def test_libraries(self):
+        sys.modules["npcolony"] = MockLibrary
+        sys.modules["gravo_pilot"] = MockLibrary
+        self.assertEqual(
+            self.node.libraries,
+            {
+                "npcolony": "1.0.0",
+                "gravo_pilot": "1.0.0",
+                "appier": appier.VERSION,
+                "appier-extras": appier_extras.VERSION,
+                "pillow": PIL.__version__,
+                "reportlab": reportlab.Version,
+            },
+        )
+
+    def test_libraries_not_installed(self):
+        sys.modules["npcolony"] = None
+        sys.modules["gravo_pilot"] = None
+        libraries = self.node.libraries
+        self.assertEqual(
+            sorted(libraries.keys()), ["appier", "appier-extras", "pillow", "reportlab"]
+        )
+        self.assertEqual(libraries["appier"], appier.VERSION)
+
+        sys.modules["gravo_pilot"] = MockLibrary
+        libraries = self.node.libraries
+        self.assertEqual("npcolony" in libraries, False)
+        self.assertEqual(libraries["gravo_pilot"], "1.0.0")
+
+    def test_libraries_no_version(self):
+        libraries = self.node.libraries
+        self.assertEqual("npcolony" in libraries, False)
+        self.assertEqual("gravo_pilot" in libraries, False)
+        self.assertEqual(libraries["pillow"], PIL.__version__)
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        sys.modules["gravo_pilot"] = MockLibrary
+        libraries = self.node.libraries
+        self.assertEqual("npcolony" in libraries, False)
+        self.assertEqual(libraries["gravo_pilot"], "1.0.0")
 
     def test_handle_job_title(self):
         data_b64 = base64.b64encode(b"%PDF-1.4 document").decode("utf-8")

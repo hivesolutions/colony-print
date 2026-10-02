@@ -39,6 +39,18 @@ the size of a document with the size of the media of a printer and
 with the limits of its custom sizes, as the sizes of the printers
 are rounded (eg: to points) """
 
+LIBRARIES = (
+    ("npcolony", "npcolony", "VERSION"),
+    ("gravo_pilot", "gravo_pilot", "VERSION"),
+    ("appier", "appier", "VERSION"),
+    ("appier-extras", "appier_extras", "VERSION"),
+    ("pillow", "PIL", "__version__"),
+    ("reportlab", "reportlab", "Version"),
+)
+""" The libraries whose versions are reported by the node, as a
+sequence of tuples with the name of the library, the name of the
+module to be imported and the name of its version attribute """
+
 EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
 
@@ -97,6 +109,7 @@ class ColonyPrintNode(object):
                         printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
+                        libraries=self.libraries,
                         platform=appier.PLATFORM,
                         os=os.name,
                         version=VERSION,
@@ -280,6 +293,22 @@ class ColonyPrintNode(object):
         if self._has_text() and hasattr(self, "_info_text"):
             engine_info["text"] = self._info_text()
         return engine_info
+
+    @property
+    def libraries(self):
+        # builds the map of the versions of the libraries of the node, the
+        # libraries that are not installed (or that don't expose a version)
+        # are omitted, as their version is not known
+        libraries = dict()
+        for name, module, attribute in LIBRARIES:
+            try:
+                module = __import__(module)
+            except Exception:
+                continue
+            if not hasattr(module, attribute):
+                continue
+            libraries[name] = getattr(module, attribute)
+        return libraries
 
     def _handle_job(self, job):
         # unpacks the complete set of job information to
