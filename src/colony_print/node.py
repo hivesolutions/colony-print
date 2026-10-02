@@ -374,7 +374,7 @@ class ColonyPrintNode(object):
                 device for device in self.npcolony.get_devices() if "custom" in device
             ]:
                 capabilities.append("custom-paper")
-            if format == "pdf" or hasattr(self.npcolony, "load_font"):
+            if format == "pdf" or self._has_feature("load-fonts"):
                 capabilities.append("dynamic-fonts")
         if self._has_gravo():
             capabilities.extend(
@@ -872,7 +872,7 @@ class ColonyPrintNode(object):
         documents they print.
         """
 
-        if not self._has_npcolony() or not hasattr(self.npcolony, "load_font"):
+        if not self._has_npcolony() or not self._has_feature("load-fonts"):
             return
         file_paths = set(self.font_cache.files().values())
         for file_path in sorted(self.loaded_fonts - file_paths):
@@ -898,6 +898,22 @@ class ColonyPrintNode(object):
 
     def _has_text(self):
         return True
+
+    def _has_feature(self, feature):
+        """
+        Verifies if the provided (optional) feature of npcolony is supported
+        in the current system, as reported by npcolony itself, the versions
+        of npcolony that don't report their features support none of them.
+
+        :type feature: String
+        :param feature: The name of the feature of npcolony (eg: load-fonts).
+        :rtype: bool
+        :return: If the feature is supported by npcolony in the system.
+        """
+
+        if not hasattr(self.npcolony, "get_features"):
+            return False
+        return feature in self.npcolony.get_features()
 
     def _info_npcolony(self):
         info = dict(

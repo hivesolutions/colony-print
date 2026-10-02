@@ -201,6 +201,7 @@ class MockNPColonyWindows(object):
 
     calls = []
     fonts = []
+    features = ["load-fonts"]
 
     @staticmethod
     def get_format():
@@ -209,6 +210,10 @@ class MockNPColonyWindows(object):
     @staticmethod
     def get_devices():
         return []
+
+    @staticmethod
+    def get_features():
+        return MockNPColonyWindows.features
 
     @staticmethod
     def print_printer_base64(printer, data_b64, options=None):
@@ -305,6 +310,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.node.font_cache = colony_print.FontCache(self.fonts_dir)
         MockNPColonyWindows.calls = []
         MockNPColonyWindows.fonts = []
+        MockNPColonyWindows.features = ["load-fonts"]
         MockGravostyleAPI.calls = []
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
@@ -619,6 +625,14 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(
             self.node.capabilities,
             ["npcolony", "text", "binie", "xmpl", "custom-paper", "dynamic-fonts"],
+        )
+
+        # the npcolony of the system doesn't report the loading of fonts
+        # (eg: built for python 2), so the fonts can't be installed
+        MockNPColonyWindows.features = []
+        self.assertEqual(
+            self.node.capabilities,
+            ["npcolony", "text", "binie", "xmpl", "custom-paper"],
         )
 
         sys.modules["npcolony"] = MockNPColonyLegacy
@@ -1316,9 +1330,30 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.node._load_fonts()
         self.assertEqual(MockNPColonyWindows.fonts, [])
 
+        # the npcolony of the system doesn't report the loading of fonts
+        # (eg: built for python 2), so the fonts are not loaded
+        MockNPColonyWindows.features = []
+        self.node.loaded_fonts = set()
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [])
+        self.assertEqual(self.node.loaded_fonts, set())
+
         sys.modules["npcolony"] = None
         self.node._load_fonts()
         self.assertEqual(MockNPColonyWindows.fonts, [])
+
+    def test_has_feature(self):
+        self.assertEqual(self.node._has_feature("load-fonts"), False)
+
+        sys.modules["npcolony"] = MockNPColonyWindows
+        self.assertEqual(self.node._has_feature("load-fonts"), True)
+        self.assertEqual(self.node._has_feature("unknown"), False)
+
+        MockNPColonyWindows.features = []
+        self.assertEqual(self.node._has_feature("load-fonts"), False)
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        self.assertEqual(self.node._has_feature("load-fonts"), False)
 
     def test_info_distribution(self):
         self.assertEqual(self.node._info_distribution(), None)
