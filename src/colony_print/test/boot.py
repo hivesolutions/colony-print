@@ -177,18 +177,38 @@ class SecretRedirectHandlerTest(unittest.TestCase):
         self.assertEqual(redirected.get_header("X-secret-key"), "key")
 
         # the secret key never leaves the origin of the original request,
-        # be it another host, another port or a downgrade to HTTP, while
-        # the other headers are kept
-        for url in (
-            "https://cdn.example.com/files",
-            "http://print.example.com/files",
-            "https://print.example.com:8443/files",
+        # be it another host, another port or a downgrade to HTTP (when the
+        # insecure update is allowed), while the other headers are kept
+        insecure = colony_print.boot.ColonyPrintBoot(
+            environ=dict(NODE_UPDATE_INSECURE="1")
+        )
+        for url, other in (
+            ("https://cdn.example.com/files", boot),
+            ("https://print.example.com:8443/files", boot),
+            ("http://print.example.com/files", insecure),
         ):
-            redirected = handler.redirect_request(request, None, 302, "Found", {}, url)
+            redirected = colony_print.boot.SecretRedirectHandler(
+                other
+            ).redirect_request(request, None, 302, "Found", {}, url)
             self.assertEqual(redirected.get_header("X-secret-key"), None)
             self.assertEqual(
                 redirected.get_header("User-agent"), colony_print.boot.NAME
             )
+
+        # a redirect to an insecure URL (eg: a downgrade to HTTP) is never
+        # followed, failing with an HTTP error (that is not retried), while
+        # a redirect to the local machine is followed
+        for url in ("http://print.example.com/files", "ftp://cdn.example.com/files"):
+            with self.assertRaises(
+                colony_print.boot.urllib_request.HTTPError
+            ) as context:
+                handler.redirect_request(request, None, 302, "Found", {}, url)
+            self.assertEqual(context.exception.code, 302)
+
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "http://127.0.0.1:8686/files"
+        )
+        self.assertEqual(redirected.get_full_url(), "http://127.0.0.1:8686/files")
 
 
 class ColonyPrintBootTest(unittest.TestCase):
@@ -831,6 +851,36 @@ class ColonyPrintBootTest(unittest.TestCase):
             ),
             False,
         )
+
+    def test_secure_url(self):
+        for url in (
+            "https://print.example.com/packages",
+            "HTTPS://cdn.example.com/files",
+            "http://localhost:8686/packages",
+            "http://127.0.0.1:8686/packages",
+            "http://127.1.2.3/packages",
+            "http://[::1]:8686/packages",
+        ):
+            self.assertEqual(self.boot.secure_url(url), True)
+
+        for url in (
+            "http://print.example.com/packages",
+            "http://192.168.1.10:8686/packages",
+            "http://localhost.example.com/packages",
+            "http://127.evil.example.com/packages",
+            "http://127.0.0.1.evil.example.com/packages",
+            "ftp://print.example.com/packages",
+            "file:///C:/packages",
+            "",
+        ):
+            self.assertEqual(self.boot.secure_url(url), False)
+
+        # the insecure update allows any URL, but only with a true value
+        for value, secure in (("1", True), (" On ", True), ("0", False), ("no", False)):
+            boot = colony_print.boot.ColonyPrintBoot(
+                environ=dict(NODE_UPDATE_INSECURE=value)
+            )
+            self.assertEqual(boot.secure_url("http://print.example.com/"), secure)
 
     def test_digest(self):
         file_path = os.path.join(self.temp_path, APPIER_NAME)

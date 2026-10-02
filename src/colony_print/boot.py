@@ -109,13 +109,21 @@ class SecretRedirectHandler(urllib_request.HTTPRedirectHandler):
     Redirect handler that drops the secret key from the redirected
     requests that leave the origin of the original request (eg: to
     another host or from HTTPS to HTTP), as urllib copies every header
-    of the original request into the redirected one.
+    of the original request into the redirected one, and that refuses
+    the redirects to the URLs that are not secure (eg: plain HTTP).
     """
 
     def __init__(self, boot):
         self.boot = boot
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # the packages are only retrieved from secure URLs, so a redirect
+        # to an insecure one (eg: an HTTP mirror) is never followed, as
+        # its listing and packages could be replaced on the network
+        if not self.boot.secure_url(newurl):
+            raise urllib_request.HTTPError(
+                newurl, code, "Insecure redirect to '%s'" % newurl, headers, fp
+            )
         request = urllib_request.HTTPRedirectHandler.redirect_request(
             self, req, fp, code, msg, headers, newurl
         )
@@ -544,6 +552,30 @@ class ColonyPrintBoot(object):
             == (other.port or PORTS.get(other.scheme, None))
         )
 
+    def secure_url(self, url):
+        """
+        Verifies if the provided URL is secure for the retrieval of the
+        packages, which are installed and run by the node, meaning that
+        it uses HTTPS or targets the local machine (loopback), unless the
+        insecure update is explicitly allowed (NODE_UPDATE_INSECURE).
+
+        :type url: String
+        :param url: The URL to be verified.
+        :rtype: bool
+        :return: If the packages may be retrieved from the URL.
+        """
+
+        value = self.environ.get("NODE_UPDATE_INSECURE", "0")
+        if value.strip().lower() in TRUE_VALUES:
+            return True
+        url = urllib_parse.urlparse(url)
+        if url.scheme == "https":
+            return True
+        host = url.hostname or ""
+        return url.scheme == "http" and (
+            host in LOOPBACK_HOSTS or bool(LOOPBACK_REGEX.match(host))
+        )
+
     def digest(self, file_path):
         hash = hashlib.sha256()
         with open(file_path, "rb") as file:
@@ -681,16 +713,7 @@ class ColonyPrintBoot(object):
 
     @property
     def packages_secure(self):
-        value = self.environ.get("NODE_UPDATE_INSECURE", "0")
-        if value.strip().lower() in TRUE_VALUES:
-            return True
-        url = urllib_parse.urlparse(self.packages_url)
-        if url.scheme == "https":
-            return True
-        host = url.hostname or ""
-        return url.scheme == "http" and (
-            host in LOOPBACK_HOSTS or bool(LOOPBACK_REGEX.match(host))
-        )
+        return self.secure_url(self.packages_url)
 
     @property
     def update_enabled(self):
