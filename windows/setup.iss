@@ -928,9 +928,8 @@ begin
   if not SecureVolume(ExpandConstant('{app}')) or not SecureVolume(DataDir) then
     if SuppressibleMsgBox('The disk of this machine has no file security (eg: FAT32), ' +
       'so any user of this machine is able to read the secret key of the server ' +
-      'and to change the files of the node, that run as the system account.' +
-      #13#10#13#10 + 'Continue with the installation anyway?', mbConfirmation,
-      MB_YESNO, IDYES) <> IDYES then
+      'and to change the files of the node, that run as the system account.' + #13#10#13#10 +
+      'Continue with the installation anyway?', mbConfirmation, MB_YESNO, IDYES) <> IDYES then
     begin
       Result := 'The node was not installed, as its disk has no file security.';
       Exit;
