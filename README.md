@@ -248,8 +248,10 @@ Windows XP (SP3) nodes are installed with a second installer (`colony-print-node
 * The service is run by [NSSM](https://nssm.cc) instead of WinSW, which requires a .NET Framework that Windows XP lacks. The log files are rotated when they reach 10 MB, but the rotated ones are never removed.
 * The node is installed in the 32 bit program files (`C:\Program Files (x86)\Colony Print Node` on a 64 bit Windows) and, on Windows XP, its configuration and logs are in `C:\Documents and Settings\All Users\Application Data\Colony Print Node`.
 * The access to the configuration is restricted on a best effort basis (it's not possible on FAT32 disks) and is not verified, as Windows XP has no PowerShell. So the configuration kept by an uninstall is not used by the next install, which must be given the configuration again, only an install over an installed node keeps its configuration.
-* The installer doesn't verify the server URL and the secret key on the versions of Windows older than 7 when the server uses HTTPS, as they lack its secure protocols (TLS 1.2), which the node itself supports.
+* The installer doesn't verify the server URL and the secret key on the versions of Windows older than 8.1 when the server uses HTTPS, as they don't enable its secure protocols (TLS 1.2) by default, which the node itself supports.
 * Windows XP has no PDF printer, so one must be installed to use the email mode.
+
+Both installers use the same service, so only one of the nodes is installed in a machine. Installing one of them over the node of the other one (e.g. after upgrading the machine to Windows 10) replaces it, uninstalling the other node and keeping its configuration.
 
 ```powershell
 .\windows\build.ps1 -XP -Python C:\Python27\python.exe

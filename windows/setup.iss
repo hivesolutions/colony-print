@@ -529,6 +529,69 @@ begin
     ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
+{ Retrieves the path to the wrapper (image) of the existing service, without
+  its quotes and arguments, empty in case there's no service }
+function ServiceImage: String;
+var
+  Index: Integer;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'ImagePath', Result) then
+    Exit;
+  Result := Trim(Result);
+  if (Result <> '') and (Result[1] = '"') then
+  begin
+    Result := Copy(Result, 2, Length(Result));
+    Index := Pos('"', Result) - 1;
+  end
+  else
+    Index := Pos('.exe', Lowercase(Result)) + 3;
+  if Index > 3 then
+    Result := Copy(Result, 1, Index);
+end;
+
+{ Verifies if the existing service is the one of this installer, the one
+  whose wrapper is in its directory, as the installer of the Windows XP nodes
+  and the one of the other nodes use the same service name with different
+  wrappers in different directories, the short names of the directories are
+  compared, so that the same directory is never taken as another one }
+function OwnService: Boolean;
+begin
+  Result := CompareText(GetShortName(ExtractFilePath(ServiceImage)),
+    GetShortName(AddBackslash(ExpandConstant('{app}')))) = 0;
+end;
+
+{ Removes the node of the other installer, whose service would otherwise be
+  kept instead of the one of this installer, by running its uninstaller (the
+  one next to the wrapper of its service), that removes its service and its
+  files while keeping its configuration, and waiting for the service to be
+  removed (as the uninstaller returns before it's done), the service is deleted
+  in case there's no uninstaller (or it fails), returning if it was removed }
+function RemoveOtherNode: Boolean;
+var
+  Uninstaller: String;
+  ResultCode, I: Integer;
+begin
+  Log('Removing the ' + ServiceName + ' service of another installer');
+  Uninstaller := ExtractFilePath(ServiceImage) + 'unins000.exe';
+  if (ServiceImage <> '') and FileExists(Uninstaller) then
+  begin
+    Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode);
+    for I := 1 to 60 do
+    begin
+      if not ServiceExists then
+        Break;
+      Sleep(1000);
+    end;
+  end;
+  if ServiceExists then
+    Exec(ExpandConstant('{sys}\sc.exe'), 'delete ' + ServiceName, '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode);
+  Result := not ServiceExists;
+end;
+
 { Retrieves the default printer of the user running the installer, as the
   service runs under the system account, which has no default printer }
 function UserDefaultPrinter: String;
@@ -563,16 +626,16 @@ end;
 { Verifies that the server is reachable and accepts the secret key, by
   listing its nodes (an operation that requires the secret key), notice
   that the installer of the Windows XP nodes doesn't verify a server that
-  uses HTTPS in the versions of Windows older than 7, as their HTTP client
-  lacks the secure protocols (TLS 1.2) required by the current servers,
-  which are supported by the Python of the node }
+  uses HTTPS in the versions of Windows older than 8.1, as their HTTP client
+  doesn't enable (by default) the secure protocols (TLS 1.2) required by the
+  current servers, which are supported by the Python of the node }
 function TestServer(const Url, Key: String; var Message: String): Boolean;
 var
   Request: Variant;
 begin
   Result := False;
 #ifdef XP
-  if (Pos('https://', Lowercase(Url)) = 1) and (GetWindowsVersion < $06010000) then
+  if (Pos('https://', Lowercase(Url)) = 1) and (GetWindowsVersion < $06030000) then
   begin
     Log('Server not verified, as this version of Windows lacks its secure protocols');
     Result := True;
@@ -878,6 +941,13 @@ begin
     Exec(ExpandConstant('{sys}\net.exe'), 'stop ' + ServiceName, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
   end;
+
+  { removes the node of the other installer (the one of the Windows XP
+    nodes or the one of the other nodes), so that this one replaces it,
+    notice that its configuration is kept (it was already loaded) }
+  if ServiceExists and not OwnService then
+    if not RemoveOtherNode then
+      Result := 'Could not remove the ' + ServiceName + ' service of another installer.';
 end;
 
 procedure WriteConfig;

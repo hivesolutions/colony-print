@@ -553,6 +553,36 @@ class ColonyPrintNodeTest(unittest.TestCase):
             list(self.node.font_cache.files().keys()), [("colonia", "regular")]
         )
 
+    def test_print_job_email_printer(self):
+        # the printer of the node is a string of the environment, which is
+        # a byte string (encoded as UTF-8 by the boot) in Python 2, that must
+        # be usable together with the unicode strings of the job (eg: its
+        # name, as decoded from the JSON of the server) when it's not ASCII
+        printer = appier.legacy.u("Balcão")
+        name = appier.legacy.u("Etiqueta São João")
+        MockNPColony.format = "binie"
+        self.node.node_printer = (
+            printer if appier.legacy.PYTHON_3 else printer.encode("utf-8")
+        )
+        self.node.node_email_receivers = []
+        result = self.node.print_job_email(
+            dict(
+                data_b64=colony_print.controllers.node.HELLO_WORLD_B64,
+                name=name,
+                options=dict(save_output=True, send_email=False),
+            )
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(json.loads(json.dumps(result)), result)
+        self.assertEqual(
+            result["output_data"], colony_print.controllers.node.HELLO_WORLD_B64
+        )
+
+        # the name of the printer is given to npcolony as a string, the
+        # same (byte) string of the environment in Python 2
+        self.assertEqual(type(MockNPColony.calls[0][0]), str)
+        self.assertEqual(MockNPColony.calls[0][0], self.node.node_printer)
+
     def test_libraries(self):
         sys.modules["npcolony"] = MockLibrary
         sys.modules["gravo_pilot"] = MockLibrary
@@ -698,6 +728,37 @@ class ColonyPrintNodeTest(unittest.TestCase):
             MockNPColony.calls, [("office", data_b64, dict(title="invoice"))]
         )
 
+    def test_handle_job_printer(self):
+        # the printer of the node, a byte string (encoded as UTF-8 by the
+        # boot) in Python 2, is used by the jobs that don't select one, whose
+        # strings are unicode ones (decoded from the JSON of the server), the
+        # printer of the result being an unicode string (JSON serializable)
+        # and the one given to npcolony the string of the environment
+        printer = appier.legacy.u("Balcão")
+        printer_s = printer if appier.legacy.PYTHON_3 else printer.encode("utf-8")
+        name = appier.legacy.u("Etiqueta São João")
+        data_b64 = base64.b64encode(b"%PDF-1.4 document").decode("utf-8")
+        self.node.node_printer = printer_s
+        result = self.node._handle_job(dict(data_b64=data_b64, name=name, format="pdf"))
+        self.assertEqual(
+            result,
+            dict(result="success", handler="npcolony", printer=printer, data=dict()),
+        )
+        self.assertEqual(json.loads(json.dumps(result)), result)
+        self.assertEqual(MockNPColony.calls, [(printer_s, data_b64, dict(title=name))])
+        self.assertEqual(type(MockNPColony.calls[0][0]), str)
+
+        # the printer selected by a job (an unicode string) is handled the
+        # same way, taking precedence over the printer of the node
+        self.node.node_printer = "Receipt"
+        MockNPColony.calls = []
+        result = self.node._handle_job(
+            dict(data_b64=data_b64, name=name, printer=printer, format="pdf")
+        )
+        self.assertEqual(result["printer"], printer)
+        self.assertEqual(MockNPColony.calls, [(printer_s, data_b64, dict(title=name))])
+        self.assertEqual(type(MockNPColony.calls[0][0]), str)
+
     def test_handle_job_type(self):
         data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
         result = self.node._handle_job(
@@ -826,6 +887,36 @@ class ColonyPrintNodeTest(unittest.TestCase):
         data_b64 = base64.b64encode(b"raw printer data").decode("utf-8")
         self.node._handle_npcolony(data_b64, printer="Receipt")
         self.assertEqual(MockNPColony.calls, [("Receipt", data_b64, dict())])
+
+    def test_handle_npcolony_printer(self):
+        # npcolony only accepts the unicode strings that are ASCII in Python
+        # 2, so the name of the printer is given to it as a string (encoded
+        # as UTF-8 in Python 2), while its device (whose name is an unicode
+        # string) is the one used in the conversion of the binie document
+        printer = appier.legacy.u("Balcão")
+        printer_s = printer if appier.legacy.PYTHON_3 else printer.encode("utf-8")
+        MockNPColony.devices = [dict(RECEIPT_DEVICE, name=printer), OFFICE_DEVICE]
+        self.node._handle_npcolony(
+            colony_print.controllers.node.HELLO_WORLD_B64,
+            format="binie",
+            printer=printer,
+        )
+        name, data_b64, options = MockNPColony.calls[0]
+        self.assertEqual(type(name), str)
+        self.assertEqual(name, printer_s)
+        self.assertEqual(base64.b64decode(data_b64)[:5], b"%PDF-")
+        self.assertEqual(options, dict(media="RP80x297", scaling="none"))
+
+        # the string of the environment is given to npcolony untouched and
+        # no printer selects the default one (no printer given to npcolony)
+        MockNPColony.calls = []
+        data_b64 = base64.b64encode(b"raw printer data").decode("utf-8")
+        self.node._handle_npcolony(data_b64, printer=printer_s)
+        self.node._handle_npcolony(data_b64, printer="")
+        self.assertEqual(
+            MockNPColony.calls,
+            [(printer_s, data_b64, dict()), (None, data_b64, dict())],
+        )
 
     def test_handle_npcolony_binie_system(self):
         MockNPColony.format = "binie"

@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Converted documents sent with the base64 content type even when not encoded in base64 - [#36](https://github.com/hivesolutions/colony-print/issues/36)
 * Boot of the Windows nodes that run Python 2.7 failing with configuration values that are not ASCII (e.g. the name of the node)
+* Jobs of the nodes that run Python 2.7 failing with printers whose name is not ASCII
 
 ## [0.22.0] - 2026-10-02
 

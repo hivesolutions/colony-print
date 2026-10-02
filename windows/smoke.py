@@ -73,7 +73,7 @@ class Smoke(object):
     itself, then updates and rolls back the node from a local package index
     (with a newer version of colony-print), prints a document, re-installs
     and uninstalls it, installing it once more with the configuration kept
-    by the uninstall.
+    by the uninstall and then over the service of another installer.
 
     The installer of the Windows XP nodes (32 bit) is the one tested when
     run with the --xp argument, on any version of Windows, with the Python
@@ -102,6 +102,7 @@ class Smoke(object):
             self.test_reinstall(current)
             self.test_uninstall()
             self.test_install_kept(current)
+            self.test_replace()
         finally:
             self.dump_logs()
             self.stop_index()
@@ -276,6 +277,11 @@ class Smoke(object):
                 principal = line.strip().split(":(", 1)[0]
                 assert principal in TRUSTED, "%s accessible by %s" % (path, principal)
 
+        # verifies that the access to the data directory is protected, so
+        # that the access of its parent is never inherited by it (eg: when
+        # the access of the parent is changed), exposing the secret key
+        assert self.protected(DATA_PATH), "Data directory access not protected"
+
         # the node updates itself from PyPI (the newest versions of the
         # packages of the installer, or newer ones), before registering
         node = self.wait_node()
@@ -380,6 +386,22 @@ class Smoke(object):
         self.wait_node(last_ping=last_ping)
         self.uninstall()
 
+    def test_replace(self):
+        # creates a service with the name of the one of the node but with
+        # another wrapper (image), as the one of the other installer (of the
+        # Windows XP nodes or of the other nodes), and installs the node,
+        # which must replace it with its own service, uninstalling it
+        last_ping = self.node()["last_ping"]
+        image = os.path.join(os.environ.get("SystemRoot", ""), "System32", "cmd.exe")
+        subprocess.check_call(["sc.exe", "create", SERVICE, "binPath=", image])
+        assert self.service_image() == image, "Service not created"
+        self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        assert self.service_state() == "RUNNING", "Service is not running"
+        image = self.service_image()
+        assert image.lower().startswith(APP_PATH.lower()), "Service not replaced"
+        self.wait_node(last_ping=last_ping)
+        self.uninstall()
+
     def uninstall(self):
         uninstaller = os.path.join(APP_PATH, "unins000.exe")
         subprocess.check_call(
@@ -471,6 +493,14 @@ class Smoke(object):
         match = re.search(r"STATE\s*:\s*\d+\s+(\w+)", output)
         return match.group(1) if match else None
 
+    def service_image(self):
+        process = subprocess.Popen(
+            ["sc.exe", "qc", SERVICE], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        output = process.communicate()[0].decode("utf-8", "ignore")
+        match = re.search(r"BINARY_PATH_NAME\s*:\s*(.+)", output)
+        return match.group(1).strip().strip('"') if match else None
+
     def printers(self):
         output = subprocess.check_output(
             [
@@ -481,6 +511,17 @@ class Smoke(object):
             ]
         )
         return [line.strip() for line in output.decode("utf-8", "ignore").splitlines()]
+
+    def protected(self, path):
+        output = subprocess.check_output(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                "(Get-Acl -LiteralPath '%s').AreAccessRulesProtected" % path,
+            ]
+        )
+        return output.decode("utf-8", "ignore").strip() == "True"
 
     def request(self, method, path, data=None, content_type=None, timeout=60):
         headers = {"X-Secret-Key": self.key} if self.key else dict()
