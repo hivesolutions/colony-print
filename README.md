@@ -120,7 +120,7 @@ The `options` map is filtered to the following keys:
 
 The `save_output` and `email_*` options only take effect on nodes running in `email` mode (`NODE_MODE=email`).
 
-The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format or the `fonts` field) fail with `409`, see [Node Capabilities](doc/capabilities.md).
+The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format) fail with `409`, except the fonts of the print jobs, that are skipped for the nodes that don't support them (see [Print Fonts](#print-fonts)), see [Node Capabilities](doc/capabilities.md).
 
 ### npcolony Print Payload
 
@@ -162,6 +162,7 @@ The fonts of a Binie or XMPL document may be sent in the `fonts` field of the pr
 * The nodes keep the installed fonts in a cache that never expires, by the MD5 of their files, and download the font of a URL only once (URLs are considered immutable, so a changed font must be published at a new URL).
 * The installed fonts are available to every later job of the node, as the fonts installed in the system are, and they are used before the system ones. When several files of the same family and style are installed, the most recently installed (or referenced) one is used.
 * A font that can't be installed (download failure, MD5 not installed or not matching, not TrueType, license that doesn't allow embedding the font, name or style not matching the font file, larger than `FONT_MAX_SIZE`) fails the job with an error that names it, the fonts are never silently replaced by other fonts.
+* The fonts may always be sent, whatever the node: the nodes that don't support them (without the `dynamic-fonts` capability, e.g. older nodes) print the documents with their own fonts, the server not sending them the fonts of the request and marking the fonts of the job as skipped (`fonts_skipped` in the information of the job). The fonts endpoints and the jobs of the `fonts` type still require the capability.
 * On Linux (CUPS) the fonts are embedded in the PDF document, on Windows they're loaded in the system for the node process only, so no administration rights are required.
 * On Windows the font files are parsed by the font engine of the system (in kernel mode before Windows 10, eg: Windows XP), so fonts should only be sent by trusted clients, as the admin token they require already implies.
 

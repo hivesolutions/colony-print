@@ -604,10 +604,13 @@ class ColonyPrintNode(object):
             format = "binie"
 
         # installs the fonts of the job (if any) so that they're used in
-        # the printing of the document, as the fonts of the system are
-        if fonts:
-            self._ensure_capability("dynamic-fonts")
+        # the printing of the document, as the fonts of the system are, a
+        # node that doesn't support the fonts (eg: windows with an older
+        # npcolony) printing the document with the fonts of the system
+        if fonts and "dynamic-fonts" in self.capabilities:
             self._install_fonts(fonts)
+        elif fonts:
+            logging.warning("Fonts not supported by node, printing with system fonts")
 
         # in case the data is a binie document and the current system only
         # prints pdf documents (eg: cups) converts the document into a pdf

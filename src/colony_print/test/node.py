@@ -1575,14 +1575,18 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(MockNPColony.calls, [])
 
-        # the npcolony of the system is not able to load the fonts
+        # the npcolony of the system is not able to load the fonts, so the
+        # document is printed with the fonts of the system, none of the fonts
+        # of the job being installed
         sys.modules["npcolony"] = MockNPColonyLegacy
-        self.assertRaises(
-            appier.OperationalError,
-            lambda: self.node._handle_npcolony(
-                COLONIA_B64, format="binie", fonts=[self._font()]
+        installed = self.node.font_cache.installed()
+        self.assertEqual(
+            self.node._handle_npcolony(
+                COLONIA_B64, format="binie", fonts=[self._font("Binaria")]
             ),
+            dict(),
         )
+        self.assertEqual(self.node.font_cache.installed(), installed)
 
     def test_handle_npcolony_xmpl(self):
         self.node._handle_npcolony(

@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-*
+* Fonts of the print jobs skipped for the nodes that don't support them, that print the documents with their own fonts, instead of refusing the jobs - [#38](https://github.com/hivesolutions/colony-print/issues/38)
 
 ### Fixed
 
