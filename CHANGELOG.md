@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Library versions and print diagnostics (job counts and last print) of the nodes in the admin node view - [#23](https://github.com/hivesolutions/colony-print/issues/23)
+* Operating system information (system, distribution, version and architecture) of the nodes in the admin node view
 
 ### Changed
 
