@@ -109,10 +109,7 @@ class ColonyPrintNode(object):
         # system, a font that fails to load is logged and doesn't prevent
         # the node from running (only the jobs that require it fail)
         self.font_cache = self._build_font_cache()
-        try:
-            self._load_fonts()
-        except Exception as exception:
-            logging.exception("Exception while loading fonts '%s'" % str(exception))
+        self._load_fonts()
 
         headers = dict()
         if secret_key:
@@ -876,6 +873,21 @@ class ColonyPrintNode(object):
             fonts = [self.font_cache.install(font) for font in fonts]
         finally:
             self._load_fonts()
+
+        # verifies that the (active) fonts of the job are loaded in the
+        # system (when it loads fonts), failing the job otherwise, as the
+        # failures to load the fonts of the cache are only logged
+        if self._has_npcolony() and self._has_feature("load-fonts"):
+            file_paths = set(self.font_cache.files().values())
+            for font in fonts:
+                if not font["path"] in file_paths:
+                    continue
+                if font["path"] in self.loaded_fonts:
+                    continue
+                raise appier.OperationalError(
+                    "Font '%s' not loaded in the system" % font["name"]
+                )
+
         return fonts
 
     def _load_fonts(self):
@@ -887,16 +899,30 @@ class ColonyPrintNode(object):
         The systems whose npcolony is not able to load fonts are left
         untouched, as the CUPS ones that embed the fonts in the PDF
         documents they print.
+
+        A font that fails to (un)load is logged and doesn't prevent the
+        other fonts from loading, the jobs that require it fail instead.
         """
 
         if not self._has_npcolony() or not self._has_feature("load-fonts"):
             return
         file_paths = set(self.font_cache.files().values())
         for file_path in sorted(self.loaded_fonts - file_paths):
-            self.npcolony.unload_font(file_path)
+            try:
+                self.npcolony.unload_font(file_path)
+            except Exception as exception:
+                logging.warning(
+                    "Problem unloading font '%s': %s" % (file_path, str(exception))
+                )
             self.loaded_fonts.discard(file_path)
         for file_path in sorted(file_paths - self.loaded_fonts):
-            self.npcolony.load_font(file_path)
+            try:
+                self.npcolony.load_font(file_path)
+            except Exception as exception:
+                logging.warning(
+                    "Problem loading font '%s': %s" % (file_path, str(exception))
+                )
+                continue
             self.loaded_fonts.add(file_path)
 
     def _has_npcolony(self):

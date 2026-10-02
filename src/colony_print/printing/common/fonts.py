@@ -456,13 +456,17 @@ class FontCache(object):
 
         # stores the font file in the cache (unless it's already there) and
         # marks the font as the most recently installed one (the active one
-        # for its family and style), saving the index of the cache
+        # for its family and style) with an order that, unlike the time, is
+        # always increasing, saving the index of the cache
         if not data == None and not os.path.exists(self._file(md5)):
             self._write(self._file(md5), data)
         if url:
             info.setdefault("url", url)
             self.urls[url] = md5
         info["time"] = time.time()
+        info["order"] = (
+            max([0] + [_info.get("order", 0) for _info in self.fonts.values()]) + 1
+        )
         self.fonts[md5] = info
         self._save()
 
@@ -506,7 +510,8 @@ class FontCache(object):
     def _active(self):
         """
         Retrieves the MD5 of the font used (active) for each family and
-        style, the most recently installed font of the family and style.
+        style, the most recently installed font of the family and style
+        (by its install order and then by its time, for older indexes).
 
         :rtype: Dictionary
         :return: The map associating the (lower cased) name and the style
@@ -517,7 +522,11 @@ class FontCache(object):
         for md5, info in self.fonts.items():
             key = (info["name"].lower(), info["style"])
             current = active.get(key, None)
-            if current and self.fonts[current]["time"] >= info["time"]:
+            current_info = self.fonts[current] if current else None
+            if current_info and (
+                current_info.get("order", 0),
+                current_info["time"],
+            ) >= (info.get("order", 0), info["time"]):
                 continue
             active[key] = md5
         return active

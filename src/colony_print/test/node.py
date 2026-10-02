@@ -202,7 +202,7 @@ class MockNPColonyWindows(object):
     calls = []
     fonts = []
     features = ["load-fonts"]
-    error = None
+    errors = dict()
 
     @staticmethod
     def get_format():
@@ -222,12 +222,14 @@ class MockNPColonyWindows(object):
 
     @staticmethod
     def load_font(path):
-        if MockNPColonyWindows.error:
-            raise MockNPColonyWindows.error
+        if path in MockNPColonyWindows.errors:
+            raise MockNPColonyWindows.errors[path]
         MockNPColonyWindows.fonts.append(("load", path))
 
     @staticmethod
     def unload_font(path):
+        if path in MockNPColonyWindows.errors:
+            raise MockNPColonyWindows.errors[path]
         MockNPColonyWindows.fonts.append(("unload", path))
 
 
@@ -314,7 +316,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.calls = []
         MockNPColonyWindows.fonts = []
         MockNPColonyWindows.features = ["load-fonts"]
-        MockNPColonyWindows.error = None
+        MockNPColonyWindows.errors = dict()
         MockGravostyleAPI.calls = []
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
@@ -446,9 +448,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
     def test_loop_fonts_error(self):
         # a font of the cache that fails to load in the system (windows) is
         # logged and doesn't prevent the node from submitting its information
-        colony_print.FontCache(self.fonts_dir).install(self._font())
+        info = colony_print.FontCache(self.fonts_dir).install(self._font())
         sys.modules["npcolony"] = MockNPColonyWindows
-        MockNPColonyWindows.error = IOError("Problem loading font")
+        MockNPColonyWindows.errors = {info["path"]: IOError("Problem loading font")}
         appier.post = MockServer.post
         appier.conf_s("FONTS_PATH", self.fonts_dir)
         self.node.sleep_time = None
@@ -1346,6 +1348,31 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(MockNPColonyWindows.fonts, [("load", path)])
         self.assertEqual(path in self.node.loaded_fonts, True)
 
+        # a font of the job that fails to load in the system fails the job,
+        # while a (broken) font of the cache that is not of the job doesn't
+        data = build_font("Telhado")
+        font = dict(name="Telhado", data_b64=base64.b64encode(data).decode())
+        path = self.node.font_cache._file(hashlib.md5(data).hexdigest())
+        MockNPColonyWindows.errors = {path: IOError("Problem loading font")}
+        self.assertRaises(
+            appier.OperationalError, lambda: self.node._install_fonts([font])
+        )
+        fonts = self.node._install_fonts([self._font(name="Fontana")])
+        self.assertEqual(fonts[0]["name"], "Fontana")
+        self.assertEqual(path in self.node.loaded_fonts, False)
+
+        # two files of the same font in the job, the last one is the active
+        # one (loaded) and the first one is not required to be loaded
+        data = build_font("Ovelhas")
+        fonts = self.node._install_fonts(
+            [
+                dict(name="Ovelhas", data_b64=base64.b64encode(data).decode()),
+                dict(name="Ovelhas", data_b64=base64.b64encode(data + b"\0").decode()),
+            ]
+        )
+        self.assertEqual(fonts[0]["path"] in self.node.loaded_fonts, False)
+        self.assertEqual(fonts[1]["path"] in self.node.loaded_fonts, True)
+
     def test_load_fonts(self):
         regular = self.node.font_cache.install(self._font())
         binaria = self.node.font_cache.install(self._font(name="Binaria"))
@@ -1383,6 +1410,33 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.fonts = []
         self.node._load_fonts()
         self.assertEqual(MockNPColonyWindows.fonts, [])
+
+        # a font that fails to load (eg: refused by GDI) doesn't prevent the
+        # other fonts from loading, and it's retried on the next load
+        MockNPColonyWindows.fonts = []
+        self.node.loaded_fonts = set()
+        MockNPColonyWindows.errors = {updated["path"]: IOError("Problem loading")}
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", binaria["path"])])
+        self.assertEqual(self.node.loaded_fonts, set([binaria["path"]]))
+        MockNPColonyWindows.errors = dict()
+        self.node._load_fonts()
+        self.assertEqual(
+            self.node.loaded_fonts, set([updated["path"], binaria["path"]])
+        )
+
+        # a font that fails to unload is no longer considered loaded, as it's
+        # not used anymore (another file of the font is active)
+        MockNPColonyWindows.fonts = []
+        MockNPColonyWindows.errors = {updated["path"]: IOError("Problem unloading")}
+        self.node.font_cache.install(dict(name="Colonia", md5=regular["md5"]))
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", regular["path"])])
+        self.assertEqual(
+            self.node.loaded_fonts, set([regular["path"], binaria["path"]])
+        )
+        MockNPColonyWindows.errors = dict()
+        MockNPColonyWindows.fonts = []
 
         # the npcolony of the system doesn't report the loading of fonts
         # (eg: built for python 2), so the fonts are not loaded

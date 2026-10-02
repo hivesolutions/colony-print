@@ -435,6 +435,7 @@ class FontCacheTest(unittest.TestCase):
                 style="regular",
                 size=len(data),
                 time=info["time"],
+                order=1,
                 md5=md5,
                 path=os.path.join(self.path, md5 + ".ttf"),
             ),
@@ -459,6 +460,7 @@ class FontCacheTest(unittest.TestCase):
         )
         self.assertEqual(installed["md5"], md5)
         self.assertEqual(installed["time"] > info["time"], True)
+        self.assertEqual(installed["order"], 2)
         self.assertEqual(len(font_cache.fonts), 1)
         self.assertEqual(self._files(), [md5 + ".ttf", "index.json"])
 
@@ -711,6 +713,43 @@ class FontCacheTest(unittest.TestCase):
             font_cache._active(),
             {("colonia", "regular"): "b", ("colonia", "bold"): "d"},
         )
+
+        # the install order (always increasing) prevails over the time, that
+        # may go back (clock corrections) or be the same (clock resolution)
+        font_cache.fonts = dict(
+            a=dict(name="Colonia", style="regular", time=5.0, order=1),
+            b=dict(name="Colonia", style="regular", time=1.0, order=2),
+            c=dict(name="Colonia", style="bold", time=1.0, order=4),
+            d=dict(name="Colonia", style="bold", time=1.0, order=3),
+            e=dict(name="Colonia", style="italic", time=9.0),
+        )
+        self.assertEqual(
+            font_cache._active(),
+            {
+                ("colonia", "regular"): "b",
+                ("colonia", "bold"): "c",
+                ("colonia", "italic"): "e",
+            },
+        )
+
+    def test_active_time(self):
+        # installs two files of the same family and style with the same time
+        # (as with the resolution of the clock), the last one is the active
+        font_cache = colony_print.FontCache(self.path)
+        _time = time.time
+        time.time = lambda: 1000.0
+        try:
+            first = font_cache.install(
+                dict(name="Colonia", data_b64=base64.b64encode(build_font()))
+            )
+            second = font_cache.install(
+                dict(name="Colonia", data_b64=base64.b64encode(build_font() + b"\0"))
+            )
+            self.assertEqual(font_cache.files()[("colonia", "regular")], second["path"])
+            font_cache.install(dict(name="Colonia", md5=first["md5"]))
+            self.assertEqual(font_cache.files()[("colonia", "regular")], first["path"])
+        finally:
+            time.time = _time
 
     def test_download(self):
         url = "https://fonts.hive.pt/colonia.ttf"
