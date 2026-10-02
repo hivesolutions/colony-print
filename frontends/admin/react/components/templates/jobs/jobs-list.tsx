@@ -4,7 +4,7 @@ import { useAPI } from "../../../hooks";
 import { JobInfo } from "../../../api/colony-print";
 import { Button, Link, Tag } from "../../atoms";
 import { ContentHeader, DataTable } from "../../molecules";
-import { formatTimestamp } from "../../../utils";
+import { formatTimestamp, formatVersions } from "../../../utils";
 
 import "./jobs-list.css";
 
@@ -133,16 +133,20 @@ export const JobsList: FC = () => {
                           ? "error"
                           : "default";
                 return (
-                    <Tag
-                        variant={
-                            variant as
-                                | "success"
-                                | "error"
-                                | "default"
-                        }
-                    >
-                        {result}
-                    </Tag>
+                    <span className="jobs-list-result">
+                        <Tag
+                            variant={
+                                variant as
+                                    | "success"
+                                    | "error"
+                                    | "default"
+                            }
+                        >
+                            {result}
+                        </Tag>
+                        {job.result?.before !== undefined &&
+                            formatVersions(job)}
+                    </span>
                 );
             }
         },
