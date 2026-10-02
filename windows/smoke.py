@@ -288,6 +288,11 @@ class Smoke(object):
                 principal = line.strip().split(":(", 1)[0]
                 assert principal in TRUSTED, "%s accessible by %s" % (path, principal)
 
+        # the volumes of the runner support the security of their files, so
+        # the installer of the Windows XP nodes must not warn about it
+        setup_log = read(SETUP_LOG_PATH, errors="replace")
+        assert not "no file security" in setup_log, "Volume taken as not secure"
+
         # verifies that the access to the data directory is protected, so
         # that the access of its parent is never inherited by it (eg: when
         # the access of the parent is changed), exposing the secret key

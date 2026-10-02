@@ -345,6 +345,11 @@ function SetFileSecurity(FileName: String; Information: Cardinal;
 function LocalFree(Memory: Longint): Longint;
   external 'LocalFree@kernel32.dll stdcall';
 
+function GetVolumeInformation(RootPath: String; Name: Longint; NameSize: Cardinal;
+  var Serial, Component, Flags: Cardinal; FileSystem: Longint;
+  FileSystemSize: Cardinal): BOOL;
+  external 'GetVolumeInformationW@kernel32.dll stdcall';
+
 { The owner and the access of a file (or directory) can't be verified in the
   Windows XP nodes, as PowerShell is not part of Windows XP, so that no file
   (or directory) is trusted, meaning that only the data directory of an
@@ -362,8 +367,7 @@ end;
   used (with a security descriptor that identifies the accounts by their well
   known identifiers) as Windows XP has no icacls and its cacls requires the
   names of the accounts (and an answer) in the language of Windows, notice
-  that it's done in a best effort basis, as it's not possible in the file
-  systems without security (eg: FAT32) }
+  that it's not possible in the volumes without security (eg: FAT32) }
 function RestrictDir(const Path: String): Boolean;
 var
   Descriptor: Longint;
@@ -378,6 +382,20 @@ begin
   end;
   if not Result then
     Log('Could not restrict the access to ' + Path);
+end;
+
+{ Verifies if the volume of the provided path supports the security of its
+  files (access control lists), which is not the case of the FAT32 ones, a
+  volume whose information can't be retrieved is considered to support it,
+  so that a failure to restrict the access to its files is never ignored }
+function SecureVolume(const Path: String): Boolean;
+var
+  Serial, Component, Flags: Cardinal;
+begin
+  Result := True;
+  if GetVolumeInformation(AddBackslash(ExtractFileDrive(Path)), 0, 0, Serial,
+    Component, Flags, 0, 0) then
+    Result := (Flags and 8) <> 0;
 end;
 
 { Runs NSSM (the service wrapper of the Windows XP nodes) with the provided
@@ -489,8 +507,8 @@ end;
   the same volume, which fails in case the data directory exists (eg: created
   by another user meanwhile), so that no other user ever has access to it
   (not even for an instant), notice that its access is reset first, so that
-  only the restricted access is kept, and that it's restricted in a best
-  effort basis in the Windows XP nodes (it's created even if not restricted) }
+  only the restricted access is kept, and that in the Windows XP nodes it's
+  created without being restricted in the volumes without security (FAT32) }
 function CreateDataDir: Boolean;
 var
   TempDir: String;
@@ -503,7 +521,8 @@ begin
   if not CreateDir(TempDir) then
     Exit;
 #ifdef XP
-  RestrictDir(TempDir);
+  if not RestrictDir(TempDir) and SecureVolume(TempDir) then
+    Exit;
 #else
   if not Icacls('"' + TempDir + '" /reset /C /Q') then
     Exit;
@@ -901,6 +920,23 @@ begin
     Exit;
   end;
 
+#ifdef XP
+  { warns that the node can't be protected in the volumes without security
+    (eg: FAT32), where any user is able to read the secret key and to change
+    the files run by the service (as the system account), silent installs
+    continue, as the machines are prepared by their administrators }
+  if not SecureVolume(ExpandConstant('{app}')) or not SecureVolume(DataDir) then
+    if SuppressibleMsgBox('The disk of this machine has no file security (eg: FAT32), ' +
+      'so any user of this machine is able to read the secret key of the server ' +
+      'and to change the files of the node, that run as the system account.' +
+      #13#10#13#10 + 'Continue with the installation anyway?', mbConfirmation,
+      MB_YESNO, IDYES) <> IDYES then
+    begin
+      Result := 'The node was not installed, as its disk has no file security.';
+      Exit;
+    end;
+#endif
+
   { validates the configuration once more, as the pages are not
     shown (and so not validated) when running silently }
   ServerPage.Values[0] := NormalizeUrl(ServerPage.Values[0]);
@@ -1007,10 +1043,12 @@ begin
     and to the administrators, before writing the configuration to it, and
     takes the ownership and resets the access of its contents, so that the
     files created while it was open (since its creation) are not kept, notice
-    that only the data directory is restricted (in a best effort basis) in
-    the Windows XP nodes, its contents inheriting its access }
+    that only the data directory is restricted in the Windows XP nodes, its
+    contents inheriting its access, which is only allowed to fail in the
+    volumes without security (FAT32), after the warning of the installer }
 #ifdef XP
-  RestrictDir(DataDir);
+  if not RestrictDir(DataDir) and SecureVolume(DataDir) then
+    RaiseException('Could not restrict the access to ' + DataDir);
 #else
   if not Icacls('"' + DataDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F ' +
     '*S-1-5-32-544:(OI)(CI)F') then
