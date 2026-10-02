@@ -251,6 +251,23 @@ class JobControllerTest(unittest.TestCase):
         job_info = controller.enrich_job_info(dict(id="name", name="document"))
         self.assertEqual("request_payload" in job_info, False)
 
+    def test_enrich_job_info_fonts(self):
+        # the (JSON) payload of the jobs of the fonts type is not decoded,
+        # as it holds the (heavy) data of the fonts, only their (light)
+        # information is kept by the job
+        controller = colony_print.controllers.JobController(self.app)
+        data = json.dumps(dict(fonts=[dict(name="Colonia", data_b64="QUJD")]))
+        data_b64 = base64.b64encode(data.encode("utf-8"))
+        fonts = [dict(name="Colonia", data_length=4)]
+        self.app.jobs_info["name"] = dict(
+            id="name", name="fonts", type="fonts", fonts=fonts
+        )
+        self.app.jobs_data["name"] = data_b64
+        job_info = controller.enrich_job_info(self.app.jobs_info["name"])
+        self.assertEqual("request_payload" in job_info, False)
+        self.assertEqual(job_info["fonts"], fonts)
+        self.assertEqual(self.app.jobs_data["name"], data_b64)
+
     def test_decode_payload_json(self):
         controller = colony_print.controllers.JobController(self.app)
         data = json.dumps(dict(text="Hello World", font="HELVETICA 1L"))

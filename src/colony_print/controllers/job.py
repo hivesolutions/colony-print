@@ -205,8 +205,12 @@ class JobController(appier.Controller):
     def enrich_job_info(self, job_info):
         # enriches a copy of the provided job info with the decoded request
         # payload pulled from the persisted data on demand, so that it is not
-        # kept within the (listed) job info and the listing stays lean
+        # kept within the (listed) job info and the listing stays lean, the
+        # payload of the jobs of the fonts type is not decoded, as it holds
+        # the (heavy) data of the fonts whose information the job keeps
         job_info = dict(job_info)
+        if job_info.get("type", None) == "fonts":
+            return job_info
         data_b64 = self.owner.jobs_data.get(job_info["id"], None)
         request_payload = self._decode_payload(data_b64) if data_b64 else None
         if request_payload:
