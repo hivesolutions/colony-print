@@ -10,6 +10,7 @@ import shutil
 import struct
 import logging
 import tempfile
+import platform
 import traceback
 
 import appier
@@ -50,6 +51,10 @@ LIBRARIES = (
 """ The libraries whose versions are reported by the node, as a
 sequence of tuples with the name of the library, the name of the
 module to be imported and the name of its version attribute """
+
+OS_RELEASE_PATHS = ("/etc/os-release", "/usr/lib/os-release")
+""" The paths to the files that describe the distribution of the
+operating system (linux only), the first valid one being used """
 
 EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
@@ -112,6 +117,7 @@ class ColonyPrintNode(object):
                         libraries=self.libraries,
                         platform=appier.PLATFORM,
                         os=os.name,
+                        system=self.system,
                         version=VERSION,
                     ),
                     headers=headers,
@@ -309,6 +315,25 @@ class ColonyPrintNode(object):
                 continue
             libraries[name] = getattr(module, attribute)
         return libraries
+
+    @property
+    def system(self):
+        # builds the map with the information of the operating system of
+        # the node, the distribution is only set for the systems that
+        # describe it (linux), note that the architecture (32bit or 64bit)
+        # is the one of the interpreter running the node, which may be
+        # different from the one of the machine
+        system = dict(
+            name=platform.system(),
+            release=platform.release(),
+            version=platform.version(),
+            machine=platform.machine(),
+            architecture="%dbit" % (struct.calcsize("P") * 8),
+        )
+        distribution = self._info_distribution()
+        if distribution:
+            system["distribution"] = distribution
+        return system
 
     def _handle_job(self, job):
         # unpacks the complete set of job information to
@@ -717,6 +742,35 @@ class ColonyPrintNode(object):
         if hasattr(gravo_pilot, "VERSION"):
             info["version"] = gravo_pilot.VERSION
         return info
+
+    def _info_distribution(self):
+        """
+        Retrieves the description of the distribution of the operating
+        system (eg: Ubuntu 24.04.1 LTS) from its os-release file, which
+        only exists in linux systems.
+
+        A file that can't be read is ignored, as this information is
+        submitted by the loop of the node, that must not be stopped by it.
+
+        :rtype: String
+        :return: The description of the distribution, or an invalid
+        value in case it's not available.
+        """
+
+        for path in OS_RELEASE_PATHS:
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "rb") as file:
+                    data = file.read().decode("utf-8")
+            except Exception:
+                continue
+            for line in data.splitlines():
+                key, _separator, value = line.partition("=")
+                if not key.strip() == "PRETTY_NAME":
+                    continue
+                return value.strip().strip("\"'") or None
+        return None
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
