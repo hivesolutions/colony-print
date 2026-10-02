@@ -8,15 +8,17 @@ interface StatCardProps {
     label: string;
     value: string | number;
     description?: string;
+    style?: string[];
 }
 
 export const StatCard: FC<StatCardProps> = ({
     label,
     value,
-    description
+    description,
+    style = []
 }) => {
     return (
-        <Card style={["stat-card"]}>
+        <Card style={["stat-card", ...style]}>
             <Text variant="secondary">{label}</Text>
             <Title level={2} style={["stat-card-value"]}>
                 {value}
