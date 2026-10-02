@@ -88,7 +88,7 @@ Every engine is reached through the same print endpoint and request envelope. A 
 | `data`     | string | yes\*    | Raw document data, base64 encoded by the server before dispatch. Mutually exclusive with `data_b64`.                       |
 | `data_b64` | string | yes\*    | Base64 encoded document data, the engine specific payload described below. Mutually exclusive with `data`.                 |
 | `name`     | string | no       | Human readable job name. Defaults to the generated job identifier.                                                         |
-| `type`     | string | no       | Target engine: `npcolony` (default), `gravo` or `text`.                                                                    |
+| `type`     | string | no       | Target engine: `npcolony` (default), `gravo` or `text`, or `fonts` to install fonts. See [Print Fonts](#print-fonts).      |
 | `format`   | string | no       | Expected document format (e.g. `binie`, `pdf` or `xmpl`). Validated against the node format when provided.                 |
 | `options`  | object | no       | Extra per job options (see table below). Keys outside the supported set are discarded.                                     |
 | `fonts`    | array  | no       | Fonts of the document (`binie` and `xmpl` formats only), installed on demand by the node. See [Print Fonts](#print-fonts). |
@@ -157,7 +157,7 @@ The fonts of a Binie or XMPL document may be sent in the `fonts` field of the pr
 * On Linux (CUPS) the fonts are embedded in the PDF document, on Windows they're loaded in the system for the node process only, so no administration rights are required.
 * On Windows the font files are parsed by the font engine of the system (in kernel mode before Windows 10, eg: Windows XP), so fonts should only be sent by trusted clients, as the admin token they require already implies.
 
-The fonts installed on a node are listed by `GET /nodes/<id>/fonts`, and may be installed before any job (so that later jobs reference them by `md5` alone or not at all) by `POST /nodes/<id>/fonts`, with the same `fonts` array (`data_b64` or `url` entries), which queues a job of the `fonts` type whose result lists the installed fonts.
+The fonts installed on a node are listed by `GET /nodes/<id>/fonts`, and may be installed before any job (so that later jobs reference them by `md5` alone or not at all) by `POST /nodes/<id>/fonts`, with the same `fonts` array (`data_b64` or `url` entries), which queues a job of the `fonts` type whose result lists the installed fonts. The same job may also be sent to the print endpoints, with the `fonts` type and a `{"fonts": [...]}` JSON payload with the same entries.
 
 The server side conversion of XMPL documents into PDF (`/documents.pdf`) also uses the fonts declared by the documents, installed in the font cache of the server (in `FONTS_PATH`, defaulting to the `fonts` directory of `DATA_PATH`), which requires the admin token.
 
