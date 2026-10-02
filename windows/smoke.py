@@ -276,6 +276,11 @@ class Smoke(object):
         assert not "NODE_INDEX_URL" in config, "Planted configuration used"
         assert not "Planted" in config, "Planted configuration used"
 
+        # the path of the wrapper of the service (that has spaces) must be
+        # quoted, as another program (eg: C:\Program.exe) is run otherwise
+        image = self.service_image(raw=True)
+        assert image.startswith('"%s' % APP_PATH), "Service path not quoted"
+
         # verifies that only the system account and the administrators have
         # access to the data directory and to the configuration, so that the
         # next install trusts them (and any other user can't access them)
@@ -536,13 +541,16 @@ class Smoke(object):
         match = re.search(r"STATE\s*:\s*\d+\s+(\w+)", output)
         return match.group(1) if match else None
 
-    def service_image(self):
+    def service_image(self, raw=False):
         process = subprocess.Popen(
             ["sc.exe", "qc", SERVICE], stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         output = process.communicate()[0].decode("utf-8", "ignore")
         match = re.search(r"BINARY_PATH_NAME\s*:\s*(.+)", output)
-        return match.group(1).strip().strip('"') if match else None
+        if not match:
+            return None
+        image = match.group(1).strip()
+        return image if raw else image.strip('"')
 
     def printers(self):
         output = subprocess.check_output(

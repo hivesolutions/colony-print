@@ -413,14 +413,20 @@ end;
   is run without a console, as NSSM is not able to create it in the current
   versions of Windows, and the paths of the parameters are quoted (with the
   quotes escaped) as they contain spaces, notice that the rotated log files
-  are not removed }
+  are not removed and that the path of the wrapper is quoted in the service,
+  as NSSM registers it without quotes, which would allow another program
+  (eg: C:\Program.exe) to be run by the service as the system account }
 function ConfigureService: Boolean;
 var
   Prefix, Logs: String;
+  ResultCode: Integer;
 begin
   Prefix := 'set ' + ServiceName + ' ';
   Logs := DataDir + '\logs\' + ServiceName;
-  Result := Nssm(Prefix + 'DisplayName {#AppName}') and
+  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'config ' + ServiceName + ' binPath= "\"' +
+    ExpandConstant('{app}\nssm.exe') + '\""', '', SW_HIDE, ewWaitUntilTerminated,
+    ResultCode) and (ResultCode = 0) and
+    Nssm(Prefix + 'DisplayName {#AppName}') and
     Nssm(Prefix + 'Description Receives the print jobs of the Colony Print server ' +
       'and prints them on the printers of this machine, updating itself from PyPI ' +
       'whenever it starts.') and
