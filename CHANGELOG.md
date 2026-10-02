@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+*
+
+### Changed
+
+*
+
+### Fixed
+
+*
+
+## [0.23.0] - 2026-10-02
+
+### Added
+
 * Capabilities of the nodes, advertised by each node and verified by the server before sending it a job - [#29](https://github.com/hivesolutions/colony-print/issues/29)
 * Fonts sent with the print jobs of Binie and XMPL documents, installed on demand by the nodes without any manual install - [#29](https://github.com/hivesolutions/colony-print/issues/29)
 * Printing of XMPL documents, converted into Binie documents by the nodes - [#29](https://github.com/hivesolutions/colony-print/issues/29)
