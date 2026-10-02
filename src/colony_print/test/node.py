@@ -307,6 +307,104 @@ class MockServer(object):
         raise MockInterrupt()
 
 
+class MockQueue(object):
+    """
+    Stand-in for the get and post operations of appier that serves the
+    configured batches of jobs to the node, interrupting it once there
+    are no more batches, and records the requests posted to the server
+    (failing the ones of the results with the configured error), so that
+    the handling of the jobs by the loop of the node can be inspected.
+    """
+
+    batches = []
+    calls = []
+    error = None
+
+    @staticmethod
+    def get(url, headers=None, timeout=None):
+        if not MockQueue.batches:
+            raise MockInterrupt()
+        return MockQueue.batches.pop(0)
+
+    @staticmethod
+    def post(url, data_j=None, headers=None):
+        MockQueue.calls.append((url, data_j, headers))
+        if MockQueue.error and url.endswith("/result"):
+            raise MockQueue.error
+
+
+class MockSys(object):
+    """
+    Stand-in for the sys module that exposes a configurable command line
+    (the original one of the interpreter and the one of its script) and
+    records the exit codes of the node, interrupting it (as the exit of
+    the process does), so that the restart of the node can be exercised
+    without exiting.
+    """
+
+    executable = "/usr/bin/python"
+    argv = ["boot.py", "--config", "config.env"]
+    orig_argv = ["python", "-I", "-u", "boot.py", "--config", "config.env"]
+    exits = []
+
+    @staticmethod
+    def exit(code=0):
+        MockSys.exits.append(code)
+        raise MockInterrupt()
+
+
+class MockSysLegacy(object):
+    """
+    Stand-in for the sys module of the interpreters that don't keep their
+    original command line (older than Python 3.10), only the one of their
+    script (without the options of the interpreter).
+    """
+
+    executable = "/usr/bin/python"
+    argv = ["boot.py", "--config", "config.env"]
+    exit = staticmethod(MockSys.exit)
+
+
+class MockOS(object):
+    """
+    Stand-in for the os module that exposes a configurable system (name)
+    and environment and records the processes that replace the one of the
+    node, interrupting it (as a replaced process never returns) or raising
+    the configured error, so that the restart of the node can be exercised
+    in any system.
+    """
+
+    name = "posix"
+    environ = dict()
+    execs = []
+    error = None
+
+    @staticmethod
+    def execve(path, args, env):
+        if MockOS.error:
+            raise MockOS.error
+        MockOS.execs.append((path, args, env))
+        raise MockInterrupt()
+
+
+class MockSubprocess(object):
+    """
+    Stand-in for the subprocess module that records the processes that
+    are started (and their environments) or raises the configured error,
+    so that the restart of the node can be exercised without starting
+    another node.
+    """
+
+    calls = []
+    error = None
+
+    @staticmethod
+    def Popen(args, env=None):
+        if MockSubprocess.error:
+            raise MockSubprocess.error
+        MockSubprocess.calls.append((args, env))
+
+
 class ColonyPrintNodeTest(unittest.TestCase):
     def setUp(self):
         self.node = colony_print.node.ColonyPrintNode()
@@ -332,7 +430,23 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self._os_release_paths = colony_print.node.OS_RELEASE_PATHS
         colony_print.node.OS_RELEASE_PATHS = (self.os_release_path,)
         MockServer.calls = []
+        MockQueue.batches = []
+        MockQueue.calls = []
+        MockQueue.error = None
+        self._get = appier.get
         self._post = appier.post
+        MockSys.exits = []
+        MockOS.name = "posix"
+        MockOS.environ = dict()
+        MockOS.execs = []
+        MockOS.error = None
+        MockSubprocess.calls = []
+        MockSubprocess.error = None
+        self._sys = colony_print.node.sys
+        self._os = colony_print.node.os
+        self._execve = os.execve
+        self._subprocess = colony_print.node.subprocess
+        self.state_path = os.path.join(self.target_dir, "state.env")
         self._font_paths = colony_print.printing.pdf.visitor.FONT_PATHS
         colony_print.printing.pdf.visitor.FONT_PATHS = (os.path.join(FONTS_PATH, ""),)
 
@@ -349,7 +463,12 @@ class ColonyPrintNodeTest(unittest.TestCase):
             sys.modules["npcolony"] = self._npcolony
         colony_print.node.platform = self._platform
         colony_print.node.OS_RELEASE_PATHS = self._os_release_paths
+        appier.get = self._get
         appier.post = self._post
+        colony_print.node.sys = self._sys
+        colony_print.node.os = self._os
+        os.execve = self._execve
+        colony_print.node.subprocess = self._subprocess
         colony_print.printing.pdf.visitor.FONT_PATHS = self._font_paths
 
     def _gravo_payload(self, **kwargs):
@@ -383,6 +502,28 @@ class ColonyPrintNodeTest(unittest.TestCase):
             data[:256].rstrip(b"\0") == b"hello_world"
             and data[256:] == hello_world[256:]
         )
+
+    def _loop(self, **values):
+        # runs the loop of the node with the provided configuration values
+        # (and the font cache of the test) until it's interrupted by one of
+        # the stand-ins (the ones of the server and of the exit), note that
+        # any other problem is retried by the loop, without sleeping
+        values = dict(values, FONTS_PATH=self.fonts_dir)
+        for name, value in values.items():
+            appier.conf_s(name, value)
+        self.node.sleep_time = 0.0
+        try:
+            self.assertRaises(MockInterrupt, self.node.loop)
+        finally:
+            for name in values:
+                appier.conf_r(name)
+
+    def _urls(self, calls):
+        return [url.split("nodes/", 1)[1] for url, _data_j, _headers in calls]
+
+    def _state(self, path=None):
+        with open(path or self.state_path, "rb") as file:
+            return file.read()
 
     def _media_box(self, data_b64):
         data = base64.b64decode(data_b64)
@@ -438,6 +579,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(data_j["system"]["distribution"], "Ubuntu 24.04.1 LTS")
         self.assertEqual(data_j["capabilities"], self.node.capabilities)
         self.assertEqual("dynamic-fonts" in data_j["capabilities"], True)
+        self.assertEqual(data_j["start_time"], self.node.start_time)
+        self.assertEqual(type(data_j["start_time"]), float)
+        self.assertEqual(data_j["update"], None)
         self.assertEqual(self.node.font_cache.path, self.fonts_dir)
         self.assertEqual(
             [(font["name"], font["active"]) for font in data_j["fonts"]],
@@ -461,6 +605,192 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(len(MockServer.calls), 1)
         self.assertEqual(self.node.loaded_fonts, set())
         self.assertEqual(len(MockServer.calls[0][1]["fonts"]), 1)
+
+    def test_loop_control(self):
+        # the node restarts itself by running its own command line once more,
+        # unless it's run by the windows service (WinSW), that starts again a
+        # node that exits, or the way to restart is configured, any other
+        # value refusing the restart (that is not advertised)
+        appier.post = MockServer.post
+        for values, restart in (
+            (dict(), "exec"),
+            (dict(WINSW_SERVICE_ID="colony-print-node"), "exit"),
+            (dict(WINSW_SERVICE_ID="colony-print-node", NODE_RESTART="exec"), "exec"),
+            (dict(NODE_RESTART=" Exit "), "exit"),
+            (dict(NODE_RESTART=""), "exec"),
+            (dict(NODE_RESTART="0"), None),
+            (dict(NODE_RESTART=0), None),
+            (dict(NODE_RESTART="reboot"), None),
+        ):
+            self._loop(**values)
+            data_j = MockServer.calls[-1][1]
+            self.assertEqual(self.node.node_restart, restart)
+            self.assertEqual("restart" in data_j["capabilities"], not restart == None)
+            self.assertEqual("update" in data_j["capabilities"], False)
+            self.assertEqual("auto-update" in data_j["capabilities"], False)
+            self.assertEqual(data_j["update"], None)
+
+        # the node run by the boot is told about it, about its state file
+        # and about the outcome of the update, that is submitted to the
+        # server together with the capabilities that depend on the boot
+        values = dict(
+            NODE_BOOT="1",
+            NODE_STATE_PATH=self.state_path,
+            NODE_UPDATE_STATUS="failure",
+            NODE_UPDATE_TIME="1790879619.9",
+            NODE_UPDATE_ERROR="Package update failed with code 1",
+        )
+        self._loop(**values)
+        data_j = MockServer.calls[-1][1]
+        self.assertEqual(self.node.node_boot, True)
+        self.assertEqual(self.node.node_state, self.state_path)
+        self.assertEqual(
+            data_j["capabilities"][-3:], ["restart", "update", "auto-update"]
+        )
+        self.assertEqual(
+            data_j["update"],
+            dict(
+                auto=True,
+                status="failure",
+                time=1790879619.9,
+                error="Package update failed with code 1",
+            ),
+        )
+        self.assertEqual(json.loads(json.dumps(data_j)), data_j)
+
+        # the auto-update of the node is the one of its configuration (as
+        # applied by the boot), disabled by the false values of the boot
+        for value, auto in (("0", False), (" Off ", False), ("yes", True), ("", True)):
+            self._loop(NODE_UPDATE=value, **values)
+            self.assertEqual(self.node.node_update, auto)
+            self.assertEqual(MockServer.calls[-1][1]["update"]["auto"], auto)
+
+        # the node that can't restart is not updated from the admin, but
+        # its auto-update is still set from it
+        self._loop(NODE_RESTART="0", **values)
+        self.assertEqual(MockServer.calls[-1][1]["capabilities"][-1], "auto-update")
+        self.assertEqual("update" in MockServer.calls[-1][1]["capabilities"], False)
+
+        # the remote control of the node disabled in its configuration, no
+        # capability of it being advertised, with the update still reported
+        for value in ("0", "false", "no", "off"):
+            self._loop(NODE_CONTROL=value, **values)
+            data_j = MockServer.calls[-1][1]
+            self.assertEqual(self.node.node_control, False)
+            for capability in ("restart", "update", "auto-update"):
+                self.assertEqual(capability in data_j["capabilities"], False)
+            self.assertEqual(data_j["update"]["status"], "failure")
+        self._loop(NODE_CONTROL="1", **values)
+        self.assertEqual(self.node.node_control, True)
+
+    def test_loop_restart(self):
+        # the restart requested by a job is only done once the remaining jobs
+        # of its batch are printed and their results posted, the job having
+        # no result (it's finished by the server once the node is back) and
+        # the next batch of jobs not being retrieved by the node
+        data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
+        MockQueue.batches = [
+            [
+                dict(id="first", name="first", type="text", data_b64=data_b64),
+                dict(id="restart", name="restart", type="restart"),
+                dict(id="second", name="second", type="text", data_b64=data_b64),
+            ],
+            [dict(id="third", name="third", type="text", data_b64=data_b64)],
+        ]
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        colony_print.node.sys = MockSys
+        self._loop(NODE_RESTART="exit")
+        self.assertEqual(MockSys.exits, [colony_print.node.RESTART_CODE])
+        self.assertEqual(
+            self._urls(MockQueue.calls),
+            ["node", "node/jobs/first/result", "node/jobs/second/result"],
+        )
+        self.assertEqual(
+            [data_j["result"] for _url, data_j, _headers in MockQueue.calls[1:]],
+            ["success", "success"],
+        )
+        self.assertEqual(len(MockQueue.batches), 1)
+        self.assertEqual(self.node.restart_jobs, [])
+
+        # the node also restarts when the results of the batch can't be
+        # posted, instead of waiting for the next batch of jobs
+        MockSys.exits = []
+        MockQueue.calls = []
+        MockQueue.error = appier.HTTPError("Problem posting result")
+        MockQueue.batches = [
+            [
+                dict(id="first", name="first", type="text", data_b64=data_b64),
+                dict(id="update", name="update", type="update"),
+            ],
+            [dict(id="third", name="third", type="text", data_b64=data_b64)],
+        ]
+        self._loop(NODE_RESTART="exit", NODE_BOOT="1", NODE_STATE_PATH=self.state_path)
+        self.assertEqual(MockSys.exits, [colony_print.node.RESTART_CODE])
+        self.assertEqual(
+            self._urls(MockQueue.calls), ["node", "node/jobs/first/result"]
+        )
+        self.assertEqual(len(MockQueue.batches), 1)
+        self.assertEqual(self._state(), b"NODE_UPDATE_ONCE=1\r\n")
+
+    def test_loop_restart_error(self):
+        # a restart that fails is posted as the (error) result of the job
+        # that requested it, the node running (and registering) as before
+        MockQueue.batches = [[dict(id="restart", name="restart", type="restart")]]
+        MockOS.error = OSError("Exec format error")
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        colony_print.node.sys = MockSys
+        os.execve = MockOS.execve
+        self._loop(NODE_RESTART="exec")
+        self.assertEqual(MockSys.exits, [])
+        self.assertEqual(
+            self._urls(MockQueue.calls), ["node", "node/jobs/restart/result", "node"]
+        )
+        result = MockQueue.calls[1][1]
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(result["error"], "Exec format error")
+        self.assertEqual("OSError" in result["traceback"], True)
+        self.assertEqual(self.node.restart_jobs, [])
+
+        # the commands that the node doesn't support (eg: with its remote
+        # control disabled after they were queued) fail as any other job,
+        # with their results posted and without any restart
+        MockQueue.calls = []
+        MockQueue.batches = [
+            [
+                dict(id="restart", name="restart", type="restart"),
+                dict(id="update", name="update", type="update"),
+                dict(
+                    id="auto-update",
+                    name="auto-update",
+                    type="auto-update",
+                    options=dict(enabled=False),
+                ),
+            ]
+        ]
+        self._loop(NODE_CONTROL="0", NODE_BOOT="1", NODE_STATE_PATH=self.state_path)
+        self.assertEqual(
+            self._urls(MockQueue.calls),
+            [
+                "node",
+                "node/jobs/restart/result",
+                "node/jobs/update/result",
+                "node/jobs/auto-update/result",
+                "node",
+            ],
+        )
+        self.assertEqual(
+            [data_j["error"] for _url, data_j, _headers in MockQueue.calls[1:4]],
+            [
+                "Capability 'restart' not supported by node",
+                "Capability 'update' not supported by node",
+                "Capability 'auto-update' not supported by node",
+            ],
+        )
+        self.assertEqual(self.node.restart_jobs, [])
+        self.assertEqual(os.path.exists(self.state_path), False)
+        self.assertEqual(MockOS.execs, [])
 
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
@@ -583,6 +913,71 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(type(MockNPColony.calls[0][0]), str)
         self.assertEqual(MockNPColony.calls[0][0], self.node.node_printer)
 
+    def test_print_job_email_commands(self):
+        # the commands print no document, so they're handled as in the normal
+        # mode (without any output document nor email), having no data
+        self.node.node_mode = "email"
+        self.node.node_restart = "exit"
+        self.node.node_boot = True
+        self.node.node_state = self.state_path
+        result = self.node.print_job(dict(id="restart", name="restart", type="restart"))
+        self.assertEqual(result, None)
+        result = self.node.print_job(dict(id="update", name="update", type="update"))
+        self.assertEqual(result, None)
+        self.assertEqual(self.node.restart_jobs, ["restart", "update"])
+        result = self.node.print_job(
+            dict(
+                id="auto-update",
+                name="auto-update",
+                type="auto-update",
+                options=dict(enabled=False),
+            )
+        )
+        self.assertEqual(
+            result,
+            dict(result="success", handler="auto-update", data=dict(auto=False)),
+        )
+        self.assertEqual(MockNPColony.calls, [])
+
+    def test_restart(self):
+        # the node only restarts when one of its jobs has requested it
+        colony_print.node.sys = MockSys
+        self.node.node_restart = "exit"
+        self.assertEqual(self.node.restart(), dict())
+        self.assertEqual(MockSys.exits, [])
+
+        self.node.restart_jobs = ["first", "second"]
+        self.assertRaises(MockInterrupt, self.node.restart)
+        self.assertEqual(MockSys.exits, [colony_print.node.RESTART_CODE])
+        self.assertEqual(self.node.restart_jobs, [])
+
+    def test_restart_error(self):
+        # a restart that fails (eg: the interpreter can't be run) results in
+        # the error of every job that requested it and is not tried again
+        colony_print.node.sys = MockSys
+        colony_print.node.os = MockOS
+        MockOS.error = OSError("Exec format error")
+        self.node.node_restart = "exec"
+        self.node.restart_jobs = ["first", "second"]
+        results = self.node.restart()
+        self.assertEqual(sorted(results.keys()), ["first", "second"])
+        for result in results.values():
+            self.assertEqual(result["result"], "error")
+            self.assertEqual(result["error"], "Exec format error")
+            self.assertEqual("OSError" in result["traceback"], True)
+        self.assertEqual(json.loads(json.dumps(results)), results)
+        self.assertEqual(self.node.restart_jobs, [])
+        self.assertEqual(self.node.restart(), dict())
+        self.assertEqual(MockSys.exits, [])
+
+        # the same happens when the node is not able to restart (eg: its
+        # restart was requested by a job before it was refused)
+        self.node.node_restart = None
+        self.node.restart_jobs = ["third"]
+        results = self.node.restart()
+        self.assertEqual(results["third"]["result"], "error")
+        self.assertEqual(results["third"]["error"], "Restart 'None' not valid")
+
     def test_libraries(self):
         sys.modules["npcolony"] = MockLibrary
         sys.modules["gravo_pilot"] = MockLibrary
@@ -654,6 +1049,42 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self._os_release(b'NAME="Ubuntu"\nPRETTY_NAME=""\n')
         self.assertEqual("distribution" in self.node.system, False)
 
+    def test_update(self):
+        # only the nodes run by the boot know about their update
+        self.assertEqual(self.node.update, None)
+
+        self.node.node_boot = True
+        self.assertEqual(self.node.update, dict(auto=True, status=None, time=None))
+
+        appier.conf_s("NODE_UPDATE_STATUS", "skipped")
+        appier.conf_s("NODE_UPDATE_TIME", "1790879619.9")
+        try:
+            self.node.node_update = False
+            self.assertEqual(
+                self.node.update, dict(auto=False, status="skipped", time=1790879619.9)
+            )
+
+            appier.conf_s("NODE_UPDATE_STATUS", "failure")
+            appier.conf_s("NODE_UPDATE_ERROR", "Package update failed with code 1")
+            update = self.node.update
+            self.assertEqual(
+                update,
+                dict(
+                    auto=False,
+                    status="failure",
+                    time=1790879619.9,
+                    error="Package update failed with code 1",
+                ),
+            )
+            self.assertEqual(json.loads(json.dumps(update)), update)
+
+            appier.conf_s("NODE_UPDATE_ERROR", "")
+            self.assertEqual("error" in self.node.update, False)
+        finally:
+            appier.conf_r("NODE_UPDATE_STATUS")
+            appier.conf_r("NODE_UPDATE_TIME")
+            appier.conf_r("NODE_UPDATE_ERROR")
+
     def test_capabilities(self):
         self.assertEqual(
             self.node.capabilities,
@@ -713,6 +1144,37 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
 
         sys.modules["npcolony"] = None
+        self.assertEqual(self.node.capabilities, ["text"])
+
+    def test_capabilities_control(self):
+        # the node that is able to restart is restarted from the admin, the
+        # one that is also run by the boot being updated from it as well
+        sys.modules["npcolony"] = None
+        sys.modules["gravo_pilot"] = None
+        self.node.node_restart = "exec"
+        self.assertEqual(self.node.capabilities, ["text", "restart"])
+
+        self.node.node_boot = True
+        self.assertEqual(
+            self.node.capabilities, ["text", "restart", "update", "auto-update"]
+        )
+
+        self.node.node_mode = "email"
+        self.node.node_restart = "exit"
+        self.assertEqual(
+            self.node.capabilities,
+            ["text", "email", "restart", "update", "auto-update"],
+        )
+
+        # the update is a restart whose boot updates the node, so the node
+        # that doesn't restart only has its auto-update set from the admin
+        self.node.node_mode = "normal"
+        self.node.node_restart = None
+        self.assertEqual(self.node.capabilities, ["text", "auto-update"])
+
+        # the remote control of the node disabled in its configuration
+        self.node.node_restart = "exit"
+        self.node.node_control = False
         self.assertEqual(self.node.capabilities, ["text"])
 
     def test_handle_job_title(self):
@@ -825,6 +1287,39 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(
             options, dict(title="hello_world", media="RP80x297", scaling="none")
         )
+
+    def test_handle_job_commands(self):
+        # the jobs that restart the node (commands without data) only request
+        # its restart, having no result (the node is restarted afterwards)
+        self.node.node_restart = "exec"
+        self.node.node_boot = True
+        self.node.node_state = self.state_path
+        result = self.node._handle_job(dict(id="first", name="restart", type="restart"))
+        self.assertEqual(result, None)
+        self.assertEqual(self.node.restart_jobs, ["first"])
+        self.assertEqual(os.path.exists(self.state_path), False)
+
+        result = self.node._handle_job(dict(id="second", name="update", type="update"))
+        self.assertEqual(result, None)
+        self.assertEqual(self.node.restart_jobs, ["first", "second"])
+        self.assertEqual(self._state(), b"NODE_UPDATE_ONCE=1\r\n")
+
+        # the auto-update is set without any restart, with the result of
+        # any other job
+        result = self.node._handle_job(
+            dict(
+                id="third",
+                name="auto-update",
+                type="auto-update",
+                options=dict(enabled=True),
+            )
+        )
+        self.assertEqual(
+            result, dict(result="success", handler="auto-update", data=dict(auto=True))
+        )
+        self.assertEqual(json.loads(json.dumps(result)), result)
+        self.assertEqual(self.node.restart_jobs, ["first", "second"])
+        self.assertEqual(MockNPColony.calls, [])
 
     def test_handle_npcolony_binie(self):
         self.node._handle_npcolony(
@@ -1403,6 +1898,103 @@ class ColonyPrintNodeTest(unittest.TestCase):
             appier.OperationalError, lambda: self.node._handle_fonts(data_b64)
         )
 
+    def test_handle_restart(self):
+        self.node.node_restart = "exec"
+        self.node._handle_restart("first")
+        self.assertEqual(self.node.restart_jobs, ["first"])
+
+        # the node that is not run by the boot is not able to update itself
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_restart("second", update=True),
+        )
+        self.assertEqual(self.node.restart_jobs, ["first"])
+
+        # the boot is told to update the packages of the node (once) by
+        # the state file, that keeps its other values
+        self.node.node_boot = True
+        self.node.node_state = self.state_path
+        with open(self.state_path, "wb") as file:
+            file.write(b"NODE_UPDATE=0\r\n")
+        self.node._handle_restart("second", update=True)
+        self.assertEqual(self.node.restart_jobs, ["first", "second"])
+        self.assertEqual(self._state(), b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+
+        # the restart is not requested when the state file can't be saved
+        # (eg: a directory in its place), as the node would not be updated
+        self.node.node_state = self.target_dir
+        self.assertRaises(
+            Exception, lambda: self.node._handle_restart("third", update=True)
+        )
+        self.assertEqual(self.node.restart_jobs, ["first", "second"])
+
+        # the node that is not able to restart (or whose remote control is
+        # disabled) refuses the restart, even when requested by the server
+        self.node.node_state = self.state_path
+        self.node.node_restart = None
+        for update in (False, True):
+            self.assertRaises(
+                appier.OperationalError,
+                lambda: self.node._handle_restart("third", update=update),
+            )
+        self.node.node_restart = "exit"
+        self.node.node_control = False
+        for update in (False, True):
+            self.assertRaises(
+                appier.OperationalError,
+                lambda: self.node._handle_restart("third", update=update),
+            )
+        self.assertEqual(self.node.restart_jobs, ["first", "second"])
+
+    def test_handle_auto_update(self):
+        # the node that is not run by the boot has no auto-update
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_auto_update(dict(enabled=False)),
+        )
+        self.assertEqual(os.path.exists(self.state_path), False)
+
+        self.node.node_boot = True
+        self.node.node_state = self.state_path
+        result = self.node._handle_auto_update(dict(enabled=False))
+        self.assertEqual(result, dict(auto=False))
+        self.assertEqual(self.node.node_update, False)
+        self.assertEqual(self.node.update["auto"], False)
+        self.assertEqual(self._state(), b"NODE_UPDATE=0\r\n")
+
+        # the other values of the state file are kept (eg: an update that
+        # was requested and not yet run by the boot)
+        with open(self.state_path, "wb") as file:
+            file.write(b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+        result = self.node._handle_auto_update(dict(enabled=True))
+        self.assertEqual(result, dict(auto=True))
+        self.assertEqual(self.node.node_update, True)
+        self.assertEqual(self._state(), b"NODE_UPDATE=1\r\nNODE_UPDATE_ONCE=1\r\n")
+
+        # the auto-update must be explicitly set (as a boolean value)
+        for options in (dict(), dict(enabled=None), dict(enabled="0"), dict(enabled=0)):
+            self.assertRaises(
+                appier.AssertionError,
+                lambda: self.node._handle_auto_update(options),
+            )
+        self.assertEqual(self.node.node_update, True)
+        self.assertEqual(self._state(), b"NODE_UPDATE=1\r\nNODE_UPDATE_ONCE=1\r\n")
+
+        # the auto-update of the node is not changed when the state file
+        # can't be saved (eg: a directory in its place)
+        self.node.node_state = self.target_dir
+        self.assertRaises(
+            Exception, lambda: self.node._handle_auto_update(dict(enabled=False))
+        )
+        self.assertEqual(self.node.node_update, True)
+
+        self.node.node_state = self.state_path
+        self.node.node_control = False
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_auto_update(dict(enabled=False)),
+        )
+
     def test_build_font_cache(self):
         self.node.font_cache.install(self._font())
         appier.conf_s("FONTS_PATH", self.fonts_dir)
@@ -1589,6 +2181,185 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.node._load_fonts()
         self.assertEqual(MockNPColonyWindows.fonts, [])
 
+    def test_restart_exit(self):
+        # the node restarts by exiting with the (error) exit code reserved
+        # for it, so that its service starts it again
+        colony_print.node.sys = MockSys
+        colony_print.node.os = MockOS
+        colony_print.node.subprocess = MockSubprocess
+        self.node.node_restart = "exit"
+        self.assertRaises(MockInterrupt, self.node._restart)
+        self.assertEqual(MockSys.exits, [colony_print.node.RESTART_CODE])
+        self.assertEqual(colony_print.node.RESTART_CODE > 0, True)
+        self.assertEqual(MockOS.execs, [])
+        self.assertEqual(MockSubprocess.calls, [])
+
+        # the same happens on windows, where the service is the one that
+        # starts the node again
+        MockOS.name = "nt"
+        self.assertRaises(MockInterrupt, self.node._restart)
+        self.assertEqual(MockSys.exits, [colony_print.node.RESTART_CODE] * 2)
+        self.assertEqual(MockSubprocess.calls, [])
+
+    def test_restart_exec(self):
+        # the node restarts by replacing its process with the original
+        # command line of the interpreter (with its options) and with the
+        # environment the process was started with (without the values of
+        # the boot), so that a changed configuration applies
+        colony_print.node.sys = MockSys
+        colony_print.node.os = MockOS
+        colony_print.node.subprocess = MockSubprocess
+        MockOS.environ = dict(PATH="/usr/bin", SECRET_KEY="key", NODE_BOOT="1")
+        appier.conf_s("NODE_BOOT_KEYS", "NODE_BOOT,NODE_BOOT_KEYS,SECRET_KEY")
+        self.node.node_restart = "exec"
+        try:
+            self.assertRaises(MockInterrupt, self.node._restart)
+        finally:
+            appier.conf_r("NODE_BOOT_KEYS")
+        self.assertEqual(
+            MockOS.execs,
+            [
+                (
+                    "/usr/bin/python",
+                    [
+                        "/usr/bin/python",
+                        "-I",
+                        "-u",
+                        "boot.py",
+                        "--config",
+                        "config.env",
+                    ],
+                    dict(PATH="/usr/bin"),
+                )
+            ],
+        )
+        self.assertEqual(MockSys.exits, [])
+        self.assertEqual(MockSubprocess.calls, [])
+
+        # the interpreters that don't keep their original command line run
+        # the one of their script (without the options of the interpreter)
+        colony_print.node.sys = MockSysLegacy
+        MockOS.execs = []
+        self.assertRaises(MockInterrupt, self.node._restart)
+        self.assertEqual(
+            MockOS.execs[0][:2],
+            (
+                "/usr/bin/python",
+                ["/usr/bin/python", "boot.py", "--config", "config.env"],
+            ),
+        )
+        self.assertEqual(MockSysLegacy.argv, ["boot.py", "--config", "config.env"])
+
+        # a process that can't be replaced fails the restart
+        MockOS.error = OSError("Exec format error")
+        self.assertRaises(OSError, self.node._restart)
+        self.assertEqual(MockSys.exits, [])
+
+    def test_restart_exec_windows(self):
+        # a process can't be replaced on windows, so a new one is started
+        # (with the same command line and environment) and the current one
+        # exits (with success), only once the new one is started
+        colony_print.node.sys = MockSys
+        colony_print.node.os = MockOS
+        colony_print.node.subprocess = MockSubprocess
+        MockOS.name = "nt"
+        MockOS.environ = dict(PATH="C:\\Windows", SECRET_KEY="key")
+        MockSys.executable = "C:\\Python\\python.exe"
+        self.node.node_restart = "exec"
+        try:
+            self.assertRaises(MockInterrupt, self.node._restart)
+            self.assertEqual(
+                MockSubprocess.calls,
+                [
+                    (
+                        [
+                            "C:\\Python\\python.exe",
+                            "-I",
+                            "-u",
+                            "boot.py",
+                            "--config",
+                            "config.env",
+                        ],
+                        dict(PATH="C:\\Windows", SECRET_KEY="key"),
+                    )
+                ],
+            )
+            self.assertEqual(MockSys.exits, [0])
+            self.assertEqual(MockOS.execs, [])
+
+            # the node keeps running when the new process can't be started
+            MockSubprocess.error = OSError("The system cannot find the file")
+            self.assertRaises(OSError, self.node._restart)
+            self.assertEqual(MockSys.exits, [0])
+        finally:
+            MockSys.executable = "/usr/bin/python"
+
+    def test_restart_invalid(self):
+        colony_print.node.sys = MockSys
+        colony_print.node.os = MockOS
+        colony_print.node.subprocess = MockSubprocess
+        for restart in (None, "0", "reboot"):
+            self.node.node_restart = restart
+            self.assertRaises(appier.OperationalError, self.node._restart)
+        self.assertEqual(MockSys.exits, [])
+        self.assertEqual(MockOS.execs, [])
+        self.assertEqual(MockSubprocess.calls, [])
+
+    def test_environ(self):
+        # the node that is not run by the boot restarts with its environment
+        colony_print.node.os = MockOS
+        MockOS.environ = dict(
+            PATH="/usr/bin",
+            BASE_URL="https://print.example.com/",
+            SECRET_KEY="key",
+            NODE_BOOT="1",
+            NODE_BOOT_KEYS="NODE_BOOT,NODE_BOOT_KEYS,NODE_UPDATE_ERROR,SECRET_KEY",
+        )
+        self.assertEqual(self.node._environ(), MockOS.environ)
+        self.assertEqual(self.node._environ() is MockOS.environ, False)
+
+        # the values set by the boot (as named by it) are not part of the
+        # environment of the restarted node, the ones that are not in the
+        # environment (eg: removed meanwhile) being ignored
+        appier.conf_s("NODE_BOOT_KEYS", MockOS.environ["NODE_BOOT_KEYS"])
+        try:
+            self.assertEqual(
+                self.node._environ(),
+                dict(PATH="/usr/bin", BASE_URL="https://print.example.com/"),
+            )
+        finally:
+            appier.conf_r("NODE_BOOT_KEYS")
+        self.assertEqual(len(MockOS.environ), 5)
+
+    def test_save_state(self):
+        # the state file is created with the values, that are loaded back
+        # by the boot, leaving no temporary file behind
+        import colony_print.boot
+
+        boot = colony_print.boot.ColonyPrintBoot(environ=dict())
+        self.node.node_state = self.state_path
+        self.node._save_state(NODE_UPDATE_ONCE="1")
+        self.assertEqual(self._state(), b"NODE_UPDATE_ONCE=1\r\n")
+        self.assertEqual(boot.load_config(self.state_path), dict(NODE_UPDATE_ONCE="1"))
+
+        # the values are replaced, the other ones being kept
+        self.node._save_state(NODE_UPDATE="0")
+        self.node._save_state(NODE_UPDATE="1")
+        self.assertEqual(
+            boot.load_config(self.state_path),
+            dict(NODE_UPDATE="1", NODE_UPDATE_ONCE="1"),
+        )
+        self.assertEqual(sorted(os.listdir(self.target_dir)), ["state.env"])
+
+        # the state saved by the node is the one applied by the boot
+        self.assertEqual(boot.apply_state(self.state_path), True)
+        self.assertEqual(boot.environ, dict(NODE_UPDATE="1"))
+        self.assertEqual(self._state(), b"NODE_UPDATE=1\r\n")
+
+        # the node that is not run by the boot has no state file
+        self.node.node_state = None
+        self.assertRaises(Exception, lambda: self.node._save_state(NODE_UPDATE="0"))
+
     def test_has_feature(self):
         self.assertEqual(self.node._has_feature("load-fonts"), False)
 
@@ -1601,6 +2372,24 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
         sys.modules["npcolony"] = MockNPColonyLegacy
         self.assertEqual(self.node._has_feature("load-fonts"), False)
+
+    def test_is_enabled(self):
+        self.assertEqual(self.node._is_enabled("NODE_CONTROL"), True)
+        self.assertEqual(self.node._is_enabled("NODE_BOOT", default="0"), False)
+
+        try:
+            for value in ("0", "false", "False", "no", " off ", 0, False):
+                appier.conf_s("NODE_CONTROL", value)
+                self.assertEqual(self.node._is_enabled("NODE_CONTROL"), False)
+
+            for value in ("1", "true", "yes", "", 1, True):
+                appier.conf_s("NODE_CONTROL", value)
+                self.assertEqual(self.node._is_enabled("NODE_CONTROL"), True)
+                self.assertEqual(
+                    self.node._is_enabled("NODE_CONTROL", default="0"), True
+                )
+        finally:
+            appier.conf_r("NODE_CONTROL")
 
     def test_info_distribution(self):
         self.assertEqual(self.node._info_distribution(), None)

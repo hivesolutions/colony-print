@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import time
 import uuid
 import json
@@ -12,6 +13,7 @@ import logging
 import tempfile
 import platform
 import traceback
+import subprocess
 
 import appier
 
@@ -33,6 +35,25 @@ is used to avoid overloading the server with requests """
 NODE_MODES = set(["normal", "email"])
 """ The set of running modes that are considered to be valid for
 the node, this is going to be used to validate the mode """
+
+RESTART_MODES = set(["exit", "exec"])
+""" The set of ways in which the node is able to restart itself (as
+requested from the admin), either by exiting, so that its service
+starts it again, or by running its own command line once more """
+
+RESTART_CODE = 75
+""" The exit code (reserved for it) of the process of a node that
+restarts by exiting, which is an error one, as the services only
+start again (by themselves) the processes that exit with an error """
+
+COMMAND_TYPES = ("restart", "update", "auto-update")
+""" The types of the jobs that are commands for the node (requested
+from the admin), instead of documents to be printed, so they have no
+data and are handled in the same way by every mode of the node """
+
+FALSE_VALUES = ("0", "false", "no", "off")
+""" The (lower cased) configuration values considered to be false,
+the same ones as the ones of the boot of the node """
 
 FONTS_PATH = "~/.colony_print/fonts"
 """ The default path to the directory of the cache of the fonts
@@ -82,8 +103,15 @@ class ColonyPrintNode(object):
         self.node_mode = None
         self.node_printer = None
         self.node_email_receivers = None
+        self.node_restart = None
+        self.node_control = True
+        self.node_boot = False
+        self.node_update = True
+        self.node_state = None
         self.font_cache = None
         self.loaded_fonts = set()
+        self.restart_jobs = []
+        self.start_time = time.time()
 
     def loop(self):
         logging.basicConfig(
@@ -102,6 +130,25 @@ class ColonyPrintNode(object):
             "NODE_EMAIL_RECEIVERS", self.node_email_receivers, cast=list
         )
 
+        # the node restarts itself (as requested from the admin) by exiting
+        # when it's run by the windows service (WinSW), that starts it again,
+        # and by running its own command line once more otherwise, unless the
+        # way to restart is configured, any other value refusing the restart
+        node_restart = appier.conf("NODE_RESTART", None)
+        if node_restart in (None, ""):
+            node_restart = "exit" if appier.conf("WINSW_SERVICE_ID", None) else "exec"
+        node_restart = str(node_restart).strip().lower()
+        self.node_restart = node_restart if node_restart in RESTART_MODES else None
+
+        # the node is updated from the admin only when it's run by the boot,
+        # that hands its marker, the path of the state file and the outcome
+        # of its update over to the node, the remote control of the node
+        # (restart and update) may be disabled altogether in its configuration
+        self.node_control = self._is_enabled("NODE_CONTROL")
+        self.node_boot = self._is_enabled("NODE_BOOT", default="0")
+        self.node_update = self._is_enabled("NODE_UPDATE")
+        self.node_state = appier.conf("NODE_STATE_PATH", None)
+
         logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
         logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
 
@@ -117,6 +164,19 @@ class ColonyPrintNode(object):
 
         while True:
             try:
+                # restarts the node in case one of the jobs of the previous
+                # iteration has requested it, only now that the remaining jobs
+                # of its batch are printed and their results posted, so that
+                # no print is interrupted, a restart that fails being posted
+                # as the (error) result of the jobs that requested it
+                for job_id, result in self.restart().items():
+                    logging.info("Posting job result for '%s'" % job_id)
+                    appier.post(
+                        base_url + "nodes/%s/jobs/%s/result" % (node_id, job_id),
+                        data_j=result,
+                        headers=headers,
+                    )
+
                 logging.info("Submitting node information")
                 appier.post(
                     base_url + "nodes/%s" % node_id,
@@ -134,6 +194,8 @@ class ColonyPrintNode(object):
                         os=os.name,
                         system=self.system,
                         version=VERSION,
+                        start_time=self.start_time,
+                        update=self.update,
                     ),
                     headers=headers,
                 )
@@ -156,6 +218,12 @@ class ColonyPrintNode(object):
                             error=str(exception),
                             traceback=traceback.format_exc(),
                         )
+
+                    # the jobs that restart the node have no result, as they
+                    # are finished by the server once the node (restarted)
+                    # registers itself again
+                    if result == None:
+                        continue
                     results[job["id"]] = result
                 for job_id, result in results.items():
                     logging.info("Posting job result for '%s'" % job_id)
@@ -179,9 +247,9 @@ class ColonyPrintNode(object):
 
     def print_job_email(self, job):
         # the jobs that don't print a document (eg: the installation of
-        # fonts) are handled as in the normal mode, as there's no output
-        # document to be generated and sent by email for them
-        if job.get("type", None) in ("fonts",):
+        # fonts and the commands) are handled as in the normal mode, as
+        # there's no output document to be generated and sent by email
+        if job.get("type", None) in ("fonts",) + COMMAND_TYPES:
             return self._handle_job(job)
 
         import mailme
@@ -294,6 +362,35 @@ class ColonyPrintNode(object):
             output_mime_type="application/pdf" if save_output else None,
         )
 
+    def restart(self):
+        """
+        Restarts the node in case its restart was requested by one of its
+        jobs (restart or update), which only returns in case the restart
+        fails, with the (error) results of those jobs, as the server only
+        finishes them (by itself) once the restarted node registers itself.
+
+        :rtype: Dictionary
+        :return: The results of the jobs that requested the restart (by
+        job identifier), empty in case no restart was requested.
+        """
+
+        results = dict()
+        job_ids, self.restart_jobs = self.restart_jobs, []
+        if not job_ids:
+            return results
+
+        try:
+            self._restart()
+        except Exception as exception:
+            logging.exception("Exception while restarting node: %s" % str(exception))
+            for job_id in job_ids:
+                results[job_id] = dict(
+                    result="error",
+                    error=str(exception),
+                    traceback=traceback.format_exc(),
+                )
+        return results
+
     @property
     def npcolony(self):
         import npcolony
@@ -358,11 +455,37 @@ class ColonyPrintNode(object):
         return system
 
     @property
+    def update(self):
+        """
+        The information of the update of the packages of the node, if it's
+        run every time the node starts (auto-update) and the outcome of the
+        one run by the boot when the node started (its status, its time and
+        its error), which is only known by the nodes run by the boot.
+
+        :rtype: Dictionary
+        :return: The information of the update of the node, or an invalid
+        value in case the node is not run by the boot.
+        """
+
+        if not self.node_boot:
+            return None
+        update = dict(
+            auto=self.node_update,
+            status=appier.conf("NODE_UPDATE_STATUS", None),
+            time=appier.conf("NODE_UPDATE_TIME", None, cast=float),
+        )
+        error = appier.conf("NODE_UPDATE_ERROR", None)
+        if error:
+            update["error"] = error
+        return update
+
+    @property
     def capabilities(self):
         """
         The capabilities (features) supported by the node, as advertised
         to the server, that depend on the available engines, on the system
-        (and its npcolony version) and on the mode of the node.
+        (and its npcolony version), on the mode of the node and on the way
+        the node is run (and configured) for the ones of its remote control.
 
         :rtype: List
         :return: The names of the capabilities supported by the node.
@@ -391,12 +514,20 @@ class ColonyPrintNode(object):
             )
         if self.node_mode == "email":
             capabilities.append("email")
+        if self.node_control:
+            if self.node_restart:
+                capabilities.append("restart")
+            if self.node_restart and self.node_boot:
+                capabilities.append("update")
+            if self.node_boot:
+                capabilities.append("auto-update")
         return capabilities
 
     def _handle_job(self, job):
         # unpacks the complete set of job information to
-        # be able to print the job in the current system
-        data_b64 = job["data_b64"]
+        # be able to print the job in the current system,
+        # the jobs that are commands having no data
+        data_b64 = job.get("data_b64", None)
         name = job.get("name", "undefined")
         printer = job.get("printer", None)
         type = job.get("type", None)
@@ -430,6 +561,12 @@ class ColonyPrintNode(object):
         elif type in ("fonts",):
             result = self._handle_fonts(data_b64)
             return dict(result="success", handler="fonts", data=result)
+        elif type in ("restart", "update"):
+            self._handle_restart(job["id"], update=type == "update")
+            return None
+        elif type in ("auto-update",):
+            result = self._handle_auto_update(options)
+            return dict(result="success", handler="auto-update", data=result)
 
         raise appier.OperationalError("Type '%s' not valid" % type)
 
@@ -846,6 +983,42 @@ class ColonyPrintNode(object):
         data_j = self._decode_payload(data_b64)
         return dict(fonts=self._install_fonts(data_j["fonts"]))
 
+    def _handle_restart(self, job_id, update=False):
+        """
+        Requests the restart of the node for the job with the provided
+        identifier, that is only done once the remaining jobs of the batch
+        are printed and their results posted, so that no print is
+        interrupted by it.
+
+        For an update the boot is told (through the state file) to update
+        the packages of the node when it starts again, even with the
+        auto-update disabled, as a running node can't update itself.
+
+        :type job_id: String
+        :param job_id: The identifier of the job that requests the restart.
+        :type update: bool
+        :param update: If the packages of the node should be updated by
+        the boot when the node starts again.
+        """
+
+        self._ensure_capability("update" if update else "restart")
+        if update:
+            self._save_state(NODE_UPDATE_ONCE="1")
+        self.restart_jobs.append(job_id)
+
+    def _handle_auto_update(self, options):
+        self._ensure_capability("auto-update")
+        enabled = options.get("enabled", None)
+        appier.verify(
+            isinstance(enabled, bool), message="Enabled must be a boolean value"
+        )
+
+        # keeps the auto-update in the state file, that is applied by the
+        # boot (over the configuration) the next time the node starts
+        self._save_state(NODE_UPDATE="1" if enabled else "0")
+        self.node_update = enabled
+        return dict(auto=enabled)
+
     def _build_font_cache(self):
         """
         Builds the cache of the fonts installed on demand of the node,
@@ -954,6 +1127,72 @@ class ColonyPrintNode(object):
                 continue
             self.loaded_fonts.add(file_path)
 
+    def _restart(self):
+        """
+        Restarts the process of the node in the way the node is configured
+        to, either by exiting with the (error) exit code reserved for it, so
+        that the service of the node starts it again, or by running its own
+        command line once more, replacing the process (that keeps its PID)
+        or, where that's not possible (windows), starting a new process and
+        exiting.
+
+        The command line is the original one of the interpreter (with its
+        options) where it's available (Python 3.10+), the one of the script
+        being used otherwise, and it's run with the environment the process
+        was started with, so that a changed configuration applies.
+        """
+
+        if not self.node_restart in RESTART_MODES:
+            raise appier.OperationalError(
+                message="Restart '%s' not valid" % self.node_restart
+            )
+
+        logging.info("Restarting node using '%s'" % self.node_restart)
+        if self.node_restart == "exit":
+            sys.exit(RESTART_CODE)
+
+        args = sys.orig_argv[1:] if hasattr(sys, "orig_argv") else sys.argv
+        args = [sys.executable] + list(args)
+        environ = self._environ()
+        if os.name == "nt":
+            subprocess.Popen(args, env=environ)
+            sys.exit(0)
+        os.execve(sys.executable, args, environ)
+
+    def _environ(self):
+        """
+        Builds the environment of the process that is run by the restart of
+        the node, the one the process of the node was started with, meaning
+        without the values set by the boot (the ones of the configuration
+        file and the ones handed over to the node), as named by it, so that
+        the boot applies the (possibly changed) configuration once more, as
+        it does when it's started by the service.
+
+        :rtype: Dictionary
+        :return: The environment the process of the node was started with.
+        """
+
+        environ = dict(os.environ)
+        keys = appier.conf("NODE_BOOT_KEYS", "")
+        for key in keys.split(","):
+            environ.pop(key, None)
+        return environ
+
+    def _save_state(self, **values):
+        """
+        Saves the provided values in the state file of the node, the one
+        that is applied by the boot over the configuration (that is never
+        written by the node, as it holds the secret key), keeping its other
+        values and replacing the file atomically.
+        """
+
+        import colony_print.boot
+
+        boot = colony_print.boot.ColonyPrintBoot()
+        state = boot.load_config(self.node_state)
+        state.update(values)
+        boot.save_config(self.node_state, state)
+
     def _has_npcolony(self):
         try:
             __import__("npcolony")
@@ -986,6 +1225,23 @@ class ColonyPrintNode(object):
         if not hasattr(self.npcolony, "get_features"):
             return False
         return feature in self.npcolony.get_features()
+
+    def _is_enabled(self, name, default="1"):
+        """
+        Verifies if the configuration with the provided name is enabled,
+        meaning that its value is not one of the false ones, using the
+        same rules as the boot of the node, so that both agree on it.
+
+        :type name: String
+        :param name: The name of the configuration (eg: NODE_CONTROL).
+        :type default: String
+        :param default: The value used when the configuration is not set.
+        :rtype: bool
+        :return: If the configuration is enabled.
+        """
+
+        value = appier.conf(name, default)
+        return not str(value).strip().lower() in FALSE_VALUES
 
     def _info_npcolony(self):
         info = dict(
@@ -1059,7 +1315,7 @@ class ColonyPrintNode(object):
         # node doesn't support fail instead of being wrongly printed
         if not capability in self.capabilities:
             raise appier.OperationalError(
-                "Capability '%s' not supported by node" % capability
+                message="Capability '%s' not supported by node" % capability
             )
 
 

@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Restart and update of the nodes requested by the server, done only once their pending jobs are printed - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 * Update of the nodes forced for their next start, even with the auto-update disabled - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Start time and last update reported by the nodes - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Option to disable the remote control of a node in its configuration - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ### Changed
 
@@ -18,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * Configuration file of the nodes ignored when their boot is run outside of the Windows service - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Error message missing from the jobs refused by a node that lacks the capability they require - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ## [0.23.0] - 2026-10-02
 
