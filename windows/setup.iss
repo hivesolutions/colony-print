@@ -713,6 +713,15 @@ begin
     if Result <> '' then
       Exit;
   end;
+  { a file in the place of the data directory (that any user may create in
+    the program data) is removed, as it would make its creation fail }
+  if FileExists(DataDir) then
+  begin
+    Log('Removing the file in the place of the data directory ' + DataDir);
+    Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /C /Q');
+    Icacls('"' + DataDir + '" /reset /C /Q');
+    DeleteFile(DataDir);
+  end;
   if not Trusted or not DirExists(DataDir) then
     if not CreateDataDir then
     begin
