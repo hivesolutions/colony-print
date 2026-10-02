@@ -56,7 +56,9 @@ class NodeController(appier.Controller):
     def create(self, id):
         node = appier.get_object()
         node["last_ping"] = time.time()
+        previous = self.owner.nodes.get(id, None)
         self.owner.nodes[id] = node
+        self._finish_restart(id, previous, node)
 
     @appier.route("/nodes/<str:id>", "GET", json=True)
     @appier.ensure(token="admin")
@@ -109,6 +111,8 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/print", ("GET", "POST"), json=True)
     @appier.ensure(token="admin")
     def print_default(self, id):
+        import colony_print
+
         data = self.field("data", None)
         data_b64 = self.field("data_b64", None)
         name = self.field("name", None)
@@ -125,6 +129,11 @@ class NodeController(appier.Controller):
         appier.verify(
             not (data and data_b64),
             message="Only one of data or data_b64 fields must be provided",
+            code=400,
+        )
+        appier.verify(
+            not type in colony_print.main.COMMAND_TYPES,
+            message="Type '%s' is not valid for print requests" % type,
             code=400,
         )
 
@@ -149,27 +158,7 @@ class NodeController(appier.Controller):
             )
         if fonts_info:
             job_info["fonts"] = fonts_info
-        self.owner.jobs_info[job_id] = job_info
-        self.owner.jobs_data[job_id] = data_b64
-        self.owner.jobs_fonts[job_id] = fonts
-
-        # creates a copy of the job info as starting
-        # point for the job structure and then adds
-        # the "heavy" data (base64 encoded) to it, with
-        # the fonts of the request replacing their (light)
-        # information, as the node installs them
-        job = dict(job_info)
-        job["data_b64"] = data_b64
-        job.pop("fonts", None)
-        if fonts:
-            job["fonts"] = fonts
-        jobs = self.owner.jobs.get(id, [])
-        jobs.append(job)
-        self.owner.jobs[id] = jobs
-        appier.notify("jobs:%s" % id)
-
-        job_info.update(status="queued", queued_time=time.time())
-        return job_info
+        return self.owner.queue_job(job_info, data_b64=data_b64, fonts=fonts)
 
     @appier.route("/nodes/<str:id>/print", "OPTIONS")
     def print_default_o(self, id):
@@ -204,6 +193,8 @@ class NodeController(appier.Controller):
     )
     @appier.ensure(token="admin")
     def print_printer(self, id, printer):
+        import colony_print
+
         data = self.field("data", None)
         data_b64 = self.field("data_b64", None)
         name = self.field("name", None)
@@ -220,6 +211,11 @@ class NodeController(appier.Controller):
         appier.verify(
             not (data and data_b64),
             message="Only one of data or data_b64 fields must be provided",
+            code=400,
+        )
+        appier.verify(
+            not type in colony_print.main.COMMAND_TYPES,
+            message="Type '%s' is not valid for print requests" % type,
             code=400,
         )
 
@@ -246,27 +242,7 @@ class NodeController(appier.Controller):
             )
         if fonts_info:
             job_info["fonts"] = fonts_info
-        self.owner.jobs_info[job_id] = job_info
-        self.owner.jobs_data[job_id] = data_b64
-        self.owner.jobs_fonts[job_id] = fonts
-
-        # creates a copy of the job info as starting
-        # point for the job structure and then adds
-        # the "heavy" data (base64 encoded) to it, with
-        # the fonts of the request replacing their (light)
-        # information, as the node installs them
-        job = dict(job_info)
-        job["data_b64"] = data_b64
-        job.pop("fonts", None)
-        if fonts:
-            job["fonts"] = fonts
-        jobs = self.owner.jobs.get(id, [])
-        jobs.append(job)
-        self.owner.jobs[id] = jobs
-        appier.notify("jobs:%s" % id)
-
-        job_info.update(status="queued", queued_time=time.time())
-        return job_info
+        return self.owner.queue_job(job_info, data_b64=data_b64, fonts=fonts)
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
     def print_printer_o(self, id, printer):
@@ -307,6 +283,34 @@ class NodeController(appier.Controller):
     def fonts_o(self, id):
         return ""
 
+    @appier.route("/nodes/<str:id>/restart", "POST", json=True)
+    @appier.ensure(token="admin")
+    def restart(self, id):
+        return self._command(id, "restart")
+
+    @appier.route("/nodes/<str:id>/restart", "OPTIONS")
+    def restart_o(self, id):
+        return ""
+
+    @appier.route("/nodes/<str:id>/update", "POST", json=True)
+    @appier.ensure(token="admin")
+    def update(self, id):
+        return self._command(id, "update")
+
+    @appier.route("/nodes/<str:id>/update", "OPTIONS")
+    def update_o(self, id):
+        return ""
+
+    @appier.route("/nodes/<str:id>/auto_update", "POST", json=True)
+    @appier.ensure(token="admin")
+    def auto_update(self, id):
+        enabled = self.field("enabled", cast=bool, mandatory=True, not_empty=True)
+        return self._command(id, "auto-update", options=dict(enabled=enabled))
+
+    @appier.route("/nodes/<str:id>/auto_update", "OPTIONS")
+    def auto_update_o(self, id):
+        return ""
+
     @appier.coroutine
     def wait_jobs(self, id):
         while True:
@@ -331,6 +335,100 @@ class NodeController(appier.Controller):
         node = dict(node)
         node["stats"] = self.owner.node_stats(id)
         return node
+
+    def _command(self, id, type, options=None):
+        """
+        Queues a command job (without data) of the provided type for the
+        node with the provided identifier, that must support the capability
+        with the name of the type, an exception being raised otherwise, so
+        that a node never receives a type that it doesn't know.
+
+        A node with a job that restarts it (restart or update) queued or in
+        flight doesn't get another one, that job being returned instead.
+
+        :type id: String
+        :param id: The identifier of the node of the job.
+        :type type: String
+        :param type: The type of the command job (eg: restart).
+        :type options: Dictionary
+        :param options: The options of the command job, if any.
+        :rtype: Dictionary
+        :return: The information of the queued job, or the one of the job
+        that is already going to restart the node.
+        """
+
+        import colony_print
+
+        self._ensure_capability(id, type)
+
+        if type in colony_print.main.RESTART_TYPES:
+            for job_info in self.owner.jobs_info.values():
+                if not job_info.get("node_id", None) == id:
+                    continue
+                if not job_info.get("type", None) in colony_print.main.RESTART_TYPES:
+                    continue
+                if not job_info.get("status", None) in ("queued", "printing"):
+                    continue
+                return job_info
+
+        job_id = str(uuid.uuid4())
+        job_info = dict(id=job_id, name=type, node_id=id, data_length=0, type=type)
+        if options:
+            job_info["options"] = options
+        return self.owner.queue_job(job_info)
+
+    def _finish_restart(self, id, previous, node):
+        """
+        Finishes the jobs that restart the node with the provided identifier
+        (restart and update) that are in flight, in case the node has been
+        restarted, meaning that it has registered itself with a start time
+        newer than the one of its previous registration, as these jobs are
+        not finished by a result of the node (posted while it goes down).
+
+        The result of the jobs keeps the version, the libraries and the
+        start time of the node before and after the restart, the update
+        jobs being finished as errors when the update run by the boot of
+        the node (as reported by it) was not successful.
+
+        :type id: String
+        :param id: The identifier of the node.
+        :type previous: Dictionary
+        :param previous: The information of the previous registration of
+        the node, if any.
+        :type node: Dictionary
+        :param node: The information of the node, as just registered.
+        """
+
+        import colony_print
+
+        start_time = node.get("start_time", None)
+        previous_time = previous.get("start_time", None) if previous else None
+        if not start_time or not previous_time or not start_time > previous_time:
+            return
+
+        fields = ("version", "libraries", "start_time")
+        for job_info in self.owner.jobs_info.values():
+            if not job_info.get("node_id", None) == id:
+                continue
+            if not job_info.get("type", None) in colony_print.main.RESTART_TYPES:
+                continue
+            if not job_info.get("status", None) == "printing":
+                continue
+            result = dict(
+                result="success",
+                handler=job_info["type"],
+                before=dict((name, previous.get(name, None)) for name in fields),
+                after=dict((name, node.get(name, None)) for name in fields),
+            )
+            if job_info["type"] == "update":
+                update = node.get("update", None) or dict()
+                result["update"] = update
+                if not update.get("status", None) == "success":
+                    result.update(
+                        result="error",
+                        error=update.get("error", None) or "Update not run by the node",
+                    )
+            job_info.update(status="finished", finish_time=time.time(), result=result)
 
     def _verify_fonts(self, id, data_b64, type=None, format=None, fonts=None):
         """

@@ -12,8 +12,12 @@ import colony_print
 class ColonyPrintAppTest(unittest.TestCase):
     def setUp(self):
         self.app = colony_print.ColonyPrintApp(level=logging.ERROR)
+        self.notifications = []
+        self._notify = appier.notify
+        appier.notify = lambda name, *args, **kwargs: self.notifications.append(name)
 
     def tearDown(self):
+        appier.notify = self._notify
         self.app.unload()
         adapter = appier.get_adapter()
         adapter.drop_db()
@@ -202,3 +206,129 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.assertEqual(stats["total"], 2)
         self.assertEqual(stats["finished"], 2)
         self.assertEqual(stats["last"]["id"], "job-1")
+
+    def test_node_stats_commands(self):
+        # the jobs that are commands for the node (eg: its restart) print no
+        # document, so they are left out of its statistics (and are never
+        # its last job), whatever their status is
+        self.app.jobs_info["success"] = dict(
+            id="success",
+            name="success",
+            node_id="node",
+            status="finished",
+            finish_time=100.0,
+            result=dict(result="success"),
+        )
+        for index, type in enumerate(("restart", "update", "auto-update")):
+            self.app.jobs_info[type] = dict(
+                id=type,
+                name=type,
+                node_id="node",
+                type=type,
+                status="finished",
+                finish_time=200.0 + index,
+                result=dict(result="error" if type == "update" else "success"),
+            )
+        for status in ("queued", "printing", "cancelled"):
+            self.app.jobs_info[status] = dict(
+                id=status, name="restart", node_id="node", type="restart", status=status
+            )
+        self.assertEqual(
+            self.app.node_stats("node"),
+            dict(
+                total=1,
+                finished=1,
+                error=0,
+                in_flight=0,
+                cancelled=0,
+                last=dict(
+                    id="success", name="success", finish_time=100.0, result="success"
+                ),
+            ),
+        )
+
+        # the jobs of the other types (eg: the installation of fonts) are
+        # part of the statistics, as before
+        self.app.jobs_info["fonts"] = dict(
+            id="fonts", name="fonts", node_id="node", type="fonts", status="queued"
+        )
+        stats = self.app.node_stats("node")
+        self.assertEqual(stats["total"], 2)
+        self.assertEqual(stats["in_flight"], 1)
+
+    def test_queue_job(self):
+        # the job is kept (its information, its data and its fonts) and sent
+        # to its node with the data and with the fonts of the request in the
+        # place of their information, the node being notified about it
+        fonts = [dict(name="Colonia", data_b64="QUJD")]
+        job_info = dict(
+            id="first",
+            name="document",
+            node_id="node",
+            data_length=4,
+            format="binie",
+            fonts=[dict(name="Colonia", data_length=4)],
+        )
+        result = self.app.queue_job(job_info, data_b64="QUJD", fonts=fonts)
+        self.assertEqual(result is job_info, True)
+        self.assertEqual(job_info["status"], "queued")
+        self.assertEqual(type(job_info["queued_time"]), float)
+        self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual(self.app.jobs_info["first"] is job_info, True)
+        self.assertEqual(self.app.jobs_data["first"], "QUJD")
+        self.assertEqual(self.app.jobs_fonts["first"], fonts)
+        self.assertEqual(
+            self.app.jobs["node"],
+            [
+                dict(
+                    id="first",
+                    name="document",
+                    node_id="node",
+                    data_length=4,
+                    format="binie",
+                    data_b64="QUJD",
+                    fonts=fonts,
+                )
+            ],
+        )
+        self.assertEqual(self.notifications, ["jobs:node"])
+
+        # a job without fonts is sent without them, even when it keeps
+        # their information (the fonts declared by its document)
+        job_info = dict(
+            id="second",
+            name="document",
+            node_id="node",
+            fonts=[dict(name="Colonia", data_length=4)],
+        )
+        self.app.queue_job(job_info, data_b64="QUJD")
+        self.assertEqual(self.app.jobs_fonts["second"], None)
+        self.assertEqual(
+            self.app.jobs["node"][1],
+            dict(id="second", name="document", node_id="node", data_b64="QUJD"),
+        )
+
+        # a job that is a command has no data (nor fonts), but is kept as
+        # the other jobs, so that their structures are dropped together
+        job_info = dict(id="third", name="restart", node_id="node", type="restart")
+        self.app.queue_job(job_info)
+        self.assertEqual(self.app.jobs_data["third"], None)
+        self.assertEqual(self.app.jobs_fonts["third"], None)
+        self.assertEqual(
+            self.app.jobs["node"][2],
+            dict(id="third", name="restart", node_id="node", type="restart"),
+        )
+        self.assertEqual(
+            [job["id"] for job in self.app.jobs["node"]], ["first", "second", "third"]
+        )
+        self.assertEqual(
+            sorted(self.app.jobs_info.keys()), sorted(self.app.jobs_data.keys())
+        )
+
+        # the jobs are queued for their own node
+        job_info = dict(id="fourth", name="document", node_id="other")
+        self.app.queue_job(job_info, data_b64="QUJD")
+        self.assertEqual([job["id"] for job in self.app.jobs["other"]], ["fourth"])
+        self.assertEqual(len(self.app.jobs["node"]), 3)
+        self.assertEqual(self.notifications[-1], "jobs:other")
+        self.assertEqual(len(self.notifications), 4)

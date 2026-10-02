@@ -81,10 +81,22 @@ class JobController(appier.Controller):
     @appier.route("/jobs/<str:id>/clone", "POST", json=True)
     @appier.ensure(token="admin")
     def clone(self, id):
+        import colony_print
+
         appier.verify(
             id in self.owner.jobs_info,
             message="Job not found",
             code=404,
+        )
+
+        # the jobs that are commands for the node (eg: its restart) are
+        # only queued by their own endpoints, that verify the node
+        job_info = self.owner.jobs_info[id]
+        type = job_info.get("type", None)
+        appier.verify(
+            not type in colony_print.main.COMMAND_TYPES,
+            message="Job of type '%s' can not be cloned" % type,
+            code=409,
         )
 
         # retrieves the original (base64 encoded) data that was persisted
@@ -101,31 +113,11 @@ class JobController(appier.Controller):
         # the clone starts its life cycle as a freshly queued job, with
         # the same fonts (if any) as the original one, kept for every job
         # so that they're dropped together with the other job structures
-        job_info = self.owner.jobs_info[id]
         job_id = str(uuid.uuid4())
-        node_id = job_info["node_id"]
         fonts = self.owner.jobs_fonts.get(id, None)
         clone_info = dict((k, v) for k, v in job_info.items() if k in CLONE_FIELDS)
         clone_info["id"] = job_id
-        self.owner.jobs_info[job_id] = clone_info
-        self.owner.jobs_data[job_id] = data_b64
-        self.owner.jobs_fonts[job_id] = fonts
-
-        # creates a copy of the job info as starting
-        # point for the job structure and then adds
-        # the "heavy" data (base64 encoded) to it
-        job = dict(clone_info)
-        job["data_b64"] = data_b64
-        job.pop("fonts", None)
-        if fonts:
-            job["fonts"] = fonts
-        jobs = self.owner.jobs.get(node_id, [])
-        jobs.append(job)
-        self.owner.jobs[node_id] = jobs
-        appier.notify("jobs:%s" % node_id)
-
-        clone_info.update(status="queued", queued_time=time.time())
-        return clone_info
+        return self.owner.queue_job(clone_info, data_b64=data_b64, fonts=fonts)
 
     @appier.route("/jobs/<str:id>/clone", "OPTIONS")
     def clone_o(self, id):
@@ -167,7 +159,7 @@ class JobController(appier.Controller):
     @appier.ensure(token="admin")
     def payload(self, id):
         appier.verify(
-            id in self.owner.jobs_data,
+            not self.owner.jobs_data.get(id, None) == None,
             message="Job payload not found",
             code=404,
         )
