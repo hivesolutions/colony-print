@@ -400,6 +400,20 @@ begin
     Result := (Flags and 8) <> 0;
 end;
 
+{ Verifies if the registry has application paths of Python 2.7 (for the
+  machine or for the system account), the directories (eg: added by another
+  program) where Python always searches for its modules before its own
+  library, which can't be disabled in the Python of the Windows XP nodes }
+function ApplicationPaths: Boolean;
+var
+  Names: TArrayOfString;
+begin
+  Result := (RegGetSubkeyNames(HKLM, 'SOFTWARE\Python\PythonCore\2.7\PythonPath', Names) and
+    (GetArrayLength(Names) > 0)) or
+    (RegGetSubkeyNames(HKU, 'S-1-5-18\Software\Python\PythonCore\2.7\PythonPath', Names) and
+    (GetArrayLength(Names) > 0));
+end;
+
 { Runs NSSM (the service wrapper of the Windows XP nodes) with the provided
   parameters, returning if it succeeded }
 function Nssm(const Params: String): Boolean;
@@ -940,6 +954,20 @@ begin
       'Continue with the installation anyway?', mbConfirmation, MB_YESNO, IDYES) <> IDYES then
     begin
       Result := 'The node was not installed, as its disk has no file security.';
+      Exit;
+    end;
+
+  { warns that the modules of the node may be loaded from other directories,
+    the application paths of Python 2.7 in the registry, so that any user
+    able to write in them is able to run code as the system account, silent
+    installs continue, as the machines are prepared by their administrators }
+  if ApplicationPaths then
+    if SuppressibleMsgBox('The registry of this machine has application paths of Python 2.7 ' +
+      '(eg: added by another program), where the node also searches for its modules, so ' +
+      'any user able to write in them is able to run code as the system account.' + #13#10#13#10 +
+      'Continue with the installation anyway?', mbConfirmation, MB_YESNO, IDYES) <> IDYES then
+    begin
+      Result := 'The node was not installed, as Python 2.7 has application paths.';
       Exit;
     end;
 #endif

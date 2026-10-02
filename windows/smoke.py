@@ -297,6 +297,7 @@ class Smoke(object):
         # the installer of the Windows XP nodes must not warn about it
         setup_log = read(SETUP_LOG_PATH, errors="replace")
         assert not "no file security" in setup_log, "Volume taken as not secure"
+        assert not "application paths" in setup_log, "Application paths found"
 
         # verifies that the access to the data directory is protected, so
         # that the access of its parent is never inherited by it (eg: when
@@ -397,8 +398,21 @@ class Smoke(object):
         # installs the Windows XP node once more, which must not use the
         # configuration kept by the uninstall (its index and its pinned
         # version), as its installer is not able to verify (and trust) it,
-        # so that the node is configured by the parameters, uninstalling it
-        self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        # so that the node is configured by the parameters, uninstalling it,
+        # an application path of Python 2.7 (a directory that doesn't exist) is
+        # added to the registry for the install, as the installer must warn
+        # about it (and continue)
+        path = os.path.join(WORK_PATH, "paths")
+        path_key = "HKLM\\SOFTWARE\\Python\\PythonCore\\2.7\\PythonPath\\Smoke"
+        subprocess.check_call(
+            ["reg.exe", "add", path_key, "/ve", "/d", path, "/f", "/reg:32"]
+        )
+        try:
+            self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        finally:
+            subprocess.check_call(["reg.exe", "delete", path_key, "/f", "/reg:32"])
+        setup_log = read(SETUP_LOG_PATH, errors="replace")
+        assert "application paths" in setup_log, "No application paths warning"
         assert self.service_state() == "RUNNING", "Service is not running"
         config = read(os.path.join(DATA_PATH, "config.env"))
         assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
