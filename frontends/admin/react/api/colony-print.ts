@@ -22,6 +22,14 @@ export interface NodeInfo {
     libraries?: Record<string, string>;
     platform: string;
     os: string;
+    system?: {
+        name: string;
+        release: string;
+        version: string;
+        machine: string;
+        architecture: string;
+        distribution?: string;
+    };
     version: string;
     last_ping?: number;
     stats?: {

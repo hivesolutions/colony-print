@@ -37,6 +37,43 @@ export const NodeShow: FC = () => {
         fetchNode();
     }, [fetchNode]);
 
+    const system = node?.system;
+
+    const systemFields = system
+        ? [
+              {
+                  label: "System",
+                  value:
+                      [system.name, system.release]
+                          .filter(Boolean)
+                          .join(" ") || "-"
+              },
+              ...(system.distribution
+                  ? [
+                        {
+                            label: "Distribution",
+                            value: system.distribution
+                        }
+                    ]
+                  : []),
+              {
+                  label: "System Version",
+                  value: system.version || "-"
+              },
+              {
+                  label: "Architecture",
+                  value:
+                      [
+                          system.machine,
+                          system.architecture &&
+                              `(${system.architecture})`
+                      ]
+                          .filter(Boolean)
+                          .join(" ") || "-"
+              }
+          ]
+        : [];
+
     const fields = node
         ? [
               { label: "ID", value: id || "-" },
@@ -63,6 +100,7 @@ export const NodeShow: FC = () => {
               },
               { label: "Platform", value: node.platform || "-" },
               { label: "OS", value: node.os || "-" },
+              ...systemFields,
               { label: "Version", value: node.version || "-" },
               {
                   label: "Last Seen",
@@ -150,7 +188,38 @@ export const NodeShow: FC = () => {
                     </Button>
                 }
             />
+            {stats && (
+                <div className="node-show-stats">
+                    <StatCard
+                        label="Total jobs"
+                        value={stats.total}
+                    />
+                    <StatCard
+                        label="Finished"
+                        value={stats.finished}
+                    />
+                    <StatCard
+                        label="Errored"
+                        value={stats.error}
+                        style={
+                            stats.error > 0
+                                ? ["node-show-stat-error"]
+                                : []
+                        }
+                    />
+                    <StatCard
+                        label="In flight"
+                        value={stats.in_flight}
+                    />
+                </div>
+            )}
             <DetailGrid fields={fields} loading={loading} />
+            {stats && (
+                <div className="node-show-section">
+                    <Title level={3}>Print Diagnostics</Title>
+                    <DetailGrid fields={lastFields} />
+                </div>
+            )}
             {engineEntries.map(([engine, info]) => {
                 const entries = Object.entries(
                     info as Record<string, unknown>
@@ -260,35 +329,6 @@ export const NodeShow: FC = () => {
                         data={libraryEntries}
                         emptyMessage="No libraries"
                     />
-                </div>
-            )}
-            {stats && (
-                <div className="node-show-section">
-                    <Title level={3}>Print Diagnostics</Title>
-                    <div className="node-show-stats">
-                        <StatCard
-                            label="Total jobs"
-                            value={stats.total}
-                        />
-                        <StatCard
-                            label="Finished"
-                            value={stats.finished}
-                        />
-                        <StatCard
-                            label="Errored"
-                            value={stats.error}
-                            style={
-                                stats.error > 0
-                                    ? ["node-show-stat-error"]
-                                    : []
-                            }
-                        />
-                        <StatCard
-                            label="In flight"
-                            value={stats.in_flight}
-                        />
-                    </div>
-                    <DetailGrid fields={lastFields} />
                 </div>
             )}
         </div>

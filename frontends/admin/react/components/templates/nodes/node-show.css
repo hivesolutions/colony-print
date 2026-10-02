@@ -20,6 +20,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
+    margin-bottom: 24px;
 }
 
 .node-show-stat-error .stat-card-value {
