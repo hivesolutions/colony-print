@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Converted documents sent with the base64 content type even when not encoded in base64 - [#36](https://github.com/hivesolutions/colony-print/issues/36)
 
 ## [0.22.0] - 2026-10-02
 
