@@ -78,9 +78,11 @@ Type: filesandordirs; Name: "{app}\python"
 [Files]
 Source: "{#BuildDir}\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the service wrapper of the Windows XP nodes (NSSM) has no configuration
-; file, as the service is configured by the installer
+; file, as the service is configured by the installer, that also runs the
+; redistributable of the Visual C++ 2008 runtime required by their Python
 #ifdef XP
 Source: "{#BuildDir}\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\vcredist_x86.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 #else
 Source: "{#BuildDir}\{#ServiceName}.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "service.xml"; DestDir: "{app}"; DestName: "{#ServiceName}.xml"; Flags: ignoreversion
@@ -1068,6 +1070,24 @@ begin
   WriteConfig;
 #ifndef XP
   Icacls('"' + ConfigPath + '" /setowner *S-1-5-32-544 /C /Q');
+#endif
+
+#ifdef XP
+  { installs the runtime of the Python of the Windows XP nodes (Visual C++
+    2008), that is not part of that Python nor of Windows XP, so that the
+    node is not able to start without it, notice that an already installed
+    runtime and a required restart are not failures }
+  Log('Installing the Visual C++ 2008 runtime');
+  if not Exec(ExpandConstant('{tmp}\vcredist_x86.exe'), '/q', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) or ((ResultCode <> 0) and
+    (ResultCode <> 1638) and (ResultCode <> 3010)) then
+  begin
+    ServiceError := True;
+    Log('Could not install the Visual C++ 2008 runtime (code ' + IntToStr(ResultCode) + ')');
+    SuppressibleMsgBox('The Visual C++ 2008 runtime, required by the node, could not ' +
+      'be installed (code ' + IntToStr(ResultCode) + ').', mbError, MB_OK, IDOK);
+    Exit;
+  end;
 #endif
 
   { installs the service, the one of the Windows XP nodes (NSSM) being

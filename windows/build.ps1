@@ -14,7 +14,8 @@ and a 32 bit Python 2.7 interpreter (the last one that runs on Windows XP),
 the Python of the node is extracted from its installer (as it has no embedded
 distribution), the service wrapper is NSSM (as WinSW requires a .NET Framework
 that Windows XP lacks) and the installer is compiled with Inno Setup 5 (the
-last one that supports Windows XP).
+last one that supports Windows XP), bundling the redistributable of the Visual
+C++ 2008 runtime required by that Python.
 
 .EXAMPLE
 .\windows\build.ps1 -Python C:\Python314\python.exe
@@ -29,6 +30,7 @@ param(
     [string]$WinSWSha256 = "b5066b7bbdfba1293e5d15cda3caaea88fbeab35bd5b38c41c913d492aadfc4f",
     [string]$NssmVersion = "2.24",
     [string]$NssmSha256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743",
+    [string]$VCRedistSha256 = "8742bcbf24ef328a72d2a27b693cc7071e38d3bb4b9b44dec42aa3d2c8d61d92",
     [string]$Iscc = "",
     [switch]$XP
 )
@@ -225,6 +227,20 @@ if ($XP) {
     $NssmDir = Join-Path $BuildDir "nssm-$NssmVersion"
     Copy-Item -Path (Join-Path $NssmDir "win32\nssm.exe") -Destination (Join-Path $BuildDir "nssm.exe")
     Remove-Item -Recurse -Force $NssmDir
+
+    # downloads the redistributable of the Visual C++ 2008 runtime (32 bit),
+    # verifying its digest, that is run by the installer of the node, as the
+    # Python of the node requires this runtime, which is not part of the Python
+    # extracted from its installer (nor of Windows XP), so that the node would
+    # not start in the machines without it
+    Write-Host "Downloading Visual C++ 2008 redistributable"
+    $VCRedist = Join-Path $BuildDir "vcredist_x86.exe"
+    $VCRedistUrl = "https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x86.exe"
+    Invoke-WebRequest -Uri $VCRedistUrl -OutFile $VCRedist
+    $VCRedistHash = (Get-FileHash -Path $VCRedist -Algorithm SHA256).Hash.ToLower()
+    if ($VCRedistHash -ne $VCRedistSha256.ToLower()) {
+        throw "Invalid Visual C++ redistributable digest $VCRedistHash (expected $VCRedistSha256)"
+    }
 }
 else {
     # downloads the WinSW service wrapper, verifying its digest, that is renamed
