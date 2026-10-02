@@ -6,7 +6,7 @@
 <service>
     <id>colony-print-node</id>
     <name>Colony Print Node</name>
-    <description>Receives the print jobs of the Colony Print server and prints them on the printers of this machine, updating itself from the server whenever it starts.</description>
+    <description>Receives the print jobs of the Colony Print server and prints them on the printers of this machine, updating itself from PyPI whenever it starts.</description>
     <executable>%BASE%\python\python.exe</executable>
     <arguments>-I -u "%BASE%\boot.py" --config "%ProgramData%\Colony Print Node\config.env"</arguments>
     <workingdirectory>%ProgramData%\Colony Print Node</workingdirectory>

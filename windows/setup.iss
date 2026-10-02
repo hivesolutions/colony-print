@@ -670,6 +670,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
+  Trusted: Boolean;
 begin
   { the node is only installed under the program files, where the users
     can't change anything, as the service runs its files (eg: the boot
@@ -694,13 +695,16 @@ begin
 
   { verifies the data directory (once more) now that the installation starts,
     as it may have been created by another user since the setup started,
-    removing it when it's not trusted, and creates it (restricted) when it
-    doesn't exist, so that only a data directory created by the installer
-    (or one that was already trusted) is ever used }
-  if not ServiceExists and DirExists(DataDir) then
+    removing it when it's not trusted, and creates it (restricted) unless
+    it was verified, which fails (aborting the setup) in case it appeared
+    meanwhile, so that only a data directory created by the installer (or
+    one that was verified) is ever used }
+  Trusted := ServiceExists;
+  if not Trusted and DirExists(DataDir) then
   begin
     try
-      if not TrustedPath(DataDir) then
+      Trusted := TrustedPath(DataDir);
+      if not Trusted then
         if not RemoveUntrustedDataDir then
           Result := 'Could not remove the untrusted data directory ' + DataDir + '.';
     except
@@ -709,7 +713,7 @@ begin
     if Result <> '' then
       Exit;
   end;
-  if not DirExists(DataDir) then
+  if not Trusted or not DirExists(DataDir) then
     if not CreateDataDir then
     begin
       Result := 'Could not create the data directory ' + DataDir + '.';

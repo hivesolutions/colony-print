@@ -15,7 +15,7 @@ This project includes two main components:
 * PDF generation with custom fonts and images
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * [CUPS](https://en.wikipedia.org/wiki/CUPS) printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
-* Windows installer for the nodes, which update themselves from the server (see [Windows Node](#windows-node))
+* Windows installer for the nodes, which update themselves from PyPI (see [Windows Node](#windows-node))
 
 ## Binie Specification
 
