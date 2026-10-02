@@ -888,11 +888,25 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self._os_release(b'PRETTY_NAME="Fedora Linux 40"\n', path=fallback_path)
         self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
 
-        self._os_release(b'PRETTY_NAME="Ubuntu \xff\xfe"\n')
-        self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
-
         self._os_release(b'PRETTY_NAME="Ubuntu 24.04.1 LTS"\n')
         self.assertEqual(self.node._info_distribution(), "Ubuntu 24.04.1 LTS")
+
+        # the fallback is only used when the first file is missing, so
+        # its description is never used for a first file without one
+        self._os_release(b'NAME="Ubuntu"\nVERSION_ID="24.04"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'PRETTY_NAME=""\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'PRETTY_NAME="Ubuntu \xff\xfe"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        os.remove(self.os_release_path)
+        self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
+
+        os.mkdir(self.os_release_path)
+        self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
 
     def test_ensure_format(self):
         self.node._ensure_format(None)

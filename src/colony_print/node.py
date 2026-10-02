@@ -54,7 +54,8 @@ module to be imported and the name of its version attribute """
 
 OS_RELEASE_PATHS = ("/etc/os-release", "/usr/lib/os-release")
 """ The paths to the files that describe the distribution of the
-operating system (linux only), the first valid one being used """
+operating system (linux only), only the first one that exists is
+used, the other ones being fallbacks for when it's missing """
 
 EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
@@ -757,6 +758,9 @@ class ColonyPrintNode(object):
         value in case it's not available.
         """
 
+        # uses only the first file that exists (os-release specification),
+        # even if it has no description or can't be read, as the other
+        # files are fallbacks only for when it's missing
         for path in OS_RELEASE_PATHS:
             if not os.path.isfile(path):
                 continue
@@ -764,12 +768,13 @@ class ColonyPrintNode(object):
                 with open(path, "rb") as file:
                     data = file.read().decode("utf-8")
             except Exception:
-                continue
+                return None
             for line in data.splitlines():
                 key, _separator, value = line.partition("=")
                 if not key.strip() == "PRETTY_NAME":
                     continue
                 return value.strip().strip("\"'") or None
+            return None
         return None
 
     def _ensure_format(self, format):
