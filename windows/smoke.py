@@ -513,12 +513,15 @@ class Smoke(object):
         return [line.strip() for line in output.decode("utf-8", "ignore").splitlines()]
 
     def protected(self, path):
+        # the access is retrieved directly with .NET, as the security module
+        # of PowerShell may not be loaded (eg: the one of another PowerShell)
         output = subprocess.check_output(
             [
                 "powershell.exe",
                 "-NoProfile",
                 "-Command",
-                "(Get-Acl -LiteralPath '%s').AreAccessRulesProtected" % path,
+                "[System.IO.Directory]::GetAccessControl('%s').AreAccessRulesProtected"
+                % path,
             ]
         )
         return output.decode("utf-8", "ignore").strip() == "True"
