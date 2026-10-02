@@ -460,6 +460,33 @@ class ColonyPrintNodeTest(unittest.TestCase):
             MockNPColony.calls, [("office", data_b64, dict(title="invoice"))]
         )
 
+    def test_handle_job_type(self):
+        data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
+        result = self.node._handle_job(
+            dict(data_b64=data_b64, name="hello", type="text")
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["handler"], "text")
+
+        # a job of a type that is not handled by the node is not printed,
+        # so it must fail instead of being reported as a finished job
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_job(
+                dict(data_b64=data_b64, name="hello", type="Text")
+            ),
+        )
+
+        self.node.node_mode = "normal"
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node.print_job(
+                dict(data_b64=data_b64, name="hello", type="zpl")
+            ),
+        )
+        self.assertEqual(MockNPColony.calls, [])
+        self.assertEqual(MockGravostyleAPI.calls, [])
+
     def test_handle_npcolony_binie(self):
         self.node._handle_npcolony(
             colony_print.controllers.node.HELLO_WORLD_B64,

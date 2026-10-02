@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Jobs of a type not handled by the node reported as finished without being printed, now reported as errors
 
 ## [0.21.0] - 2026-10-02
 

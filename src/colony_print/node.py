@@ -366,6 +366,8 @@ class ColonyPrintNode(object):
             result = self._handle_text(data_b64)
             return dict(result="success", handler="text", data=result)
 
+        raise appier.OperationalError("Type '%s' not valid" % type)
+
     def _handle_npcolony(self, data_b64, format=None, printer=None, options=dict()):
         if not self._has_npcolony():
             raise appier.OperationalError("npcolony engine is not available")
