@@ -155,6 +155,7 @@ The fonts of a Binie or XMPL document may be sent in the `fonts` field of the pr
 * The installed fonts are available to every later job of the node, as the fonts installed in the system are, and they are used before the system ones. When several files of the same family and style are installed, the most recently installed (or referenced) one is used.
 * A font that can't be installed (download failure, MD5 not installed or not matching, not TrueType, license that doesn't allow embedding the font, name or style not matching the font file, larger than `FONT_MAX_SIZE`) fails the job with an error that names it, the fonts are never silently replaced by other fonts.
 * On Linux (CUPS) the fonts are embedded in the PDF document, on Windows they're loaded in the system for the node process only, so no administration rights are required.
+* On Windows the font files are parsed by the font engine of the system (in kernel mode before Windows 10, eg: Windows XP), so fonts should only be sent by trusted clients, as the admin token they require already implies.
 
 The fonts installed on a node are listed by `GET /nodes/<id>/fonts`, and may be installed before any job (so that later jobs reference them by `md5` alone or not at all) by `POST /nodes/<id>/fonts`, with the same `fonts` array (`data_b64` or `url` entries), which queues a job of the `fonts` type whose result lists the installed fonts.
 
