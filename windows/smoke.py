@@ -21,15 +21,19 @@ except ImportError:
     import urllib2 as urllib_error
 
 XP = "--xp" in sys.argv[1:]
+REPLACE = "--replace" in sys.argv[1:]
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_PATH = os.path.join(ROOT, "dist")
 WHEELS_PATH = os.path.join(ROOT, "build", "windows", "wheels")
 WORK_PATH = os.path.join(ROOT, "build", "smoke")
-SETUP_NAME = (
-    "colony-print-node-setup-xp-*.exe" if XP else "colony-print-node-setup-[0-9]*.exe"
+XP_SETUP_NAME = "colony-print-node-setup-xp-*.exe"
+XP_APP_PATH = os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Colony Print Node")
+SETUP_NAME = XP_SETUP_NAME if XP else "colony-print-node-setup-[0-9]*.exe"
+APP_PATH = (
+    XP_APP_PATH
+    if XP
+    else os.path.join(os.environ.get("ProgramFiles", ""), "Colony Print Node")
 )
-PROGRAM_FILES = "ProgramFiles(x86)" if XP else "ProgramFiles"
-APP_PATH = os.path.join(os.environ.get(PROGRAM_FILES, ""), "Colony Print Node")
 DATA_PATH = os.path.join(os.environ.get("ProgramData", ""), "Colony Print Node")
 SETUP_LOG_PATH = os.path.join(WORK_PATH, "setup.log")
 SERVER_LOG_PATH = os.path.join(WORK_PATH, "server.log")
@@ -80,6 +84,10 @@ class Smoke(object):
     of the node (2.7) updating itself with a pip that is not able to list
     the versions of a package and with a configuration that is not kept by
     the uninstall, as its installer is not able to verify (and trust) it.
+
+    The replacement of the node of each installer by the one of the other
+    installer is the one tested when run with the --replace argument, which
+    requires both installers.
     """
 
     def __init__(self):
@@ -94,6 +102,9 @@ class Smoke(object):
 
         try:
             self.start_server()
+            if REPLACE:
+                self.test_replace_other()
+                return
             current, version = self.start_index()
             self.test_install()
             self.test_update(version)
@@ -402,6 +413,33 @@ class Smoke(object):
         self.wait_node(last_ping=last_ping)
         self.uninstall()
 
+    def test_replace_other(self):
+        # installs the node and then, without any parameter, the Windows XP
+        # node over it and the node over the Windows XP one, each of them must
+        # replace the node of the other installer (uninstalling it) and keep
+        # its configuration, so that the node registers itself once more with
+        # the Python of the installer, uninstalling it
+        self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        node = self.wait_node()
+        assert not "CPython 2.7" in node["platform"], node["platform"]
+        for name, path, other_path in (
+            (XP_SETUP_NAME, XP_APP_PATH, APP_PATH),
+            (SETUP_NAME, APP_PATH, XP_APP_PATH),
+        ):
+            last_ping = self.node()["last_ping"]
+            self.install([], name=name)
+            assert self.service_state() == "RUNNING", "Service is not running"
+            image = self.service_image()
+            assert image.lower().startswith(path.lower() + os.sep), "Not replaced"
+            uninstaller = os.path.join(other_path, "unins000.exe")
+            wait_for(lambda: not os.path.exists(uninstaller), "other node uninstall")
+            config = read(os.path.join(DATA_PATH, "config.env"))
+            assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
+            node = self.wait_node(last_ping=last_ping)
+            xp = "CPython 2.7" in node["platform"]
+            assert xp == (path == XP_APP_PATH), node["platform"]
+        self.uninstall()
+
     def uninstall(self):
         uninstaller = os.path.join(APP_PATH, "unins000.exe")
         subprocess.check_call(
@@ -429,8 +467,8 @@ class Smoke(object):
         subprocess.check_call(["net", "stop", SERVICE])
         subprocess.check_call(["net", "start", SERVICE])
 
-    def install(self, args):
-        setups = glob.glob(os.path.join(DIST_PATH, SETUP_NAME))
+    def install(self, args, name=SETUP_NAME):
+        setups = glob.glob(os.path.join(DIST_PATH, name))
         assert setups, "No installer found in dist"
         log("Installing %s" % os.path.basename(setups[0]))
         code = subprocess.call(

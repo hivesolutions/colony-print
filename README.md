@@ -257,7 +257,7 @@ Both installers use the same service, so only one of the nodes is installed in a
 .\windows\build.ps1 -XP -Python C:\Python27\python.exe
 ```
 
-The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release.
+The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release. It also installs each of the installers over the node of the other one, to verify that the node is replaced.
 
 ## Admin UI
 

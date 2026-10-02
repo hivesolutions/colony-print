@@ -464,10 +464,11 @@ class ColonyPrintNode(object):
 
         self._ensure_format(format)
 
-        # encodes the name of the printer (as UTF-8) in Python 2, as its
-        # unicode strings are only accepted by npcolony when they are ASCII,
-        # the encoded name being converted by npcolony into the one of the
-        # system (eg: the ANSI code page of windows)
+        # encodes the name of the printer (as UTF-8) in Python 2, as npcolony
+        # only accepts it as an unicode string when it's ASCII (unlike the
+        # values of the options, that are encoded by npcolony), the encoded
+        # name being converted by npcolony into the one of the system (eg:
+        # the ANSI code page of windows)
         if printer and not isinstance(printer, str):
             printer = printer.encode("utf-8")
 

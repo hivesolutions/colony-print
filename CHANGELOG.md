@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-*
+* The Windows installers replace the node installed by the other installer (uninstalling it and keeping its configuration), as both use the same service
 
 ### Fixed
 

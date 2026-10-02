@@ -562,20 +562,37 @@ begin
     GetShortName(AddBackslash(ExpandConstant('{app}')))) = 0;
 end;
 
+{ Retrieves the directory where the other installer (the one of the Windows
+  XP nodes or the one of the other nodes) installs its node, the program files
+  of the other architecture, empty in case there's none (32 bit Windows) }
+function OtherDir: String;
+begin
+  Result := '';
+#ifdef XP
+  if IsWin64 then
+    Result := ExpandConstant('{pf64}\{#AppName}');
+#else
+  Result := ExpandConstant('{commonpf32}\{#AppName}');
+#endif
+end;
+
 { Removes the node of the other installer, whose service would otherwise be
-  kept instead of the one of this installer, by running its uninstaller (the
-  one next to the wrapper of its service), that removes its service and its
-  files while keeping its configuration, and waiting for the service to be
-  removed (as the uninstaller returns before it's done), the service is deleted
-  in case there's no uninstaller (or it fails), returning if it was removed }
+  kept instead of the one of this installer, by running its uninstaller, that
+  removes its service and its files while keeping its configuration, and
+  waiting for the service to be removed (as the uninstaller returns before
+  it's done), notice that the uninstaller is only run when the wrapper of the
+  service is in the directory of the other installer, so that no other program
+  is ever run, the service is deleted in case it's not the one of the other
+  installer (or its uninstaller fails), returning if it was removed }
 function RemoveOtherNode: Boolean;
 var
   Uninstaller: String;
   ResultCode, I: Integer;
 begin
   Log('Removing the ' + ServiceName + ' service of another installer');
-  Uninstaller := ExtractFilePath(ServiceImage) + 'unins000.exe';
-  if (ServiceImage <> '') and FileExists(Uninstaller) then
+  Uninstaller := AddBackslash(OtherDir) + 'unins000.exe';
+  if (OtherDir <> '') and (CompareText(GetShortName(ExtractFilePath(ServiceImage)),
+    GetShortName(AddBackslash(OtherDir))) = 0) and FileExists(Uninstaller) then
   begin
     Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
