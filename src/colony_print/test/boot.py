@@ -34,18 +34,21 @@ run by the boot for the update of the packages of the node """
 class MockSubprocess(object):
     """
     Stand-in for the subprocess module that records the commands that
-    are called and returns the configured exit codes (one for each call,
-    the last one being kept) or raises the configured error, so that the
-    update of the packages can be exercised without pip.
+    are called (and their environments) and returns the configured exit
+    codes (one for each call, the last one being kept) or raises the
+    configured error, so that the update of the packages can be exercised
+    without pip.
     """
 
     codes = [0]
     error = None
     calls = []
+    envs = []
 
     @staticmethod
-    def call(command):
+    def call(command, env=None):
         MockSubprocess.calls.append(command)
+        MockSubprocess.envs.append(env)
         if MockSubprocess.error:
             raise MockSubprocess.error
         if len(MockSubprocess.codes) > 1:
@@ -90,6 +93,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         MockSubprocess.codes = [0]
         MockSubprocess.error = None
         MockSubprocess.calls = []
+        MockSubprocess.envs = []
         MockColonyPrintNode.loops = 0
         self._subprocess = colony_print.boot.subprocess
         colony_print.boot.subprocess = MockSubprocess
@@ -209,6 +213,22 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(
             MockSubprocess.calls, [PIP_COMMAND + ["colony-print", "npcolony"]]
         )
+
+        # pip runs with the environment of the node (eg: with its PIP_* values)
+        # but without any of its configuration files, as its global one may be
+        # created by any user, leaving the environment of the node unchanged
+        env = MockSubprocess.envs[0]
+        self.assertEqual(env["PIP_CONFIG_FILE"], os.devnull)
+        self.assertEqual(env["SECRET_KEY"], "key")
+        self.assertEqual("PIP_CONFIG_FILE" in self.environ, False)
+
+        self.environ.update(PIP_CONFIG_FILE="pip.ini", PIP_PROXY="http://proxy:8080")
+        MockSubprocess.envs = []
+        self.boot.update()
+        self.assertEqual(MockSubprocess.envs[0]["PIP_CONFIG_FILE"], os.devnull)
+        self.assertEqual(MockSubprocess.envs[0]["PIP_PROXY"], "http://proxy:8080")
+        del self.environ["PIP_CONFIG_FILE"]
+        del self.environ["PIP_PROXY"]
 
         # the versions of the packages are constrained (pinned or rolled back)
         # by the configuration and the packages are retrieved from the custom

@@ -144,9 +144,18 @@ class ColonyPrintBoot(object):
         command += requirements
 
         logging.info("Updating packages %s" % ", ".join(requirements))
+
+        # runs pip without any of its configuration files, as its global one
+        # (eg: C:\ProgramData\pip\pip.ini) may be created by any user and
+        # would make the update (run by the system account) use other packages,
+        # notice that pip may still be configured (eg: PIP_PROXY) with values
+        # in the configuration of the node, as they're in the environment
+        env = dict(self.environ)
+        env["PIP_CONFIG_FILE"] = os.devnull
+
         retries = max(self.retries, 1)
         for attempt in range(retries):
-            code = subprocess.call(command)
+            code = subprocess.call(command, env=env)
             if code == 0:
                 return requirements
             if attempt == retries - 1:

@@ -185,7 +185,7 @@ The node is installed in `C:\Program Files\Colony Print Node`. Its configuration
 
 ### Self-Update
 
-Every time the service starts, the node updates colony-print and npcolony to their newest versions in PyPI (`pip install --upgrade`), only installing their wheels (nothing is compiled in the node) and skipping the versions that don't support its Python (`Requires-Python`). Their dependencies are only updated when required. A failed update (e.g. without internet access) only logs a warning and never prevents the node from running, as it keeps the installed packages, and the service runs the boot script from a copy outside of the packages (`C:\Program Files\Colony Print Node\boot.py`), so a broken or interrupted update never prevents it from starting.
+Every time the service starts, the node updates colony-print and npcolony to their newest versions in PyPI (`pip install --upgrade`), only installing their wheels (nothing is compiled in the node) and skipping the versions that don't support its Python (`Requires-Python`). Their dependencies are only updated when required. pip ignores its configuration files (e.g. `C:\ProgramData\pip\pip.ini`, which any user may create), but may be configured with `PIP_*` values in `config.env` (e.g. `PIP_PROXY`). A failed update (e.g. without internet access) only logs a warning and never prevents the node from running, as it keeps the installed packages, and the service runs the boot script from a copy outside of the packages (`C:\Program Files\Colony Print Node\boot.py`), so a broken or interrupted update never prevents it from starting.
 
 The update is configured in `config.env`:
 
