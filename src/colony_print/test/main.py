@@ -162,11 +162,23 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.app.jobs_info["missing"] = dict(
             id="missing", name="missing", node_id="node", status="finished"
         )
+        self.app.jobs_info["invalid"] = dict(
+            id="invalid",
+            name="invalid",
+            node_id="node",
+            status="finished",
+            finish_time=50.0,
+            result=dict(result="unknown"),
+        )
         self.app.jobs_info["unknown"] = dict(id="unknown", node_id="node")
+
+        # the jobs finished without a success result have not been printed
+        # (eg: the ones of a type not handled by the node, that have an
+        # empty result), so they are counted as errored and not as finished
         stats = self.app.node_stats("node")
-        self.assertEqual(stats["total"], 3)
-        self.assertEqual(stats["finished"], 2)
-        self.assertEqual(stats["error"], 0)
+        self.assertEqual(stats["total"], 4)
+        self.assertEqual(stats["finished"], 0)
+        self.assertEqual(stats["error"], 3)
         self.assertEqual(stats["in_flight"], 0)
         self.assertEqual(
             stats["last"],

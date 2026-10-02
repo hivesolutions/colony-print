@@ -28,9 +28,10 @@ class ColonyPrintApp(appier.APIApp):
         identifier from the jobs retained by the server, the number
         of jobs (total and by status) and the last job to be finished.
 
-        The errored jobs are the finished ones for which the node has
-        reported an error result (there's no error status), and are
-        not counted as finished jobs.
+        The finished jobs are only the ones for which the node has
+        reported a success result, the other ones that have reached the
+        finished status (with an error result or with no result at all)
+        being counted as errored jobs, as there's no error status.
 
         :type id: String
         :param id: The identifier of the node to compute the statistics.
@@ -55,10 +56,10 @@ class ColonyPrintApp(appier.APIApp):
                 stats["in_flight"] += 1
             elif status == "cancelled":
                 stats["cancelled"] += 1
-            elif status == "finished" and result.get("result", None) == "error":
-                stats["error"] += 1
-            elif status == "finished":
+            elif status == "finished" and result.get("result", None) == "success":
                 stats["finished"] += 1
+            elif status == "finished":
+                stats["error"] += 1
 
             # keeps the finished job with the most recent finish time
             # as the last job of the node (the last one to be printed)
