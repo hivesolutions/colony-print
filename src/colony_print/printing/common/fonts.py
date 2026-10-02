@@ -259,6 +259,42 @@ def register_font(font):
     reportlab.pdfbase.pdfmetrics._dynFaceNames[face_name] = font
 
 
+def verify_xmpl(data):
+    """
+    Verifies that the provided XMPL document may be printed by a node,
+    with a printing document as its root element and only with inline
+    images (source), as the paths of the images would be read from the
+    file system of the node (any file the node is able to read), raising
+    an exception otherwise.
+
+    :type data: String
+    :param data: The XMPL document to be verified.
+    :see: https://github.com/hivesolutions/colony-print/blob/master/doc/xmpl.md
+    """
+
+    import xml.dom.minidom
+
+    # verifies the root element of the document, as the parser of the
+    # printing language takes any root element as the printing document,
+    # and that no element has a path, as the path of an image may come
+    # from the image or from any of its ancestors (context)
+    document = xml.dom.minidom.parseString(data)
+    appier.verify(
+        document.documentElement.tagName == "printing_document",
+        message="Root element of the document is not a printing document",
+        code=400,
+    )
+    appier.verify(
+        not [
+            element
+            for element in document.getElementsByTagName("*")
+            if element.hasAttribute("path")
+        ],
+        message="Images of the document must be inline (source)",
+        code=400,
+    )
+
+
 def xmpl_fonts(data):
     """
     Retrieves the fonts declared by the provided XMPL document, in the
@@ -596,11 +632,12 @@ class FontCache(object):
 
         # replaces the file with the temporary one, note that older
         # versions of python are not able to replace (rename into) an
-        # existing file on windows, so the file is removed first
+        # existing file on windows, so the file is removed first there
+        # (on the other systems the rename replaces it atomically)
         if hasattr(os, "replace"):
             os.replace(temp_path, path)
         else:
-            if os.path.exists(path):
+            if os.name == "nt" and os.path.exists(path):
                 os.remove(path)
             os.rename(temp_path, path)
 

@@ -12,6 +12,7 @@ from .fonts import (
     font_info,
     font_file,
     register_font,
+    verify_xmpl,
     xmpl_fonts,
     FontCache,
 )

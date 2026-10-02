@@ -202,6 +202,15 @@ class NodeControllerTest(unittest.TestCase):
             code, result = self._print(data_b64=None, data=data, format="xmpl")
             self.assertEqual(code, 400)
 
+        # images read from the file system (of the node) are refused, only
+        # inline images (source) may be printed
+        data = '<printing_document name="logo"><image path="C:\\logo.bmp"/></printing_document>'
+        code, result = self._print(data_b64=None, data=data, format="xmpl")
+        self.assertEqual(code, 400)
+        self.assertEqual(
+            result["message"], "Images of the document must be inline (source)"
+        )
+
         data = self._xmpl(fonts=[dict(name="Colonia", url="ftp://fonts.hive.pt/c.ttf")])
         code, result = self._print(data_b64=None, data=data, format="xmpl")
         self.assertEqual(code, 400)
@@ -438,6 +447,12 @@ class NodeControllerTest(unittest.TestCase):
         self.assertRaises(
             appier.OperationalError,
             lambda: controller._verify_xmpl(b'<html name="hello_world"/>'),
+        )
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: controller._verify_xmpl(
+                b'<printing_document name="logo"><image path="logo.bmp"/></printing_document>'
+            ),
         )
 
     def test_ensure_capability(self):

@@ -956,6 +956,11 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 base64.b64encode(b"<printing_document>"), format="xmpl"
             ),
         )
+        data = b'<printing_document name="logo"><image path="/etc/passwd"/></printing_document>'
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_npcolony(base64.b64encode(data), format="xmpl"),
+        )
         self.assertEqual(len(MockNPColonyWindows.calls), 1)
 
     def test_is_binie(self):
@@ -1216,6 +1221,14 @@ class ColonyPrintNodeTest(unittest.TestCase):
             lambda: self.node._convert_xmpl(base64.b64encode(b"not a document")),
         )
 
+        # an image read from the file system of the node is refused (as the
+        # server may not have verified the document), only inline images
+        data = b'<printing_document name="logo"><image path="/etc/passwd"/></printing_document>'
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._convert_xmpl(base64.b64encode(data)),
+        )
+
     def test_handle_gravo_forwards_check_path(self):
         self.node._handle_gravo(self._gravo_payload(check_path=True, dry_run=True))
         self.assertEqual(len(MockGravostyleAPI.calls), 1)
@@ -1317,6 +1330,23 @@ class ColonyPrintNodeTest(unittest.TestCase):
             font_cache.path, os.path.expanduser(colony_print.node.FONTS_PATH)
         )
         self.assertEqual(font_cache.max_size, colony_print.FONT_MAX_SIZE)
+
+        # a windows node (service) without the path configured keeps the
+        # fonts in its data directory (the one with its configuration)
+        with open(os.path.join(self.target_dir, "config.env"), "wb") as file:
+            file.write(b"NODE_ID=node\r\n")
+        name, cwd = os.name, os.getcwd()
+        os.name = "nt"
+        os.chdir(self.target_dir)
+        try:
+            font_cache = self.node._build_font_cache()
+        finally:
+            os.name = name
+            os.chdir(cwd)
+        self.assertEqual(
+            os.path.realpath(font_cache.path),
+            os.path.realpath(os.path.join(self.target_dir, "fonts")),
+        )
 
     def test_install_fonts(self):
         fonts = self.node._install_fonts([self._font(), self._font(name="Binaria")])

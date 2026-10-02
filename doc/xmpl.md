@@ -74,6 +74,8 @@ Used for embedding images within the document layout.
 </image>
 ```
 
+The image is either inline, with its base64 encoded data in the `source` attribute, or read from the file system with the `path` attribute. The XMPL documents printed by the nodes (print jobs) only accept inline images, as the paths would be read from the file system of the node.
+
 #### Font Element: `font`
 
 Declares a font used by the document, to be installed on demand by the node that prints the document (with the `dynamic-fonts` capability). Font elements are direct children of the `printing_document` element (they are ignored elsewhere) and are never printed.

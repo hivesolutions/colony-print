@@ -676,9 +676,11 @@ class ColonyPrintNode(object):
 
         import colony_print
 
-        # decodes the XMPL document and retrieves the fonts it declares,
-        # an exception is raised in case the document is not valid
+        # decodes the XMPL document, verifying that it may be printed (as
+        # the server may not have verified it), and retrieves the fonts it
+        # declares, an exception is raised in case the document is not valid
         data = base64.b64decode(data_b64)
+        colony_print.verify_xmpl(data)
         fonts = colony_print.xmpl_fonts(data) + (fonts or [])
 
         # converts the XMPL document into a binie document using the binie
@@ -844,7 +846,13 @@ class ColonyPrintNode(object):
 
         import colony_print
 
-        fonts_path = appier.conf("FONTS_PATH", FONTS_PATH)
+        # uses the configured path of the font cache, defaulting on windows
+        # nodes to the data directory, the working directory of the service
+        # (with its configuration), as their boot script may not set it
+        fonts_path = appier.conf("FONTS_PATH", None)
+        if not fonts_path and os.name == "nt" and os.path.isfile("config.env"):
+            fonts_path = os.path.abspath("fonts")
+        fonts_path = fonts_path or FONTS_PATH
         font_max_size = appier.conf(
             "FONT_MAX_SIZE", colony_print.FONT_MAX_SIZE, cast=int
         )

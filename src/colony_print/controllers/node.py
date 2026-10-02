@@ -7,8 +7,6 @@ import uuid
 import time
 import base64
 
-import xml.dom.minidom
-
 import appier
 
 HELLO_WORLD_B64 = "SGVsbG8gV29ybGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
@@ -390,6 +388,8 @@ class NodeController(appier.Controller):
                 data = base64.b64decode(data_b64)
                 declared = colony_print.xmpl_fonts(data)
                 self._verify_xmpl(data)
+            except appier.OperationalError:
+                raise
             except Exception:
                 raise appier.OperationalError(
                     message="Document is not a valid XMPL document", code=400
@@ -412,8 +412,9 @@ class NodeController(appier.Controller):
     def _verify_xmpl(self, data):
         """
         Verifies that the provided data is a valid XMPL document, with a
-        printing document as its root element, that is converted into a
-        binie document (as the node does), raising an exception otherwise.
+        printing document as its root element and only inline images, that
+        is converted into a binie document (as the node does), raising an
+        exception otherwise.
 
         :type data: String
         :param data: The XMPL document to be verified.
@@ -422,14 +423,9 @@ class NodeController(appier.Controller):
 
         import colony_print
 
-        # verifies the root element of the document, as the parser of
-        # the printing language takes any root element as the printing
-        # document, and then converts the document into binie
-        document = xml.dom.minidom.parseString(data)
-        appier.verify(
-            document.documentElement.tagName == "printing_document",
-            message="Root element of the document is not a printing document",
-        )
+        # verifies that the document may be printed by a node (its root
+        # element and its images) and then converts the document into binie
+        colony_print.verify_xmpl(data)
         manager = colony_print.PrintingManager()
         manager.load()
         manager.print_language(data, dict(name="binie", file=appier.legacy.BytesIO()))

@@ -329,6 +329,27 @@ class FontsTest(unittest.TestCase):
         )
         self.assertEqual(get_font("RegisterD") is font_b, True)
 
+    def test_verify_xmpl(self):
+        colony_print.verify_xmpl(EXAMPLE)
+        colony_print.verify_xmpl(
+            '<printing_document name="logo"><image source="QUJD"/></printing_document>'
+        )
+
+        # the paths of the images (in the image or in an ancestor, as the
+        # paths are read from the context) are refused, as other roots
+        invalid = [
+            '<printing_document name="logo"><image path="C:\\logo.bmp"/></printing_document>',
+            '<printing_document name="logo"><block path="/etc/passwd">'
+            + "<image/></block></printing_document>",
+            '<printing_document name="logo" path="logo.bmp"/>',
+            '<html name="hello_world"/>',
+        ]
+        for data in invalid:
+            self.assertRaises(
+                appier.OperationalError, lambda: colony_print.verify_xmpl(data)
+            )
+        self.assertRaises(Exception, lambda: colony_print.verify_xmpl("not xml"))
+
     def test_xmpl_fonts(self):
         fonts = colony_print.xmpl_fonts(EXAMPLE)
         self.assertEqual(
@@ -811,6 +832,22 @@ class FontCacheTest(unittest.TestCase):
                 os.replace = replace
         with open(file_path, "rb") as file:
             self.assertEqual(file.read(), b"third")
+        self.assertEqual(self._files(), ["file.ttf", "other.ttf"])
+
+        # simulates an older version of python on windows, that removes the
+        # file before (the other systems replace it with the rename)
+        name = os.name
+        if replace:
+            del os.replace
+        os.name = "nt"
+        try:
+            font_cache._write(file_path, b"fourth")
+        finally:
+            os.name = name
+            if replace:
+                os.replace = replace
+        with open(file_path, "rb") as file:
+            self.assertEqual(file.read(), b"fourth")
         self.assertEqual(self._files(), ["file.ttf", "other.ttf"])
 
     def test_save(self):
