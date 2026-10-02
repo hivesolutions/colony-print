@@ -34,6 +34,7 @@ PDF_PRINTER = "Microsoft Print to PDF"
 PORT = 8686
 BASE_URL = "http://127.0.0.1:%d/" % PORT
 PLANTED_URL = b"http://127.0.0.1:1/packages"
+PACKAGES_KEY = "ci-packages"
 
 ACCOUNT_SCRIPT = """
 import logging, appier_extras, colony_print
@@ -60,7 +61,8 @@ class Smoke(object):
     Runs a local Colony Print server, that hosts the packages of the node
     with a newer version of colony-print, silently installs the node with
     the server and verifies that the node updates itself, registers itself
-    and prints a document, re-installing and uninstalling it at the end.
+    and prints a document, re-installing and uninstalling it at the end,
+    installing it once more with the configuration kept by the uninstall.
     """
 
     def __init__(self):
@@ -79,6 +81,7 @@ class Smoke(object):
             self.test_print()
             self.test_reinstall(version)
             self.test_uninstall()
+            self.test_install_kept(version)
         finally:
             self.dump_logs()
             self.stop_server()
@@ -92,6 +95,7 @@ class Smoke(object):
             PORT=str(PORT),
             LEVEL="INFO",
             DATA_PATH=os.path.join(WORK_PATH, "data"),
+            PACKAGES_KEY=PACKAGES_KEY,
         )
 
         # creates the admin account whose secret key is used both by the
@@ -132,12 +136,24 @@ class Smoke(object):
         for path in packages + [wheel_path]:
             name = os.path.basename(path)
             with open(path, "rb") as file:
-                code, _data = self.request(
-                    "PUT",
-                    "packages/" + name,
-                    data=file.read(),
-                    content_type="application/octet-stream",
-                )
+                data = file.read()
+
+            # the secret key (kept by the node) alone must not be able to
+            # publish packages, only together with the packages key
+            code, _data = self.request(
+                "PUT",
+                "packages/" + name,
+                data=data,
+                content_type="application/octet-stream",
+            )
+            assert code == 403, "Upload of '%s' without key (%d)" % (name, code)
+            code, _data = self.request(
+                "PUT",
+                "packages/" + name,
+                data=data,
+                content_type="application/octet-stream",
+                headers={"X-Packages-Key": PACKAGES_KEY},
+            )
             assert code == 200, "Upload of '%s' failed (%d)" % (name, code)
         log("Uploaded %d packages (colony-print %s)" % (len(packages) + 1, version))
         return version
@@ -267,6 +283,23 @@ class Smoke(object):
         self.wait_node(version, last_ping=last_ping)
 
     def test_uninstall(self):
+        self.uninstall()
+        assert not os.path.exists(os.path.join(APP_PATH, "python")), "Python left"
+        assert os.path.exists(os.path.join(DATA_PATH, "config.env")), "Config removed"
+
+    def test_install_kept(self, version):
+        # installs the node once more without any parameter, which must use
+        # the configuration kept by the uninstall, as the data directory and
+        # the configuration written by the installer are trusted (owned by
+        # the administrators), even without the service, uninstalling it
+        last_ping = self.node()["last_ping"]
+        self.install([])
+        assert self.service_state() == "RUNNING", "Service is not running"
+        assert "SECRET_KEY=%s" % self.key in read(os.path.join(DATA_PATH, "config.env"))
+        self.wait_node(version, last_ping=last_ping)
+        self.uninstall()
+
+    def uninstall(self):
         uninstaller = os.path.join(APP_PATH, "unins000.exe")
         subprocess.check_call(
             [uninstaller, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
@@ -275,8 +308,6 @@ class Smoke(object):
             lambda: not os.path.exists(uninstaller) and self.service_state() == None,
             "uninstall to finish",
         )
-        assert not os.path.exists(os.path.join(APP_PATH, "python")), "Python left"
-        assert os.path.exists(os.path.join(DATA_PATH, "config.env")), "Config removed"
 
     def install(self, args):
         setups = glob.glob(os.path.join(DIST_PATH, "colony-print-node-setup-*.exe"))
@@ -342,8 +373,12 @@ class Smoke(object):
         )
         return [line.strip() for line in output.decode("utf-8", "ignore").splitlines()]
 
-    def request(self, method, path, data=None, content_type=None, timeout=60):
-        headers = {"X-Secret-Key": self.key} if self.key else dict()
+    def request(
+        self, method, path, data=None, content_type=None, headers=None, timeout=60
+    ):
+        headers = dict(headers or dict())
+        if self.key:
+            headers["X-Secret-Key"] = self.key
         if content_type:
             headers["Content-Type"] = content_type
         request = urllib_request.Request(BASE_URL + path, data=data, headers=headers)

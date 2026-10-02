@@ -3,6 +3,7 @@
 
 import os
 import re
+import hmac
 import hashlib
 
 import appier
@@ -40,6 +41,11 @@ class PackageController(appier.Controller):
     The nodes list the packages, download the ones they don't have
     and install the newest version of each of them, so a version is
     rolled out by uploading its package and rolled back by removing it.
+
+    As the packages are run by every node, uploading and removing them
+    also requires the packages key (`PACKAGES_KEY`), sent in the
+    `X-Packages-Key` header, which (unlike the secret key) is never
+    kept by the nodes, so that a compromised node can't publish them.
     """
 
     def __init__(self, owner, *args, **kwargs):
@@ -61,6 +67,7 @@ class PackageController(appier.Controller):
         # retrieves the complete set of files sent in the (multipart)
         # request and stores each of them as a package, notice that
         # all the files are validated before storing any of them
+        self.verify_publish()
         files = self.field("file", [], multiple=True)
         files = [file for file in files if isinstance(file, tuple)]
         appier.verify(files, message="No package files provided", code=400)
@@ -90,6 +97,7 @@ class PackageController(appier.Controller):
     def update(self, name):
         # retrieves the "raw" data of the request, which should contain
         # the contents of the package, and stores it under the name
+        self.verify_publish()
         self.verify_name(name)
         data = self.request.get_data()
         appier.verify(data, message="No package data provided", code=400)
@@ -98,6 +106,7 @@ class PackageController(appier.Controller):
     @appier.route("/packages/<str:name>", "DELETE", json=True)
     @appier.ensure(token="admin")
     def delete(self, name):
+        self.verify_publish()
         self.verify_name(name)
         file_path = os.path.join(self.packages_path, name)
         appier.verify(
@@ -230,6 +239,24 @@ class PackageController(appier.Controller):
             WHEEL_REGEX.match(name or ""),
             message="Invalid package name, must be a wheel file",
             code=400,
+        )
+
+    def verify_publish(self):
+        # verifies that the request is allowed to publish (upload or remove)
+        # packages, with the packages key, compared in constant time, notice
+        # that the publishing is disabled when there's no packages key
+        packages_key = appier.conf("PACKAGES_KEY", None)
+        appier.verify(
+            packages_key, message="Publishing of packages is disabled", code=403
+        )
+        key = self.request.get_header("X-Packages-Key", "")
+        appier.verify(
+            hmac.compare_digest(
+                appier.legacy.bytes(key, encoding="utf-8"),
+                appier.legacy.bytes(packages_key, encoding="utf-8"),
+            ),
+            message="Invalid packages key",
+            code=403,
         )
 
     def normalize(self, name):

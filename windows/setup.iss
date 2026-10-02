@@ -92,6 +92,7 @@ var
   ParamConfig: TArrayOfString;
   DetectedPrinter: String;
   ServiceError: Boolean;
+  UntrustedDataDir: Boolean;
 
 function DataDir: String;
 begin
@@ -120,8 +121,28 @@ begin
   Value := Trim(Copy(Line, Index + 1, Length(Line)));
   if (Length(Value) > 1) and (Value[1] = Value[Length(Value)]) and
     ((Value[1] = '"') or (Value[1] = '''')) then
+  begin
     Value := Copy(Value, 2, Length(Value) - 2);
+    StringChangeEx(Value, '\"', '"', True);
+  end;
   Result := True;
+end;
+
+{ Builds the configuration line of the provided value, quoting (and escaping)
+  the value when it starts and ends with a quote, so that it's parsed back
+  (by the boot script of the node) with the same value }
+function ConfigLine(const Name, Value: String): String;
+var
+  Quoted: String;
+begin
+  Result := Name + '=' + Value;
+  if (Length(Value) > 1) and (Value[1] = Value[Length(Value)]) and
+    ((Value[1] = '"') or (Value[1] = '''')) then
+  begin
+    Quoted := Value;
+    StringChangeEx(Quoted, '"', '\"', True);
+    Result := Name + '="' + Quoted + '"';
+  end;
 end;
 
 function FindConfig(const Lines: TArrayOfString; const Name: String): Integer;
@@ -164,11 +185,11 @@ begin
     SetArrayLength(Lines, Count - 1);
   end
   else if Index >= 0 then
-    Lines[Index] := Name + '=' + Value
+    Lines[Index] := ConfigLine(Name, Value)
   else
   begin
     SetArrayLength(Lines, Count + 1);
-    Lines[Count] := Name + '=' + Value;
+    Lines[Count] := ConfigLine(Name, Value);
   end;
 end;
 
@@ -210,6 +231,20 @@ begin
       Dash := True;
   if Result = '' then
     Result := 'node';
+end;
+
+{ Verifies if the provided (explicit) node identifier is valid in the URLs
+  of the server, starting with a letter or a digit, followed by letters,
+  digits, dashes, underscores and dots }
+function ValidNodeId(const Id: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Id <> '';
+  for I := 1 to Length(Id) do
+    if not (((Id[I] >= 'a') and (Id[I] <= 'z')) or ((Id[I] >= 'A') and (Id[I] <= 'Z')) or
+      ((Id[I] >= '0') and (Id[I] <= '9')) or ((I > 1) and (Pos(Id[I], '-_.') > 0))) then
+      Result := False;
 end;
 
 function NormalizeUrl(Url: String): String;
@@ -273,18 +308,31 @@ end;
 { Verifies if the provided file (or directory) is owned by the system account
   or by the administrators, the only ones allowed to write the data directory
   of the node, as one created by any other user (eg: before the node was
-  installed) can't be trusted, notice that only a distinct exit code (and not
-  a failure or a PowerShell that runs nothing) is considered as trusted, as
-  Inno Setup has no way of retrieving the owner }
+  installed) can't be trusted, the owner is retrieved by PowerShell (as Inno
+  Setup has no way of retrieving it) directly with .NET, so that no module is
+  loaded (eg: the one of another PowerShell in the module path), notice that
+  only two distinct exit codes are accepted and that the verification fails
+  (raising) otherwise, so that a verification that didn't run (eg: blocked
+  PowerShell) never causes the removal of the data directory }
 function TrustedOwner(const Path: String): Boolean;
 var
+  Kind: String;
   ResultCode: Integer;
 begin
-  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -Command "if ((Get-Acl -LiteralPath ''' + Path +
-    ''').GetOwner([System.Security.Principal.SecurityIdentifier]).Value -in ' +
-    '@(''S-1-5-18'', ''S-1-5-32-544'')) { exit 64 } else { exit 1 }"', '', SW_HIDE,
-    ewWaitUntilTerminated, ResultCode) and (ResultCode = 64);
+  if DirExists(Path) then
+    Kind := 'Directory'
+  else
+    Kind := 'File';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "if ([System.IO.' + Kind +
+    ']::GetAccessControl(''' + Path + ''', ''Owner'').GetOwner(' +
+    '[System.Security.Principal.SecurityIdentifier]).Value -in ' +
+    '@(''S-1-5-18'', ''S-1-5-32-544'')) { exit 64 } else { exit 65 }"', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) or ((ResultCode <> 64) and (ResultCode <> 65)) then
+    RaiseException('Could not verify the owner of ' + Path + ' (code ' +
+      IntToStr(ResultCode) + ')');
+  Log('Owner of ' + Path + ' verified with code ' + IntToStr(ResultCode));
+  Result := ResultCode = 64;
 end;
 
 { Runs icacls with the provided parameters, returning if it succeeded }
@@ -300,13 +348,21 @@ end;
   is not trusted), taking its ownership and resetting its access first, as
   its creator may have denied the access to the administrators, so that its
   contents (eg: a configuration pointing to other packages) are never used }
-procedure RemoveUntrustedDataDir;
+function RemoveUntrustedDataDir: Boolean;
 begin
   Log('Removing the untrusted data directory ' + DataDir);
   Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /T /C /Q');
   Icacls('"' + DataDir + '" /reset /T /C /Q');
-  if not DelTree(DataDir, True, True, True) then
-    RaiseException('Could not remove the untrusted data directory ' + DataDir);
+  DelTree(DataDir, True, True, True);
+  Result := not DirExists(DataDir);
+end;
+
+function ServiceExists: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'query ' + ServiceName, '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
 { Retrieves the default printer of the user running the installer, as the
@@ -377,7 +433,11 @@ function ValidateNode: String;
 begin
   Result := '';
   if Trim(NodePage.Values[0]) = '' then
-    Result := 'The name of the node must be provided.';
+    Result := 'The name of the node must be provided.'
+  else if not ValidNodeId(NodeId) then
+    Result := 'The identifier of the node (' + NodeId + '), from the /ID parameter ' +
+      'or from the existing configuration, must only have letters, digits, dashes, ' +
+      'underscores and dots.';
 end;
 
 function ValidateEmail: String;
@@ -391,22 +451,43 @@ begin
     Result := 'The Mailme key must be provided in email mode.';
 end;
 
+{ Loads the configuration of the existing data directory, only when it can
+  be trusted, either because the service is installed (as the access to the
+  data directory is restricted before the service is installed) or because
+  it's owned by the system account or by the administrators, as a data
+  directory or configuration created by any other user (eg: before the node
+  was installed) can't be trusted, notice that the untrusted data directory
+  is only removed once the installation starts and that the setup is aborted
+  in case the owner can't be verified }
+function InitializeSetup: Boolean;
+var
+  Installed: Boolean;
+begin
+  Result := True;
+  try
+    Installed := ServiceExists;
+    if DirExists(DataDir) and not Installed then
+      UntrustedDataDir := not TrustedOwner(DataDir);
+    if FileExists(ConfigPath) and not UntrustedDataDir then
+    begin
+      if Installed then
+        LoadStringsFromFile(ConfigPath, Config)
+      else if TrustedOwner(ConfigPath) then
+        LoadStringsFromFile(ConfigPath, Config)
+      else
+        Log('Ignoring the untrusted configuration file ' + ConfigPath);
+    end;
+  except
+    Log(GetExceptionMessage);
+    SuppressibleMsgBox(GetExceptionMessage, mbCriticalError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;
+
 procedure InitializeWizard;
 var
   Mode, ParamPath: String;
 begin
-  { only the configuration written by the installer (or by the system and
-    administrators) is used, as a data directory or configuration created
-    by any other user (eg: before the node was installed) can't be trusted }
-  if DirExists(DataDir) and not TrustedOwner(DataDir) then
-    RemoveUntrustedDataDir;
-  if FileExists(ConfigPath) then
-  begin
-    if TrustedOwner(ConfigPath) then
-      LoadStringsFromFile(ConfigPath, Config)
-    else
-      Log('Ignoring the untrusted configuration file ' + ConfigPath);
-  end;
   ParamPath := ExpandConstant('{param:CONFIG|}');
   if ParamPath <> '' then
     if not LoadStringsFromFile(ParamPath, ParamConfig) then
@@ -551,14 +632,6 @@ begin
     Result := Result + NewLine + Space + 'Email receivers: ' + Trim(EmailPage.Values[0]);
 end;
 
-function ServiceExists: Boolean;
-var
-  ResultCode: Integer;
-begin
-  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'query ' + ServiceName, '', SW_HIDE,
-    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
-end;
-
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
@@ -573,6 +646,14 @@ begin
     Result := ValidateEmail;
   if Result <> '' then
     Exit;
+
+  { removes the untrusted data directory, only now that the installation
+    starts, so that none of its contents is used by the node }
+  if UntrustedDataDir and not RemoveUntrustedDataDir then
+  begin
+    Result := 'Could not remove the untrusted data directory ' + DataDir + '.';
+    Exit;
+  end;
 
   { stops the service of a previous installation, so that its files
     (eg: the Python interpreter) can be replaced }
@@ -629,7 +710,12 @@ begin
     RaiseException('Could not restrict the access to ' + DataDir);
   Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /T /C /Q');
   Icacls('"' + DataDir + '\*" /reset /T /C /Q');
+
+  { writes the configuration and takes its ownership, as a (new) file is
+    owned by the user running the installer (unless the policy makes the
+    administrators the owners), that is not trusted by the next install }
   WriteConfig;
+  Icacls('"' + ConfigPath + '" /setowner *S-1-5-32-544 /C /Q');
 
   if not ServiceExists then
   begin

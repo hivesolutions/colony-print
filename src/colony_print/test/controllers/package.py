@@ -22,17 +22,23 @@ NATIVE_NAME = "npcolony-1.3.0-cp314-cp314-win_amd64.whl"
 BOUNDARY = "colony-print-boundary"
 """ The boundary used in the multipart requests of the tests """
 
+PACKAGES_KEY = "colony-print-packages"
+""" The packages key, that allows the publishing of packages,
+used in the tests """
+
 
 class PackageControllerTest(unittest.TestCase):
     def setUp(self):
         self.packages_path = tempfile.mkdtemp(prefix="colony-print-packages-test-")
         appier.conf_s("PACKAGES_PATH", self.packages_path)
+        appier.conf_s("PACKAGES_KEY", PACKAGES_KEY)
         self.app = colony_print.ColonyPrintApp(level=logging.ERROR)
         self.controller = self.app.controllers["PackageController"]
 
     def tearDown(self):
         self.app.unload()
         appier.conf_r("PACKAGES_PATH")
+        appier.conf_r("PACKAGES_KEY")
         shutil.rmtree(self.packages_path, ignore_errors=True)
         adapter = appier.get_adapter()
         adapter.drop_db()
@@ -56,6 +62,9 @@ class PackageControllerTest(unittest.TestCase):
         except Exception as exception:
             self.skipTest("Accounts not available: %s" % str(exception))
         return [("X-Secret-Key", account.key)]
+
+    def _publish_headers(self):
+        return self._headers() + [("X-Packages-Key", PACKAGES_KEY)]
 
     def _upload(self, files, headers=[]):
         # builds the multipart request with the provided files, as sent
@@ -131,7 +140,7 @@ class PackageControllerTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.packages_path), [])
 
     def test_upload_authorized(self):
-        headers = self._headers()
+        headers = self._publish_headers()
 
         response = self._upload(
             [(WHEEL_NAME, b"wheel"), (NATIVE_NAME, b"native")], headers=headers
@@ -154,7 +163,7 @@ class PackageControllerTest(unittest.TestCase):
         )
 
     def test_upload_invalid(self):
-        headers = self._headers()
+        headers = self._publish_headers()
 
         response = self._upload([], headers=headers)
         self.assertEqual(response.code, 400)
@@ -223,7 +232,9 @@ class PackageControllerTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.packages_path), [])
 
     def test_update_authorized(self):
-        headers = self._headers() + [("Content_Type", "application/octet-stream")]
+        headers = self._publish_headers() + [
+            ("Content_Type", "application/octet-stream")
+        ]
 
         response = self.app.put(
             "/packages/%s" % WHEEL_NAME, data=b"wheel", headers=headers
@@ -262,7 +273,7 @@ class PackageControllerTest(unittest.TestCase):
         self.assertEqual(os.listdir(self.packages_path), [WHEEL_NAME])
 
     def test_delete_authorized(self):
-        headers = self._headers()
+        headers = self._publish_headers()
 
         self._write(WHEEL_NAME, b"wheel")
         self.assertEqual(
@@ -378,6 +389,43 @@ class PackageControllerTest(unittest.TestCase):
             self.assertRaises(
                 appier.AppierException, lambda: self.controller.verify_name(name)
             )
+
+    def test_verify_publish(self):
+        headers = self._headers()
+        put_headers = [("Content_Type", "application/octet-stream")]
+        self._write(WHEEL_NAME, b"wheel")
+
+        # the secret key (kept by the nodes) alone is not able to publish
+        # packages, neither with an invalid packages key, while it's still
+        # able to list and download them
+        for key in (None, "invalid", PACKAGES_KEY[:-1], PACKAGES_KEY + "\u00e9"):
+            key_headers = headers + ([("X-Packages-Key", key)] if key else [])
+            response = self._upload([(NATIVE_NAME, b"native")], headers=key_headers)
+            self.assertEqual(response.code, 403)
+            response = self.app.put(
+                "/packages/%s" % NATIVE_NAME,
+                data=b"native",
+                headers=key_headers + put_headers,
+            )
+            self.assertEqual(response.code, 403)
+            response = self.app.delete("/packages/%s" % WHEEL_NAME, headers=key_headers)
+            self.assertEqual(response.code, 403)
+        self.assertEqual(os.listdir(self.packages_path), [WHEEL_NAME])
+
+        response = self.app.get("/packages", headers=headers)
+        self.assertEqual(response.code, 200)
+        response = self.app.get("/packages/%s" % WHEEL_NAME, headers=headers)
+        self.assertEqual(response.code, 200)
+
+        # without a packages key defined the publishing is disabled, even
+        # for the requests that send the (previous) packages key
+        appier.conf_r("PACKAGES_KEY")
+        headers += [("X-Packages-Key", PACKAGES_KEY)]
+        response = self._upload([(NATIVE_NAME, b"native")], headers=headers)
+        self.assertEqual(response.code, 403)
+        response = self.app.delete("/packages/%s" % WHEEL_NAME, headers=headers)
+        self.assertEqual(response.code, 403)
+        self.assertEqual(os.listdir(self.packages_path), [WHEEL_NAME])
 
     def test_normalize(self):
         self.assertEqual(self.controller.normalize("colony_print"), "colony-print")

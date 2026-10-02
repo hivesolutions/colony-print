@@ -245,7 +245,7 @@ class ColonyPrintBootTest(unittest.TestCase):
 
     def _requirements(self):
         return [
-            [argument for argument in command if "==" in argument]
+            [argument for argument in command if "<=" in argument]
             for command in MockSubprocess.calls
         ]
 
@@ -272,7 +272,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(
             os.path.exists(os.path.join(self.packages_path, WHEEL_NAME)), True
         )
-        self.assertEqual(self._requirements(), [["colony-print==0.21.0"]])
+        self.assertEqual(self._requirements(), [["colony-print<=0.21.0"]])
         self.assertEqual(MockColonyPrintNode.loops, 1)
 
     def test_main_config_default(self):
@@ -307,7 +307,8 @@ class ColonyPrintBootTest(unittest.TestCase):
         )
         self.assertEqual(os.listdir(packages_path), [WHEEL_NAME])
         self.assertEqual(os.path.exists(self.packages_path), False)
-        self.assertEqual(MockSubprocess.calls[0][6], packages_path)
+        command = MockSubprocess.calls[0]
+        self.assertEqual(command[command.index("--find-links") + 1], packages_path)
         self.assertEqual(MockColonyPrintNode.loops, 0)
 
     def test_main_no_update(self):
@@ -334,7 +335,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         MockSubprocess.code = 1
         self._installed(colony_print="0.20.0")
         self.boot.main(["--config", self.config_path])
-        self.assertEqual(self._requirements(), [["colony-print==0.21.0"]])
+        self.assertEqual(self._requirements(), [["colony-print<=0.21.0"]])
         self.assertEqual(MockColonyPrintNode.loops, 2)
 
     def test_run(self):
@@ -349,7 +350,7 @@ class ColonyPrintBootTest(unittest.TestCase):
 
         requirements = self.boot.update(self.packages_path)
         self.assertEqual(requirements, [("colony-print", "0.21.0")])
-        self.assertEqual(self._requirements(), [["colony-print==0.21.0"]])
+        self.assertEqual(self._requirements(), [["colony-print<=0.21.0"]])
         self.assertEqual(
             sorted(os.listdir(self.packages_path)), [APPIER_NAME, WHEEL_NAME]
         )
@@ -374,7 +375,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         self._installed(colony_print="0.21.0")
         requirements = self.boot.update(self.packages_path)
         self.assertEqual(requirements, [("colony-print", "0.20.0")])
-        self.assertEqual(self._requirements(), [["colony-print==0.20.0"]])
+        self.assertEqual(self._requirements(), [["colony-print<=0.20.0"]])
 
     def test_update_empty(self):
         self._installed(colony_print="0.20.0")
@@ -611,7 +612,8 @@ class ColonyPrintBootTest(unittest.TestCase):
 
     def test_install(self):
         self.boot.install(
-            self.packages_path, [("colony-print", "0.21.0"), ("npcolony", "1.3.0")]
+            self.packages_path,
+            [("colony-print", "0.21.0"), ("npcolony", "1.3.0+win"), ("pip", "26.0rc1")],
         )
         self.assertEqual(
             MockSubprocess.calls,
@@ -621,14 +623,18 @@ class ColonyPrintBootTest(unittest.TestCase):
                     "-m",
                     "pip",
                     "install",
+                    "--upgrade",
                     "--no-index",
                     "--find-links",
                     self.packages_path,
+                    "--only-binary",
+                    ":all:",
                     "--disable-pip-version-check",
                     "--no-warn-script-location",
                     "--no-input",
-                    "colony-print==0.21.0",
-                    "npcolony==1.3.0",
+                    "colony-print<=0.21.0",
+                    "npcolony<=1.3.0",
+                    "pip<=26.0rc1",
                 ]
             ],
         )
@@ -643,14 +649,14 @@ class ColonyPrintBootTest(unittest.TestCase):
         major, minor = sys.version_info[0], sys.version_info[1]
         _pairs, platforms = self.boot.tags
         platform = sorted(platforms - set(["any"]))[0]
+        abi = self.boot.abi(major, minor)
         compatible = lambda file: self.boot.compatible(dict(file=file))
 
         self.assertEqual(compatible(WHEEL_NAME), True)
         self.assertEqual(compatible("appier-1.40.0-py%d-none-any.whl" % major), True)
         self.assertEqual(
             compatible(
-                "npcolony-1.3.0-cp%d%d-cp%d%d-%s.whl"
-                % (major, minor, major, minor, platform)
+                "npcolony-1.3.0-cp%d%d-%s-%s.whl" % (major, minor, abi, platform)
             ),
             True,
         )
@@ -866,15 +872,24 @@ class ColonyPrintBootTest(unittest.TestCase):
 
     def test_version_key(self):
         versions = [
+            "",
+            "1.0.0+",
             "invalid",
             "0.9",
             "1.0.0.dev1",
+            "1.0.0a1.dev1",
             "1.0.0a1",
             "1.0.0b2",
             "1.0.0rc1",
+            "1.0.0rc1.post1",
             "1.0.0",
             "1.0.0+local",
+            "1.0.0+local.1",
+            "1.0.0+2",
+            "1.0.0+10",
+            "1.0.0.post1.dev1",
             "1.0.0.post1",
+            "1.0.0.post2",
             "1.0.1",
             "1.2",
             "1.10",
@@ -883,22 +898,48 @@ class ColonyPrintBootTest(unittest.TestCase):
         keys = [self.boot.version_key(version) for version in versions]
         self.assertEqual(keys, sorted(keys))
         self.assertEqual(len(set(keys)), len(keys))
-        self.assertEqual(self.boot.version_key("1.0"), self.boot.version_key("1.0.0"))
-        self.assertEqual(self.boot.version_key("0"), self.boot.version_key("0.0"))
+        for version, other in (
+            ("1.0", "1.0.0"),
+            ("0", "0.0"),
+            ("1.0.0-rc1", "1.0.0rc1"),
+            ("1.0.0_rc1", "1.0.0rc1"),
+            ("1.0.0RC1", "1.0.0rc1"),
+            ("1.0.0c1", "1.0.0rc1"),
+            ("1.0.0alpha1", "1.0.0a1"),
+            ("1.0.0a", "1.0.0a0"),
+            ("1.0.0-1", "1.0.0.post1"),
+            ("1.0.0.rev1", "1.0.0.post1"),
+            ("1.0.0.post", "1.0.0.post0"),
+            ("1.0.0dev", "1.0.0.dev0"),
+            ("1.0.0+Local_1", "1.0.0+local.1"),
+            ("1.0.0+02", "1.0.0+2"),
+            (" v1.0 ", "1.0"),
+        ):
+            self.assertEqual(
+                self.boot.version_key(version), self.boot.version_key(other)
+            )
         self.assertEqual(
-            self.boot.version_key("1.0.0-rc1"), self.boot.version_key("1.0.0rc1")
+            self.boot.version_key("1.0\n") == self.boot.version_key("1.0"), True
         )
         self.assertEqual(
-            self.boot.version_key("1.0.0RC1"), self.boot.version_key("1.0.0rc1")
+            self.boot.version_key("1.0.0\n+2") < self.boot.version_key("0"), True
         )
-        self.assertEqual(self.boot.version_key(" v1.0 "), self.boot.version_key("1.0"))
-        self.assertEqual(self.boot.version_key("") < self.boot.version_key("0"), True)
+
+    def test_abi(self):
+        self.assertEqual(self.boot.abi(3, 14), "cp314")
+        self.assertEqual(self.boot.abi(3, 8), "cp38")
+        self.assertEqual(self.boot.abi(3, 7), "cp37m")
+        self.assertEqual(self.boot.abi(3, 3), "cp33m")
+        self.assertEqual(
+            self.boot.abi(2, 7), "cp27mu" if sys.maxunicode == 0x10FFFF else "cp27m"
+        )
 
     def test_tags(self):
         major, minor = sys.version_info[0], sys.version_info[1]
         pairs, platforms = self.boot.tags
         current = "cp%d%d" % (major, minor)
-        self.assertEqual((current, current) in pairs, True)
+        abi = self.boot.abi(major, minor)
+        self.assertEqual((current, abi) in pairs, True)
         self.assertEqual((current, "none") in pairs, True)
         self.assertEqual(("py%d" % major, "none") in pairs, True)
         self.assertEqual(("py%d%d" % (major, minor), "none") in pairs, True)

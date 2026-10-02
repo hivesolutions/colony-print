@@ -88,32 +88,20 @@ NAME_REGEX = re.compile(r"[-_.]+")
 """ The regular expression used in the normalization of the name
 of a distribution (PEP 503) """
 
-VERSION_REGEX = re.compile(r"^v?(?:(\d+)!)?(\d+(?:\.\d+)*)(.*)$")
-""" The regular expression that splits a version into its epoch,
-release (numeric) and suffix parts """
-
-SUFFIX_REGEX = re.compile(
-    r"^[-_.]?(dev|alpha|a|beta|b|preview|pre|rc|c|post|rev|r)?[-_.]?(\d*)(.*)$"
+VERSION_REGEX = re.compile(
+    r"^v?(?:(?P<epoch>[0-9]+)!)?(?P<release>[0-9]+(?:\.[0-9]+)*)"
+    r"(?:[-_.]?(?P<pre>alpha|a|beta|b|preview|pre|c|rc)[-_.]?(?P<pre_n>[0-9]+)?)?"
+    r"(?:-(?P<post_i>[0-9]+)|[-_.]?(?P<post>post|rev|r)[-_.]?(?P<post_n>[0-9]+)?)?"
+    r"(?:[-_.]?(?P<dev>dev)[-_.]?(?P<dev_n>[0-9]+)?)?"
+    r"(?:\+(?P<local>[a-z0-9]+(?:[-_.][a-z0-9]+)*))?\Z"
 )
-""" The regular expression that splits the suffix of a version into
-its phase (eg: rc, post), the number of the phase and the rest """
+""" The regular expression that splits a (lower cased) version into
+its epoch, release, pre, post, development and local parts, according
+to the version scheme of PEP 440 """
 
-PHASES = dict(
-    dev=0,
-    alpha=1,
-    a=1,
-    beta=2,
-    b=2,
-    preview=3,
-    pre=3,
-    rc=3,
-    c=3,
-    post=5,
-    rev=5,
-    r=5,
-)
-""" The rank of each phase of a version, the final version (no
-phase) has a rank of 4, between the pre and the post releases """
+PRE_RANKS = dict(alpha=0, a=0, beta=1, b=1, preview=2, pre=2, c=2, rc=2)
+""" The rank of each phase of a pre release, the final release (no
+pre release) has a rank of 3, after all the pre releases """
 
 
 class SecretRedirectHandler(urllib_request.HTTPRedirectHandler):
@@ -404,23 +392,32 @@ class ColonyPrintBoot(object):
         return requirements
 
     def install(self, packages_path, requirements):
-        # installs the exact versions of the requirements using only the
-        # mirrored packages, so that the dependencies are resolved from the
-        # packages of the server, in case any of them is missing the
-        # installation fails as a whole (keeping the installed packages)
+        # installs the newest versions of the requirements, up to the provided
+        # ones (allowing rollbacks), using only the mirrored packages (wheels),
+        # so that the dependencies are resolved from the packages of the server
+        # and the versions that don't support the interpreter (Requires-Python)
+        # are skipped by pip, in case any of them is missing the installation
+        # fails as a whole (keeping the installed packages), notice that the
+        # local part of the versions is not allowed in the upper bound
         command = [
             sys.executable,
             "-m",
             "pip",
             "install",
+            "--upgrade",
             "--no-index",
             "--find-links",
             packages_path,
+            "--only-binary",
+            ":all:",
             "--disable-pip-version-check",
             "--no-warn-script-location",
             "--no-input",
         ]
-        command += ["%s==%s" % requirement for requirement in requirements]
+        command += [
+            "%s<=%s" % (name, version.split("+", 1)[0])
+            for name, version in requirements
+        ]
         code = subprocess.call(command)
         if not code == 0:
             raise RuntimeError("Package installation failed with code %d" % code)
@@ -581,8 +578,8 @@ class ColonyPrintBoot(object):
     def version_key(self, version):
         """
         Builds the (comparable) key of the provided version, following
-        the ordering rules of PEP 440 for the most common versions (eg:
-        1.0.0.dev1 < 1.0.0rc1 < 1.0.0 < 1.0.0.post1).
+        the ordering rules of PEP 440 (eg: 1.0.dev1 < 1.0rc1 < 1.0 <
+        1.0+local < 1.0.post1.dev1 < 1.0.post1).
 
         :type version: String
         :param version: The version to build the key for.
@@ -594,16 +591,63 @@ class ColonyPrintBoot(object):
         version = version.strip().lower()
         match = VERSION_REGEX.match(version)
         if not match:
-            return (-1, (), 0, 0, version)
+            return (-1, version)
 
-        epoch, release, suffix = match.groups()
-        release = [int(value) for value in release.split(".")]
+        groups = match.groupdict()
+        release = [int(value) for value in groups["release"].split(".")]
         while len(release) > 1 and release[-1] == 0:
             release.pop()
 
-        phase, number, rest = SUFFIX_REGEX.match(suffix).groups()
-        rank = PHASES[phase] if phase else 4
-        return (int(epoch or 0), tuple(release), rank, int(number or 0), rest)
+        # a release with only a development part (eg: 1.0.dev1) is ordered
+        # before its pre releases and the final release after all of them
+        if groups["pre"]:
+            pre = (PRE_RANKS[groups["pre"]], int(groups["pre_n"] or 0))
+        elif groups["dev"] and not groups["post"] and not groups["post_i"]:
+            pre = (-1, 0)
+        else:
+            pre = (3, 0)
+
+        # a release without post part is ordered before its post releases
+        # and a release without development part after its development ones
+        if groups["post_i"]:
+            post = int(groups["post_i"])
+        elif groups["post"]:
+            post = int(groups["post_n"] or 0)
+        else:
+            post = -1
+        dev = int(groups["dev_n"] or 0) if groups["dev"] else float("inf")
+
+        # a release with a local part is ordered after the one without it,
+        # comparing the numeric parts as numbers, after the other parts
+        local = ()
+        if groups["local"]:
+            local = tuple(
+                (1, int(part), "") if part.isdigit() else (0, 0, part)
+                for part in NAME_REGEX.split(groups["local"])
+            )
+
+        return (int(groups["epoch"] or 0), tuple(release), pre, post, dev, local)
+
+    def abi(self, major, minor):
+        """
+        Builds the ABI tag of the native wheels of CPython for the provided
+        version, which includes the pymalloc (m) flag before 3.8 and the wide
+        unicode (u) flag for the wide builds of the versions before 3.3.
+
+        :type major: int
+        :param major: The major version of CPython.
+        :type minor: int
+        :param minor: The minor version of CPython.
+        :rtype: String
+        :return: The ABI tag of CPython for the version (eg: cp37m).
+        """
+
+        abi = "cp%d%d" % (major, minor)
+        if (major, minor) < (3, 8):
+            abi += "m"
+        if (major, minor) < (3, 3) and sys.maxunicode == 0x10FFFF:
+            abi += "u"
+        return abi
 
     @property
     def tags(self):
@@ -613,7 +657,8 @@ class ColonyPrintBoot(object):
         # the versions up to it, together with the supported platforms
         major, minor = sys.version_info[0], sys.version_info[1]
         current = "cp%d%d" % (major, minor)
-        pairs = set([(current, current), (current, "none"), ("py%d" % major, "none")])
+        abi = self.abi(major, minor)
+        pairs = set([(current, abi), (current, "none"), ("py%d" % major, "none")])
         for index in range(minor + 1):
             pairs.add(("py%d%d" % (major, index), "none"))
             if major == 3 and index > 1:
