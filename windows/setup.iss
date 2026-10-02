@@ -92,7 +92,6 @@ var
   ParamConfig: TArrayOfString;
   DetectedPrinter: String;
   ServiceError: Boolean;
-  UntrustedDataDir: Boolean;
 
 function DataDir: String;
 begin
@@ -305,16 +304,18 @@ begin
       Result := False;
 end;
 
-{ Verifies if the provided file (or directory) is owned by the system account
-  or by the administrators, the only ones allowed to write the data directory
-  of the node, as one created by any other user (eg: before the node was
-  installed) can't be trusted, the owner is retrieved by PowerShell (as Inno
-  Setup has no way of retrieving it) directly with .NET, so that no module is
-  loaded (eg: the one of another PowerShell in the module path), notice that
+{ Verifies if the provided file (or directory) can be trusted, meaning that
+  only the system account and the administrators own it and have access to it
+  (as the data directory restricted by the installer), as one created by any
+  other user (eg: before the node was installed) or that grants access to any
+  other user can't be trusted, the owner and the access are retrieved by
+  PowerShell (as Inno Setup has no way of retrieving them) directly with .NET,
+  so that no module is loaded (eg: the one of another PowerShell in the module
+  path), the access to them being denied also makes it untrusted, notice that
   only two distinct exit codes are accepted and that the verification fails
   (raising) otherwise, so that a verification that didn't run (eg: blocked
   PowerShell) never causes the removal of the data directory }
-function TrustedOwner(const Path: String): Boolean;
+function TrustedPath(const Path: String): Boolean;
 var
   Kind: String;
   ResultCode: Integer;
@@ -324,14 +325,18 @@ begin
   else
     Kind := 'File';
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -Command "if ([System.IO.' + Kind +
-    ']::GetAccessControl(''' + Path + ''', ''Owner'').GetOwner(' +
-    '[System.Security.Principal.SecurityIdentifier]).Value -in ' +
-    '@(''S-1-5-18'', ''S-1-5-32-544'')) { exit 64 } else { exit 65 }"', '', SW_HIDE,
-    ewWaitUntilTerminated, ResultCode) or ((ResultCode <> 64) and (ResultCode <> 65)) then
-    RaiseException('Could not verify the owner of ' + Path + ' (code ' +
-      IntToStr(ResultCode) + ')');
-  Log('Owner of ' + Path + ' verified with code ' + IntToStr(ResultCode));
+    '-NoProfile -NonInteractive -Command "try { $a = [System.IO.' + Kind +
+    ']::GetAccessControl(''' + Path + '''); $t = @(''S-1-5-18'', ''S-1-5-32-544''); ' +
+    '$s = [System.Security.Principal.SecurityIdentifier]; ' +
+    'if ($a.GetOwner($s).Value -notin $t) { exit 65 }; ' +
+    'foreach ($r in $a.GetAccessRules($true, $true, $s)) { ' +
+    'if ($r.IdentityReference.Value -notin $t) { exit 65 } }; exit 64 } catch { ' +
+    'if ($_.Exception.GetBaseException() -is [System.UnauthorizedAccessException]) ' +
+    '{ exit 65 }; exit 1 }"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or
+    ((ResultCode <> 64) and (ResultCode <> 65)) then
+    RaiseException('Could not verify the owner and the access of ' + Path +
+      ' (code ' + IntToStr(ResultCode) + ')');
+  Log('Owner and access of ' + Path + ' verified with code ' + IntToStr(ResultCode));
   Result := ResultCode = 64;
 end;
 
@@ -344,9 +349,9 @@ begin
     ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
-{ Removes a data directory that was not created by the installer (its owner
-  is not trusted), taking its ownership and resetting its access first, as
-  its creator may have denied the access to the administrators, so that its
+{ Removes a data directory that was not created by the installer (it's not
+  trusted), taking its ownership and resetting its access first, as its
+  creator may have denied the access to the administrators, so that its
   contents (eg: a configuration pointing to other packages) are never used }
 function RemoveUntrustedDataDir: Boolean;
 begin
@@ -355,6 +360,28 @@ begin
   Icacls('"' + DataDir + '" /reset /T /C /Q');
   DelTree(DataDir, True, True, True);
   Result := not DirExists(DataDir);
+end;
+
+{ Creates the data directory with its access already restricted to the system
+  account and to the administrators, by restricting it in the (protected)
+  temporary directory of the setup and then moving it into place, which fails
+  in case the data directory exists (eg: created by another user meanwhile),
+  so that no other user ever has access to it (not even for an instant) }
+function CreateDataDir: Boolean;
+var
+  TempDir: String;
+begin
+  Result := False;
+  Log('Creating the data directory ' + DataDir);
+  TempDir := ExpandConstant('{tmp}\data');
+  if not CreateDir(TempDir) then
+    Exit;
+  if not Icacls('"' + TempDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F ' +
+    '*S-1-5-32-544:(OI)(CI)F') then
+    Exit;
+  if not Icacls('"' + TempDir + '" /setowner *S-1-5-32-544 /C /Q') then
+    Exit;
+  Result := RenameFile(TempDir, DataDir);
 end;
 
 function ServiceExists: Boolean;
@@ -452,27 +479,27 @@ begin
 end;
 
 { Loads the configuration of the existing data directory, only when it can
-  be trusted, either because the service is installed (as the access to the
-  data directory is restricted before the service is installed) or because
-  it's owned by the system account or by the administrators, as a data
+  be trusted, either because the service is installed (as the data directory
+  is restricted before the service is installed) or because only the system
+  account and the administrators own it and have access to it, as a data
   directory or configuration created by any other user (eg: before the node
   was installed) can't be trusted, notice that the untrusted data directory
   is only removed once the installation starts and that the setup is aborted
-  in case the owner can't be verified }
+  in case it can't be verified }
 function InitializeSetup: Boolean;
 var
-  Installed: Boolean;
+  Trusted: Boolean;
 begin
   Result := True;
+  Trusted := False;
   try
-    Installed := ServiceExists;
-    if DirExists(DataDir) and not Installed then
-      UntrustedDataDir := not TrustedOwner(DataDir);
-    if FileExists(ConfigPath) and not UntrustedDataDir then
+    if FileExists(ConfigPath) then
     begin
-      if Installed then
-        LoadStringsFromFile(ConfigPath, Config)
-      else if TrustedOwner(ConfigPath) then
+      if ServiceExists then
+        Trusted := True
+      else if TrustedPath(DataDir) then
+        Trusted := TrustedPath(ConfigPath);
+      if Trusted then
         LoadStringsFromFile(ConfigPath, Config)
       else
         Log('Ignoring the untrusted configuration file ' + ConfigPath);
@@ -647,13 +674,29 @@ begin
   if Result <> '' then
     Exit;
 
-  { removes the untrusted data directory, only now that the installation
-    starts, so that none of its contents is used by the node }
-  if UntrustedDataDir and not RemoveUntrustedDataDir then
+  { verifies the data directory (once more) now that the installation starts,
+    as it may have been created by another user since the setup started,
+    removing it when it's not trusted, and creates it (restricted) when it
+    doesn't exist, so that only a data directory created by the installer
+    (or one that was already trusted) is ever used }
+  if not ServiceExists and DirExists(DataDir) then
   begin
-    Result := 'Could not remove the untrusted data directory ' + DataDir + '.';
-    Exit;
+    try
+      if not TrustedPath(DataDir) then
+        if not RemoveUntrustedDataDir then
+          Result := 'Could not remove the untrusted data directory ' + DataDir + '.';
+    except
+      Result := GetExceptionMessage + '.';
+    end;
+    if Result <> '' then
+      Exit;
   end;
+  if not DirExists(DataDir) then
+    if not CreateDataDir then
+    begin
+      Result := 'Could not create the data directory ' + DataDir + '.';
+      Exit;
+    end;
 
   { stops the service of a previous installation, so that its files
     (eg: the Python interpreter) can be replaced }

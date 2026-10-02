@@ -195,17 +195,18 @@ class Smoke(object):
         return version, glob.glob(os.path.join(wheels_path, "*.whl"))[0]
 
     def test_install(self, version):
-        # plants a data directory and a configuration owned (and writable) by
-        # the users, as created by any user before the node is installed, that
-        # points the node to other packages, which the installer must not use
+        # plants a data directory and a configuration owned by the administrators
+        # but writable by the users, as created by an administrator (or by a user
+        # that took the ownership of it) before the node is installed, that points
+        # the node to other packages, which the installer must not use
         config_path = os.path.join(DATA_PATH, "config.env")
         os.makedirs(DATA_PATH)
         with open(config_path, "wb") as file:
             file.write(b"PACKAGES_URL=%s\r\nNODE_NAME=Planted\r\n" % PLANTED_URL)
+        subprocess.check_call(["icacls", DATA_PATH, "/setowner", "*S-1-5-32-544", "/T"])
         subprocess.check_call(
             ["icacls", DATA_PATH, "/grant", "*S-1-5-32-545:(OI)(CI)F"]
         )
-        subprocess.check_call(["icacls", DATA_PATH, "/setowner", "*S-1-5-32-545", "/T"])
 
         # installs the node in email mode when there's a PDF printer, so that
         # the printing of a document may be verified (without email)
