@@ -102,6 +102,26 @@ def name_record(data, index, language_id=None, name_id=None):
     return data[:record] + value + data[record + 12 :]
 
 
+class MockResponse(object):
+    """
+    Stand-in for the response of an URL opened by urllib, that serves
+    the provided data and records the sizes of its reads and if it has
+    been closed, so that the downloads can be inspected without a server.
+    """
+
+    def __init__(self, data):
+        self.data = data
+        self.reads = []
+        self.closed = False
+
+    def read(self, size=-1):
+        self.reads.append(size)
+        return self.data if size < 0 else self.data[:size]
+
+    def close(self):
+        self.closed = True
+
+
 class FontsTest(unittest.TestCase):
     def setUp(self):
         self.target_dir = tempfile.mkdtemp(prefix="colony-print-fonts-test-")
@@ -344,19 +364,21 @@ class FontCacheTest(unittest.TestCase):
         self.path = os.path.join(self.target_dir, "fonts")
         self.downloads = []
         self.responses = dict()
-        self._get = appier.get
-        appier.get = self._download
+        self._urlopen = appier.legacy.urlopen
+        appier.legacy.urlopen = self._open
 
     def tearDown(self):
-        appier.get = self._get
+        appier.legacy.urlopen = self._urlopen
         shutil.rmtree(self.target_dir, ignore_errors=True)
 
-    def _download(self, url, timeout=None):
+    def _open(self, url, timeout=None):
         self.downloads.append((url, timeout))
         response = self.responses[url]
         if isinstance(response, Exception):
             raise response
-        return response
+        return (
+            response if isinstance(response, MockResponse) else MockResponse(response)
+        )
 
     def _files(self):
         return sorted(os.listdir(self.path)) if os.path.exists(self.path) else []
@@ -489,11 +511,18 @@ class FontCacheTest(unittest.TestCase):
             lambda: font_cache.install(dict(name="Colonia", url=url)),
         )
 
-        self.responses[url] = dict(error="not a font")
+        # a file larger than the maximum size is refused without being
+        # read beyond the maximum size (plus one byte)
+        response = MockResponse(build_font())
+        self.responses[url] = response
+        font_cache.max_size = 1024
         self.assertRaises(
             appier.OperationalError,
             lambda: font_cache.install(dict(name="Colonia", url=url)),
         )
+        self.assertEqual(response.reads, [1025])
+        self.assertEqual(response.closed, True)
+        font_cache.max_size = colony_print.FONT_MAX_SIZE
 
         self.responses[url] = b"not a font"
         self.assertRaises(
@@ -699,10 +728,21 @@ class FontCacheTest(unittest.TestCase):
             "Font 'Colonia' not downloaded from '%s': Connection refused" % url,
         )
 
-        self.responses[url] = appier.legacy.u("font")
+        # only the maximum size of the font files (plus one byte) is read
+        # and the response is closed, even when the read fails
+        response = MockResponse(b"font")
+        self.responses[url] = response
+        font_cache.max_size = 2
+        self.assertEqual(font_cache._download("Colonia", url), b"fon")
+        self.assertEqual(response.reads, [3])
+        self.assertEqual(response.closed, True)
+
+        response = MockResponse(None)
+        self.responses[url] = response
         self.assertRaises(
             appier.OperationalError, lambda: font_cache._download("Colonia", url)
         )
+        self.assertEqual(response.closed, True)
 
     def test_file(self):
         font_cache = colony_print.FontCache(self.path)

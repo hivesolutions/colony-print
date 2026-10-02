@@ -527,27 +527,31 @@ class FontCache(object):
         Downloads the font file of the provided URL, raising an exception
         naming the font in case it's not possible to download it.
 
+        At most one byte more than the maximum size of the font files is
+        read, so that a larger file is refused (by the size verification
+        of the font) without being completely loaded in memory.
+
         :type name: String
         :param name: The name of the font, used for the messages.
         :type url: String
         :param url: The URL of the font file to be downloaded.
         :rtype: String
-        :return: The contents of the font file.
+        :return: The contents of the font file (or its first bytes in
+        case it's larger than the maximum size of the font files).
         """
 
         try:
-            data = appier.get(url, timeout=FONT_TIMEOUT)
+            response = appier.legacy.urlopen(url, timeout=FONT_TIMEOUT)
+            try:
+                data = response.read(self.max_size + 1)
+            finally:
+                response.close()
         except Exception as exception:
             raise appier.OperationalError(
                 message="Font '%s' not downloaded from '%s': %s"
                 % (name, url, exception),
                 code=400,
             )
-        appier.verify(
-            appier.legacy.is_bytes(data),
-            message="Font '%s' downloaded from '%s' is not a file" % (name, url),
-            code=400,
-        )
         return data
 
     def _file(self, md5):
