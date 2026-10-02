@@ -34,6 +34,7 @@ AppPublisher=Hive Solutions Lda.
 AppPublisherURL=https://github.com/hivesolutions/colony-print
 AppSupportURL=https://github.com/hivesolutions/colony-print/issues
 DefaultDirName={autopf}\{#AppName}
+DisableDirPage=yes
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -670,6 +671,16 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
 begin
+  { the node is only installed under the program files, where the users
+    can't change anything, as the service runs its files (eg: the boot
+    script and the Python interpreter) as the system account }
+  if Pos(Lowercase(AddBackslash(ExpandConstant('{commonpf}'))),
+    Lowercase(AddBackslash(ExpandFileName(ExpandConstant('{app}'))))) <> 1 then
+  begin
+    Result := 'The node must be installed in ' + ExpandConstant('{commonpf}') + '.';
+    Exit;
+  end;
+
   { validates the configuration once more, as the pages are not
     shown (and so not validated) when running silently }
   ServerPage.Values[0] := NormalizeUrl(ServerPage.Values[0]);
