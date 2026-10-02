@@ -35,6 +35,7 @@ PORT = 8686
 BASE_URL = "http://127.0.0.1:%d/" % PORT
 PLANTED_URL = b"http://127.0.0.1:1/packages"
 PACKAGES_KEY = "ci-packages"
+TRUSTED = ("BUILTIN\\Administrators", "NT AUTHORITY\\SYSTEM")
 
 ACCOUNT_SCRIPT = """
 import logging, appier_extras, colony_print
@@ -232,10 +233,17 @@ class Smoke(object):
         assert not "PACKAGES_URL" in config, "Planted configuration used"
         assert not "Planted" in config, "Planted configuration used"
 
+        # verifies that only the system account and the administrators have
+        # access to the data directory and to the configuration, so that the
+        # next install trusts them (and any other user can't access them)
         for path in (DATA_PATH, config_path):
             acl = subprocess.check_output(["icacls", path]).decode("utf-8", "ignore")
             log(acl)
-            assert not "BUILTIN\\Users" in acl, "%s accessible by users" % path
+            for line in acl.replace(path, "").splitlines():
+                if not ":(" in line:
+                    continue
+                principal = line.strip().split(":(", 1)[0]
+                assert principal in TRUSTED, "%s accessible by %s" % (path, principal)
 
         node = self.wait_node(version)
         assert "npcolony" in node["engines"], node["engines"]

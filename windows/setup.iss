@@ -366,7 +366,9 @@ end;
   account and to the administrators, by restricting it in the (protected)
   temporary directory of the setup and then moving it into place, which fails
   in case the data directory exists (eg: created by another user meanwhile),
-  so that no other user ever has access to it (not even for an instant) }
+  so that no other user ever has access to it (not even for an instant),
+  notice that its access is reset first, as the temporary directory gives
+  (explicit) access to the user running the setup }
 function CreateDataDir: Boolean;
 var
   TempDir: String;
@@ -375,6 +377,8 @@ begin
   Log('Creating the data directory ' + DataDir);
   TempDir := ExpandConstant('{tmp}\data');
   if not CreateDir(TempDir) then
+    Exit;
+  if not Icacls('"' + TempDir + '" /reset /C /Q') then
     Exit;
   if not Icacls('"' + TempDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F ' +
     '*S-1-5-32-544:(OI)(CI)F') then
