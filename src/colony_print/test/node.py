@@ -669,7 +669,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
 
         # the npcolony of the system doesn't report the loading of fonts
-        # (eg: built for python 2), so the fonts can't be installed
+        # (eg: a build without the feature), so the fonts can't be installed
         MockNPColonyWindows.features = []
         self.assertEqual(
             self.node.capabilities,
@@ -1469,7 +1469,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.fonts = []
 
         # the npcolony of the system doesn't report the loading of fonts
-        # (eg: built for python 2), so the fonts are not loaded
+        # (eg: a build without the feature), so the fonts are not loaded
         MockNPColonyWindows.features = []
         self.node.loaded_fonts = set()
         self.node._load_fonts()
