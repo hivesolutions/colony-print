@@ -202,6 +202,7 @@ class MockNPColonyWindows(object):
     calls = []
     fonts = []
     features = ["load-fonts"]
+    error = None
 
     @staticmethod
     def get_format():
@@ -221,6 +222,8 @@ class MockNPColonyWindows(object):
 
     @staticmethod
     def load_font(path):
+        if MockNPColonyWindows.error:
+            raise MockNPColonyWindows.error
         MockNPColonyWindows.fonts.append(("load", path))
 
     @staticmethod
@@ -311,6 +314,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.calls = []
         MockNPColonyWindows.fonts = []
         MockNPColonyWindows.features = ["load-fonts"]
+        MockNPColonyWindows.error = None
         MockGravostyleAPI.calls = []
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
@@ -439,6 +443,23 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(json.loads(json.dumps(data_j)), data_j)
 
+    def test_loop_fonts_error(self):
+        # a font of the cache that fails to load in the system (windows) is
+        # logged and doesn't prevent the node from submitting its information
+        colony_print.FontCache(self.fonts_dir).install(self._font())
+        sys.modules["npcolony"] = MockNPColonyWindows
+        MockNPColonyWindows.error = IOError("Problem loading font")
+        appier.post = MockServer.post
+        appier.conf_s("FONTS_PATH", self.fonts_dir)
+        self.node.sleep_time = None
+        try:
+            self.assertRaises(MockInterrupt, self.node.loop)
+        finally:
+            appier.conf_r("FONTS_PATH")
+        self.assertEqual(len(MockServer.calls), 1)
+        self.assertEqual(self.node.loaded_fonts, set())
+        self.assertEqual(len(MockServer.calls[0][1]["fonts"]), 1)
+
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
         self.node.node_email_receivers = []
@@ -511,6 +532,24 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(printer, "Receipt")
         self.assertEqual(options["media"], "RP80x297")
         self.assertEqual(len(self.node.font_cache.installed()), 1)
+
+    def test_print_job_email_fonts(self):
+        # the installation of fonts is not a document to be printed and
+        # sent by email, the fonts are installed as in the normal mode
+        self.node.node_mode = "email"
+        data_b64 = base64.b64encode(
+            json.dumps(dict(fonts=[self._font()])).encode("utf-8")
+        )
+        result = self.node.print_job(
+            dict(data_b64=data_b64, name="fonts", type="fonts")
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["handler"], "fonts")
+        self.assertEqual(result["data"]["fonts"][0]["name"], "Colonia")
+        self.assertEqual(MockNPColony.calls, [])
+        self.assertEqual(
+            list(self.node.font_cache.files().keys()), [("colonia", "regular")]
+        )
 
     def test_libraries(self):
         sys.modules["npcolony"] = MockLibrary
@@ -1291,6 +1330,21 @@ class ColonyPrintNodeTest(unittest.TestCase):
             MockNPColonyWindows.fonts,
             [("load", path) for path in sorted(self.node.font_cache.files().values())],
         )
+
+        # one of the fonts fails to install after the previous one has been
+        # installed (as the active one), that is still loaded in the system
+        MockNPColonyWindows.fonts = []
+        data = build_font("Fontana")
+        font = dict(name="Fontana", data_b64=base64.b64encode(data).decode())
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._install_fonts(
+                [font, dict(name="Binaria", md5="0" * 32)]
+            ),
+        )
+        path = self.node.font_cache._file(hashlib.md5(data).hexdigest())
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", path)])
+        self.assertEqual(path in self.node.loaded_fonts, True)
 
     def test_load_fonts(self):
         regular = self.node.font_cache.install(self._font())

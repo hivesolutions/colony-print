@@ -13,6 +13,8 @@ import appier
 
 import PIL.Image
 
+import reportlab.pdfbase.pdfmetrics
+
 import colony_print
 
 FONTS_PATH = os.path.join(
@@ -59,6 +61,17 @@ EXAMPLE_FONT = '<?xml version="1.0" encoding="UTF-8"?>\
     </printing_document>'
 """ Example XML string that should display an hello world
 message using the Colonia font (in its regular and bold styles)
+using the XML printing language """
+
+EXAMPLE_STYLE = '<?xml version="1.0" encoding="UTF-8"?>\
+    <printing_document name="hello_world" font="Calibri" font_size="9">\
+        <paragraph text_align="center">\
+            <line><text>Hello World</text></line>\
+            <line font_style="bold"><text>Hello World</text></line>\
+        </paragraph>\
+    </printing_document>'
+""" Example XML string that should display an hello world
+message using the Calibri font (in its regular and bold styles)
 using the XML printing language """
 
 
@@ -135,6 +148,35 @@ class VisitorTest(unittest.TestCase):
         )
         self.manager.print_language(EXAMPLE, options)
         self.assertEqual(b"Colonia" in file.getvalue(), False)
+
+        # another file of the font (eg: a newer version) is the one used
+        # by the next documents, replacing the one registered before
+        updated_path = os.path.join(self.target_dir, "colonia-updated.ttf")
+        with open(updated_path, "wb") as file:
+            file.write(build_font() + b"\0")
+        file = appier.legacy.BytesIO()
+        options = dict(
+            name="pdf", file=file, font_files={("colonia", "regular"): updated_path}
+        )
+        self.manager.print_language(EXAMPLE_FONT, options)
+        font = reportlab.pdfbase.pdfmetrics.getFont("Colonia")
+        self.assertEqual(font.face.filename, updated_path)
+
+    def test_print_language_fonts_style(self):
+        # the font of the system with the exact style (bold) is used before
+        # the other style of the font installed on demand, as windows does
+        file_path = os.path.join(self.target_dir, "calibri.ttf")
+        shutil.copyfile(os.path.join(FONTS_PATH, "calibri.ttf"), file_path)
+        file = appier.legacy.BytesIO()
+        options = dict(
+            name="pdf", file=file, font_files={("calibri", "regular"): file_path}
+        )
+        self.manager.print_language(EXAMPLE_STYLE, options)
+        self.assertEqual(file.getvalue()[:5], b"%PDF-")
+        bold = reportlab.pdfbase.pdfmetrics.getFont("Calibrib")
+        self.assertEqual(os.path.basename(bold.face.filename), "calibrib.ttf")
+        regular = reportlab.pdfbase.pdfmetrics.getFont("Calibri")
+        self.assertEqual(regular.face.filename, file_path)
 
 
 class BinieRendererTest(unittest.TestCase):
@@ -638,6 +680,41 @@ class BinieRendererTest(unittest.TestCase):
         file = appier.legacy.BytesIO()
         renderer.render(data, file)
         self.assertEqual(b"Colonia" in file.getvalue(), True)
+
+        # another file of the font (eg: a newer version, with the same face)
+        # is the one used, even if the font was registered before
+        updated_path = os.path.join(self.target_dir, "b" * 32 + ".ttf")
+        with open(updated_path, "wb") as file:
+            file.write(build_font() + b"\0")
+        renderer = colony_print.BinieRenderer(
+            font_files={("colonia", "regular"): updated_path}
+        )
+        renderer._match_font = lambda font_name, bold=False, italic=False: None
+        self.assertEqual(renderer.ensure_font("Colonia")[0], "b" * 32)
+        font = reportlab.pdfbase.pdfmetrics.getFont("b" * 32)
+        self.assertEqual(font.face.filename, updated_path)
+
+    def test_ensure_font_files_style(self):
+        # the font of the system with the exact style (bold) is used before
+        # the other style of the font installed on demand, as windows does
+        file_path = os.path.join(self.target_dir, "c" * 32 + ".ttf")
+        shutil.copyfile(os.path.join(FONTS_PATH, "calibri.ttf"), file_path)
+        renderer = colony_print.BinieRenderer(
+            font_files={("calibri", "regular"): file_path}
+        )
+        renderer._match_font = lambda font_name, bold=False, italic=False: None
+        self.assertEqual(renderer.ensure_font("Calibri")[0], "c" * 32)
+        self.assertEqual(renderer.ensure_font("Calibri", bold=True)[0], "calibrib")
+
+        # without the font of the system the other style is used instead
+        colony_print.printing.pdf.visitor.FONT_PATHS = (
+            os.path.join(self.target_dir, ""),
+        )
+        renderer = colony_print.BinieRenderer(
+            font_files={("calibri", "regular"): file_path}
+        )
+        renderer._match_font = lambda font_name, bold=False, italic=False: None
+        self.assertEqual(renderer.ensure_font("Calibri", bold=True)[0], "c" * 32)
 
     def test_ensure_font_fallback(self):
         colony_print.printing.pdf.visitor.FONT_PATHS = (

@@ -111,6 +111,23 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual(job["data_b64"], "QUJD")
         self.assertEqual(job["fonts"], fonts)
 
+        # a job whose fonts were declared by its document (only their
+        # information is kept) is cloned without sending them to the node
+        self.app.jobs_info["xmpl"] = dict(
+            id="xmpl",
+            name="xmpl",
+            node_id="node",
+            format="xmpl",
+            fonts=[dict(name="Colonia", data_length=4)],
+        )
+        self.app.jobs_data["xmpl"] = "QUJD"
+        response = self.app.post("/jobs/xmpl/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        clone_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(clone_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual("fonts" in self.app.jobs["node"][1], False)
+        self.assertEqual(clone_info["id"] in self.app.jobs_fonts, False)
+
         # a job without fonts is cloned without any font
         self.app.jobs_info["other"] = dict(id="other", name="other", node_id="node")
         self.app.jobs_data["other"] = "QUJD"
@@ -119,7 +136,7 @@ class JobControllerTest(unittest.TestCase):
         clone_info = json.loads(response.data.decode("utf-8"))
         self.assertEqual("fonts" in clone_info, False)
         self.assertEqual(clone_info["id"] in self.app.jobs_fonts, False)
-        self.assertEqual("fonts" in self.app.jobs["node"][1], False)
+        self.assertEqual("fonts" in self.app.jobs["node"][2], False)
 
     def test_files(self):
         response = self.app.get("/jobs/name/files")

@@ -103,8 +103,15 @@ def name_record(data, index, language_id=None, name_id=None):
 
 
 class FontsTest(unittest.TestCase):
+    def setUp(self):
+        self.target_dir = tempfile.mkdtemp(prefix="colony-print-fonts-test-")
+
+    def tearDown(self):
+        shutil.rmtree(self.target_dir, ignore_errors=True)
+
     def test_verify_font(self):
         colony_print.verify_font(dict(name="Colonia", data_b64="QUJD"))
+        colony_print.verify_font(dict(name="Colonia", data_b64=b"QUJD"))
         colony_print.verify_font(
             dict(name="Colonia", style="bold", url="https://fonts.hive.pt/a.ttf")
         )
@@ -139,6 +146,8 @@ class FontsTest(unittest.TestCase):
             dict(name="Colonia", md5="a" * 33),
             dict(name="Colonia", md5="g" * 32),
             dict(name="Colonia", md5=1, data_b64="QUJD"),
+            dict(name="Colonia", data_b64=123),
+            dict(name="Colonia", data_b64=["QUJD"]),
         ]
         for font in invalid:
             self.assertRaises(
@@ -238,8 +247,67 @@ class FontsTest(unittest.TestCase):
             font_file(font_files, "Binaria", "bold"), "/fonts/binariai.ttf"
         )
         self.assertEqual(font_file(font_files, "Calibri", "regular"), None)
+
+        # only the exact style of the family is used, as when the system
+        # may have the font of that exact style
+        self.assertEqual(
+            font_file(font_files, "Colonia", "bold", exact=True), "/fonts/coloniab.ttf"
+        )
+        self.assertEqual(font_file(font_files, "Colonia", "italic", exact=True), None)
+        self.assertEqual(font_file(font_files, "Binaria", "regular", exact=True), None)
+        self.assertEqual(font_file(None, "Colonia", "regular", exact=True), None)
         self.assertEqual(font_file(dict(), "Colonia", "regular"), None)
         self.assertEqual(font_file(None, "Colonia", "regular"), None)
+
+    def test_register_font(self):
+        import reportlab.pdfbase.ttfonts
+        import reportlab.pdfbase.pdfmetrics
+
+        path_a = os.path.join(self.target_dir, "a.ttf")
+        path_b = os.path.join(self.target_dir, "b.ttf")
+        with open(path_a, "wb") as file:
+            file.write(build_font(name="Fontana"))
+        with open(path_b, "wb") as file:
+            file.write(build_font(name="Fontana") + b"\0")
+        get_font = reportlab.pdfbase.pdfmetrics.getFont
+
+        font_a = reportlab.pdfbase.ttfonts.TTFont("RegisterA", path_a)
+        colony_print.register_font(font_a)
+        self.assertEqual(get_font("RegisterA") is font_a, True)
+        colony_print.register_font(
+            reportlab.pdfbase.ttfonts.TTFont("RegisterD", path_a)
+        )
+        self.assertEqual(get_font("RegisterD") is font_a, True)
+
+        # another file of the same face (eg: a newer version of the font)
+        # replaces the font that reportlab would use for its face
+        font_b = reportlab.pdfbase.ttfonts.TTFont("RegisterB", path_b)
+        colony_print.register_font(font_b)
+        self.assertEqual(get_font("RegisterB") is font_b, True)
+
+        # another file for an already registered name replaces its font,
+        # with the font already registered for that file (and its face)
+        colony_print.register_font(
+            reportlab.pdfbase.ttfonts.TTFont("RegisterA", path_b)
+        )
+        self.assertEqual(get_font("RegisterA") is font_b, True)
+
+        # the fonts of the same file share the registered font, as a
+        # document can't embed two fonts with the same face
+        font_c = reportlab.pdfbase.ttfonts.TTFont("RegisterC", path_b)
+        colony_print.register_font(font_c)
+        self.assertEqual(get_font("RegisterC") is font_b, True)
+        colony_print.register_font(
+            reportlab.pdfbase.ttfonts.TTFont("RegisterC", path_b)
+        )
+        self.assertEqual(get_font("RegisterC") is font_b, True)
+
+        # a name registered with the previous file now uses the font of
+        # the new file already registered for the face (not another one)
+        colony_print.register_font(
+            reportlab.pdfbase.ttfonts.TTFont("RegisterD", path_b)
+        )
+        self.assertEqual(get_font("RegisterD") is font_b, True)
 
     def test_xmpl_fonts(self):
         fonts = colony_print.xmpl_fonts(EXAMPLE)
@@ -519,6 +587,13 @@ class FontCacheTest(unittest.TestCase):
         except appier.OperationalError as exception:
             message, code = exception.message, exception.code
         self.assertEqual(message, "Font 'Calibri' has the family name 'Colonia'")
+        self.assertEqual(code, 400)
+
+        try:
+            font_cache.install(dict(name="Colonia", data_b64="QUJ"))
+        except appier.OperationalError as exception:
+            message, code = exception.message, exception.code
+        self.assertEqual(message, "Font data of 'Colonia' is not valid")
         self.assertEqual(code, 400)
 
     def test_installed(self):

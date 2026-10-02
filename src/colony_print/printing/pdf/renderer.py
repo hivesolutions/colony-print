@@ -442,9 +442,11 @@ class BinieRenderer(object):
         in the PDF context, returning its name in the context and the
         metrics used by windows to size the font.
 
-        The font file is searched in the fonts installed on demand, then
-        with the file name convention of the PDF visitor and, in case it's
-        not found, the closest font installed in the system is used instead,
+        The font file is searched in the fonts installed on demand (with
+        the exact style), then with the file name convention of the PDF
+        visitor, then in the other styles of the fonts installed on demand
+        (as windows synthesizes the missing styles) and, in case it's not
+        found, the closest font installed in the system is used instead,
         as windows substitutes missing fonts.
 
         :type font_name: String
@@ -459,7 +461,6 @@ class BinieRenderer(object):
         """
 
         import reportlab.pdfbase.ttfonts
-        import reportlab.pdfbase.pdfmetrics
 
         # builds the style of the font and uses it to check if the font
         # is already loaded, returning its values immediately if that's
@@ -477,15 +478,18 @@ class BinieRenderer(object):
             return self.fonts[key]
 
         # creates the sequence of paths of the font files to be tried, first
-        # the one of the font installed on demand (if any), then the ones
-        # following the file name convention of the PDF visitor and then
-        # the closest font installed in the system (substitution)
+        # the one of the font installed on demand with the exact style (if
+        # any), then the ones following the file name convention of the PDF
+        # visitor, then another style of the font installed on demand (as
+        # windows synthesizes it) and then the closest font installed in
+        # the system (substitution)
         file_name = font_name.lower() + visitor.FONT_SUFFIX_MAP[style] + ".ttf"
-        file_paths = [fonts.font_file(self.font_files, font_name, style)]
+        file_paths = [fonts.font_file(self.font_files, font_name, style, exact=True)]
         file_paths.extend(
             os.path.expanduser(font_path + file_name)
             for font_path in visitor.FONT_PATHS
         )
+        file_paths.append(fonts.font_file(self.font_files, font_name, style))
         file_paths.append(self._match_font(font_name, bold=bold, italic=italic))
 
         # iterates over the paths of the font files trying to load the font
@@ -496,7 +500,7 @@ class BinieRenderer(object):
             try:
                 name = os.path.splitext(os.path.basename(file_path))[0]
                 font = reportlab.pdfbase.ttfonts.TTFont(name, file_path)
-                reportlab.pdfbase.pdfmetrics.registerFont(font)
+                fonts.register_font(font)
                 head = font.face.get_table("head")
                 os2 = font.face.get_table("OS/2")
             except Exception:

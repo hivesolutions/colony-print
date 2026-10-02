@@ -105,8 +105,14 @@ class ColonyPrintNode(object):
         logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
         logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
 
+        # builds the font cache of the node and loads its fonts in the
+        # system, a font that fails to load is logged and doesn't prevent
+        # the node from running (only the jobs that require it fail)
         self.font_cache = self._build_font_cache()
-        self._load_fonts()
+        try:
+            self._load_fonts()
+        except Exception as exception:
+            logging.exception("Exception while loading fonts '%s'" % str(exception))
 
         headers = dict()
         if secret_key:
@@ -175,6 +181,12 @@ class ColonyPrintNode(object):
         return self._handle_job(job)
 
     def print_job_email(self, job):
+        # the jobs that don't print a document (eg: the installation of
+        # fonts) are handled as in the normal mode, as there's no output
+        # document to be generated and sent by email for them
+        if job.get("type", None) in ("fonts",):
+            return self._handle_job(job)
+
         import mailme
 
         data_b64 = job["data_b64"]
@@ -857,8 +869,13 @@ class ColonyPrintNode(object):
         :return: The information of the installed fonts.
         """
 
-        fonts = [self.font_cache.install(font) for font in fonts]
-        self._load_fonts()
+        # installs the fonts in the font cache, loading the active fonts in
+        # the system even when one of them fails, as the previous ones may
+        # have been installed (becoming the active ones) in the meantime
+        try:
+            fonts = [self.font_cache.install(font) for font in fonts]
+        finally:
+            self._load_fonts()
         return fonts
 
     def _load_fonts(self):

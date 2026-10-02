@@ -116,6 +116,11 @@ def verify_font(font, reference=True):
         message="Font MD5 '%s' is not valid" % md5,
         code=400,
     )
+    appier.verify(
+        not data_b64 or appier.legacy.is_string(data_b64, all=True),
+        message="Font data of '%s' is not valid" % name,
+        code=400,
+    )
 
 
 def font_info(data):
@@ -185,12 +190,13 @@ def font_info(data):
     return family, style
 
 
-def font_file(font_files, name, style):
+def font_file(font_files, name, style, exact=False):
     """
     Retrieves the path to the file of the font installed on demand with
     the provided name and style, in case the style is not installed for
-    the family another style of the family is used, as windows (GDI)
-    synthesizes the missing styles of a family.
+    the family another style of the family is used (unless the exact
+    style is required), as windows (GDI) synthesizes the missing styles
+    of a family.
 
     :type font_files: Dictionary
     :param font_files: The map associating the (lower cased) name and
@@ -199,19 +205,58 @@ def font_file(font_files, name, style):
     :param name: The name of the font (family) to be retrieved.
     :type style: String
     :param style: The style of the font to be retrieved.
+    :type exact: bool
+    :param exact: If only the provided style of the family may be used,
+    as when the system may have the font of that exact style.
     :rtype: String
     :return: The path to the file of the font or an invalid value
-    in case the family is not installed.
+    in case the family (or the exact style) is not installed.
     """
 
     if not font_files:
         return None
     name_l = name.lower()
-    for _style in (style, "regular") + FONT_STYLES:
+    styles = (style,) if exact else (style, "regular") + FONT_STYLES
+    for _style in styles:
         file_path = font_files.get((name_l, _style), None)
         if file_path:
             return file_path
     return None
+
+
+def register_font(font):
+    """
+    Registers the provided (true type) font in the PDF context, making
+    sure that it replaces the font of another file previously registered
+    with its name or with its face, as reportlab keeps the first font
+    registered for a name or for a face (eg: an older version of a font
+    installed on demand or a font of the system with the same name).
+
+    The fonts of the same file share the same registered font, as a
+    document can't embed two fonts with the same face.
+
+    :type font: TTFont
+    :param font: The (true type) font to be registered.
+    """
+
+    import reportlab.pdfbase.pdfmetrics
+
+    # registers the font and verifies that the font registered for its
+    # name is the one of its file, returning immediately if that's the case
+    reportlab.pdfbase.pdfmetrics.registerFont(font)
+    name, face_name, file_path = font.fontName, font.face.name, font.face.filename
+    registered = reportlab.pdfbase.pdfmetrics.getFont(name)
+    if getattr(registered.face, "filename", None) == file_path:
+        return
+
+    # replaces the font registered for the name and for the face, using
+    # the font already registered for the face in case it's of the same
+    # file (so that the fonts of the same file share the same font)
+    face_font = reportlab.pdfbase.pdfmetrics._dynFaceNames.get(face_name, None)
+    if face_font and getattr(face_font.face, "filename", None) == file_path:
+        font = face_font
+    reportlab.pdfbase.pdfmetrics._fonts[name] = font
+    reportlab.pdfbase.pdfmetrics._dynFaceNames[face_name] = font
 
 
 def xmpl_fonts(data):
@@ -343,7 +388,12 @@ class FontCache(object):
         # already in the cache (URLs are considered immutable)
         data = None
         if data_b64:
-            data = base64.b64decode(data_b64)
+            try:
+                data = base64.b64decode(data_b64)
+            except Exception:
+                raise appier.OperationalError(
+                    message="Font data of '%s' is not valid" % name, code=400
+                )
         elif url and url in self.urls and os.path.exists(self._file(self.urls[url])):
             appier.verify(
                 md5 in (None, self.urls[url]),

@@ -171,6 +171,18 @@ class NodeControllerTest(unittest.TestCase):
         )
         self.assertEqual(self.app.jobs["node"][1]["fonts"], [font])
 
+        # a document declaring its fonts without the fonts field, whose job
+        # keeps their information but sends no fonts to the node (it reads
+        # them from the document)
+        declared = dict(name="Colonia", data_b64="QUJD")
+        code, job_info = self._print(
+            data_b64=None, data=self._xmpl(fonts=[declared]), format="xmpl"
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual("fonts" in self.app.jobs["node"][2], False)
+        self.assertEqual(job_info["id"] in self.app.jobs_fonts, False)
+
     def test_print_default_xmpl_invalid(self):
         self._node(capabilities=["npcolony", "binie", "dynamic-fonts"])
         code, result = self._print(data_b64=None, data=self._xmpl(), format="xmpl")
@@ -183,6 +195,12 @@ class NodeControllerTest(unittest.TestCase):
         )
         self.assertEqual(code, 400)
         self.assertEqual(result["message"], "Document is not a valid XMPL document")
+
+        # documents that are well formed but that can't be converted (no
+        # name for the printing document or another root element)
+        for data in ("<printing_document/>", '<html name="hello_world"/>'):
+            code, result = self._print(data_b64=None, data=data, format="xmpl")
+            self.assertEqual(code, 400)
 
         data = self._xmpl(fonts=[dict(name="Colonia", url="ftp://fonts.hive.pt/c.ttf")])
         code, result = self._print(data_b64=None, data=data, format="xmpl")
@@ -210,6 +228,16 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
         self.assertEqual(self.app.jobs["node"][0]["fonts"], fonts)
         self.assertEqual(self.app.jobs_fonts[job_info["id"]], fonts)
+
+        code, job_info = self._print(
+            url="/nodes/node/printers/receipt/print",
+            data_b64=None,
+            data=self._xmpl(fonts=[dict(name="Colonia", data_b64="QUJD")]),
+            format="xmpl",
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual("fonts" in self.app.jobs["node"][1], False)
 
         code, result = self._print(
             url="/nodes/node/printers/receipt/print", format="pdf", fonts=fonts
@@ -392,6 +420,24 @@ class NodeControllerTest(unittest.TestCase):
                 format="binie",
                 fonts=[dict(name="Colonia", md5="a" * 32)],
             ),
+        )
+
+    def test_verify_xmpl(self):
+        controller = colony_print.controllers.NodeController(self.app)
+        controller._verify_xmpl(self._xmpl().encode("utf-8"))
+        controller._verify_xmpl(
+            self._xmpl(fonts=[dict(name="Colonia", md5="a" * 32)]).encode("utf-8")
+        )
+        for data in (
+            b"<printing_document/>",
+            b'<html name="hello_world"/>',
+            b"<printing_document",
+            b"not xml",
+        ):
+            self.assertRaises(Exception, lambda: controller._verify_xmpl(data))
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: controller._verify_xmpl(b'<html name="hello_world"/>'),
         )
 
     def test_ensure_capability(self):

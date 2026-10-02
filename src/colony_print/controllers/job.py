@@ -116,6 +116,7 @@ class JobController(appier.Controller):
         # the "heavy" data (base64 encoded) to it
         job = dict(clone_info)
         job["data_b64"] = data_b64
+        job.pop("fonts", None)
         if fonts:
             job["fonts"] = fonts
         jobs = self.owner.jobs.get(node_id, [])

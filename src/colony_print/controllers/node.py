@@ -7,6 +7,8 @@ import uuid
 import time
 import base64
 
+import xml.dom.minidom
+
 import appier
 
 HELLO_WORLD_B64 = "SGVsbG8gV29ybGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
@@ -154,9 +156,12 @@ class NodeController(appier.Controller):
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
-        # the "heavy" data (base64 encoded) to it
+        # the "heavy" data (base64 encoded) to it, with
+        # the fonts of the request replacing their (light)
+        # information, as the node installs them
         job = dict(job_info)
         job["data_b64"] = data_b64
+        job.pop("fonts", None)
         if fonts:
             job["fonts"] = fonts
         jobs = self.owner.jobs.get(id, [])
@@ -247,9 +252,12 @@ class NodeController(appier.Controller):
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
-        # the "heavy" data (base64 encoded) to it
+        # the "heavy" data (base64 encoded) to it, with
+        # the fonts of the request replacing their (light)
+        # information, as the node installs them
         job = dict(job_info)
         job["data_b64"] = data_b64
+        job.pop("fonts", None)
         if fonts:
             job["fonts"] = fonts
         jobs = self.owner.jobs.get(id, [])
@@ -339,8 +347,8 @@ class NodeController(appier.Controller):
         and the ones declared by its document (for XMPL documents), and
         that the node supports them, raising an exception otherwise.
 
-        XMPL documents are parsed so that invalid documents are refused
-        before being sent to the node.
+        XMPL documents are verified (converted as the node does) so that
+        invalid documents are refused before being sent to the node.
 
         :type id: String
         :param id: The identifier of the node of the job.
@@ -379,7 +387,9 @@ class NodeController(appier.Controller):
         if format == "xmpl":
             self._ensure_capability(id, "xmpl")
             try:
-                declared = colony_print.xmpl_fonts(base64.b64decode(data_b64))
+                data = base64.b64decode(data_b64)
+                declared = colony_print.xmpl_fonts(data)
+                self._verify_xmpl(data)
             except Exception:
                 raise appier.OperationalError(
                     message="Document is not a valid XMPL document", code=400
@@ -398,6 +408,31 @@ class NodeController(appier.Controller):
         if fonts_info:
             self._ensure_capability(id, "dynamic-fonts")
         return fonts_info
+
+    def _verify_xmpl(self, data):
+        """
+        Verifies that the provided data is a valid XMPL document, with a
+        printing document as its root element, that is converted into a
+        binie document (as the node does), raising an exception otherwise.
+
+        :type data: String
+        :param data: The XMPL document to be verified.
+        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/xmpl.md
+        """
+
+        import colony_print
+
+        # verifies the root element of the document, as the parser of
+        # the printing language takes any root element as the printing
+        # document, and then converts the document into binie
+        document = xml.dom.minidom.parseString(data)
+        appier.verify(
+            document.documentElement.tagName == "printing_document",
+            message="Root element of the document is not a printing document",
+        )
+        manager = colony_print.PrintingManager()
+        manager.load()
+        manager.print_language(data, dict(name="binie", file=appier.legacy.BytesIO()))
 
     def _ensure_capability(self, id, capability):
         """
