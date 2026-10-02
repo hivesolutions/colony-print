@@ -3,21 +3,18 @@
 Builds the Colony Print node installer for Windows (setup.exe).
 
 .DESCRIPTION
-Builds the wheels of the node (colony-print, npcolony and their dependencies)
-with the provided (64 bit) Python interpreter, compiling npcolony with the
-Visual C++ compiler of the machine, installs them in an embedded Python
+Builds the wheel of the node (colony-print) with the provided (64 bit) Python
+interpreter and downloads the wheels of npcolony and of the dependencies from
+PyPI (so that nothing is compiled), installs them in an embedded Python
 distribution of the same version and compiles the Inno Setup installer with
 it, together with the WinSW service wrapper.
-
-The wheels are also copied to the dist\packages directory, ready to be uploaded
-to the Colony Print server, from where the nodes update themselves.
 
 .EXAMPLE
 .\windows\build.ps1 -Python C:\Python314\python.exe
 #>
 param(
     [string]$Python = "python",
-    [string]$Npcolony = "npcolony",
+    [string]$Npcolony = "npcolony>=1.4.0",
     [string]$WinSWVersion = "2.12.0",
     [string]$WinSWSha256 = "b5066b7bbdfba1293e5d15cda3caaea88fbeab35bd5b38c41c913d492aadfc4f",
     [string]$Iscc = ""
@@ -32,7 +29,6 @@ $WheelsDir = Join-Path $BuildDir "wheels"
 $PythonDir = Join-Path $BuildDir "python"
 $SitePackages = Join-Path $PythonDir "Lib\site-packages"
 $DistDir = Join-Path $Root "dist"
-$PackagesDir = Join-Path $DistDir "packages"
 
 # the digests (SHA256) of the embedded Python distributions supported by the
 # build, as published by python.org, so that a tampered (or corrupted) Python,
@@ -82,15 +78,18 @@ Write-Host "Building Colony Print node $Version with Python $PythonVersion"
 if (Test-Path $BuildDir) {
     Remove-Item -Recurse -Force $BuildDir
 }
-if (Test-Path $PackagesDir) {
-    Remove-Item -Recurse -Force $PackagesDir
-}
-New-Item -ItemType Directory -Force -Path $BuildDir, $WheelsDir, $PythonDir, $PackagesDir | Out-Null
+New-Item -ItemType Directory -Force -Path $BuildDir, $WheelsDir, $PythonDir | Out-Null
 
-# builds the wheels of the node packages and of their dependencies, the
-# ones without wheels (eg: npcolony) are built from their sources
+# builds the wheel of the node (from the repository) and downloads the wheels
+# of the other packages and of the dependencies from PyPI, only accepting the
+# wheels, as npcolony (since 1.4.0) has wheels for Windows
 Write-Host "Building wheels"
-Invoke-Native $Python (@("-m", "pip", "wheel", "--wheel-dir", $WheelsDir, $Root, $Npcolony) + $Packages)
+Invoke-Native $Python @("-m", "pip", "wheel", "--no-deps", "--wheel-dir", $WheelsDir, $Root)
+$Wheel = Get-ChildItem -Path (Join-Path $WheelsDir "colony_print-*.whl") | Select-Object -First 1
+Invoke-Native $Python (@(
+    "-m", "pip", "wheel", "--only-binary", ":all:", "--wheel-dir", $WheelsDir,
+    $Wheel.FullName, $Npcolony
+) + $Packages)
 
 # downloads the embedded Python distribution and enables the site packages
 # in it (disabled by default), where the node packages are installed, notice
@@ -153,10 +152,6 @@ if ($WinSWHash -ne $WinSWSha256.ToLower()) {
     throw "Invalid WinSW digest $WinSWHash (expected $WinSWSha256)"
 }
 
-# copies the wheels to the dist directory, to be uploaded to the server
-# so that the nodes are able to update themselves from it
-Copy-Item -Path (Join-Path $WheelsDir "*.whl") -Destination $PackagesDir
-
 if (-not $Iscc) {
     $Command = Get-Command "iscc.exe" -ErrorAction SilentlyContinue
     if ($Command) {
@@ -176,4 +171,3 @@ Invoke-Native $Iscc @(
 )
 
 Write-Host "Built $(Join-Path $DistDir "colony-print-node-setup-$Version.exe")"
-Write-Host "Built packages in $PackagesDir"

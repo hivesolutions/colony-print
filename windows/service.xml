@@ -1,7 +1,7 @@
 <!--
     WinSW (https://github.com/winsw/winsw) configuration of the Colony Print
     node service, the service runs the boot script of the node, which updates
-    the packages of the node from the server and then runs the node itself.
+    the packages of the node from PyPI and then runs the node itself.
 -->
 <service>
     <id>colony-print-node</id>

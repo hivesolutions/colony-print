@@ -145,7 +145,7 @@ The `text` engine is a virtual printer that does not talk to any physical device
 
 ## Windows Node
 
-Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It installs everything the node needs: an embedded Python, colony-print, [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi) for the native (GDI) printing, and their dependencies. The node runs as the `colony-print-node` Windows service, which starts with the machine and updates itself from the server every time it starts.
+Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It installs everything the node needs: an embedded Python, colony-print, [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi) for the native (GDI) printing, and their dependencies. The node runs as the `colony-print-node` Windows service, which starts with the machine and updates itself from [PyPI](https://pypi.org) every time it starts.
 
 ### Building the Installer
 
@@ -153,7 +153,7 @@ Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It 
 .\windows\build.ps1 -Python C:\Python314\python.exe
 ```
 
-The build requires a 64 bit Python (the embedded Python is the same version), the Visual C++ Build Tools (npcolony is compiled from its sources) and [Inno Setup 6](https://jrsoftware.org/isinfo.php). It creates the installer (`dist\colony-print-node-setup-<version>.exe`) and the packages of the node (`dist\packages\*.whl`), which are uploaded to the server for the self-update. The `Windows Workflow` builds both on every push (the `colony-print-node-windows` artifact) and smoke tests the installer on a Windows runner. When a release is published, it also attaches the installer to the release, for which the tag of the release must match the version in `setup.py` (e.g. `0.21.0`). A failed attach can be retried by running the workflow manually with the tag of the release.
+The build requires a 64 bit Python (the embedded Python is the same version) and [Inno Setup 6](https://jrsoftware.org/isinfo.php), as npcolony and the other dependencies are installed from their PyPI wheels (nothing is compiled). It creates the installer (`dist\colony-print-node-setup-<version>.exe`), which bundles the packages, so that it installs the node without internet access. The `Windows Workflow` builds it on every push (the `colony-print-node-windows` artifact) and smoke tests the installer on a Windows runner. When a release is published, it also attaches the installer to the release, for which the tag of the release must match the version in `setup.py` (e.g. `0.21.0`). A failed attach can be retried by running the workflow manually with the tag of the release.
 
 ### Installing
 
@@ -181,31 +181,22 @@ The parameters that aren't given keep the values of the existing configuration, 
 
 The service runs under the system account, so it only sees the printers installed for all users and has no default printer. The installer suggests the default printer of the user running it, and the printer should be set, otherwise the jobs that don't select one fail. In email mode the printer must be a PDF printer (e.g. `Microsoft Print to PDF`), as the jobs are printed to PDF files.
 
-The node is installed in `C:\Program Files\Colony Print Node`. Its configuration (`config.env`), logs and downloaded packages are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
+The node is installed in `C:\Program Files\Colony Print Node`. Its configuration (`config.env`) and logs are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
 
 ### Self-Update
 
-Every time the service starts, the node lists the packages hosted by the server and downloads the ones compatible with it. It then installs the newest version of each package it has installed (and of colony-print and npcolony) when that version differs from the installed one, skipping the versions that don't support its Python (`Requires-Python`). A version is rolled out by uploading its packages and rolled back by removing them from the server. A failed update never prevents the node from running, as it keeps the installed packages, and the service runs the boot script from a copy outside of the packages (`C:\Program Files\Colony Print Node\boot.py`), so a broken or interrupted update never prevents it from starting. Updates may be disabled with `NODE_UPDATE=0` in `config.env`, and the packages may be hosted elsewhere with `PACKAGES_URL` (the secret key is only sent to the server itself, never to other hosts, including the ones of the redirects).
+Every time the service starts, the node updates colony-print and npcolony to their newest versions in PyPI (`pip install --upgrade`), only installing their wheels (nothing is compiled in the node) and skipping the versions that don't support its Python (`Requires-Python`). Their dependencies are only updated when required. A failed update (e.g. without internet access) only logs a warning and never prevents the node from running, as it keeps the installed packages, and the service runs the boot script from a copy outside of the packages (`C:\Program Files\Colony Print Node\boot.py`), so a broken or interrupted update never prevents it from starting.
 
-As the packages are installed and run by the service (as the system account), they're only retrieved through HTTPS, or from the local machine (including the redirects), a server reached through plain HTTP is not used for updates (the installer warns about it), unless the insecure update is explicitly allowed with `NODE_UPDATE_INSECURE=1` in `config.env`.
+The update is configured in `config.env`:
 
-The packages (wheels) are managed with the following endpoints of the server, which require the secret key, and are stored in `PACKAGES_PATH` (`DATA_PATH/packages` by default, which must be persisted, e.g. as a Docker volume). As every node keeps the secret key and runs the packages, uploading and removing them also requires the packages key, set with `PACKAGES_KEY` in the server (publishing is disabled without it) and sent in the `X-Packages-Key` header, which must never be given to the nodes:
+| Configuration           | Notes                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `NODE_UPDATE`           | `0` disables the update.                                                                          |
+| `NODE_VERSION`          | Version of colony-print, an exact version (e.g. `0.21.0`) or a specifier (e.g. `<0.22`, `==0.21.*`). |
+| `NODE_NPCOLONY_VERSION` | Version of npcolony, as `NODE_VERSION`.                                                           |
+| `NODE_INDEX_URL`        | URL of the package index to use instead of PyPI (e.g. a private mirror).                          |
 
-| Endpoint                  | Notes                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `GET /packages`           | Lists the packages, with their name, version, size and SHA256 digest.          |
-| `POST /packages`          | Uploads packages, as `file` fields of a multipart request.                     |
-| `PUT /packages/<file>`    | Uploads a package, as the body of the request (`application/octet-stream`).    |
-| `GET /packages/<file>`    | Downloads a package.                                                           |
-| `DELETE /packages/<file>` | Removes a package.                                                             |
-
-To roll out a build, upload its packages and restart the nodes (or wait for their next boot):
-
-```bash
-for file in dist/packages/*.whl; do
-    curl -H "X-Secret-Key: $SECRET_KEY" -H "X-Packages-Key: $PACKAGES_KEY" -F "file=@$file" $BASE_URL/packages
-done
-```
+The versions pin a node (or roll it back), as the node installs the newest version they allow, including an older one.
 
 ## Admin UI
 

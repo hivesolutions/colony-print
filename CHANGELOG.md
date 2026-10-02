@@ -14,8 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Substitution of the fonts missing on Linux nodes by the closest installed font - [#24](https://github.com/hivesolutions/colony-print/issues/24)
 * Review of every pull request by Claude
 * Windows installer (`setup.exe`) for the nodes, which installs an embedded Python with colony-print, npcolony and their dependencies and runs the node as a Windows service
-* Self-update of the Windows nodes whenever their service starts, from the packages hosted by the server
-* Hosting of the node packages (wheels) by the server through the `/packages` endpoints, whose publishing requires a packages key (`PACKAGES_KEY`) other than the secret key of the nodes
+* Self-update of the Windows nodes from PyPI whenever their service starts, with optional version pins (`NODE_VERSION` and `NODE_NPCOLONY_VERSION`) and package index (`NODE_INDEX_URL`)
 * Windows workflow that builds and smoke tests the node installer, attaching it to the GitHub release of each version
 
 ### Changed

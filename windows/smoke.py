@@ -22,19 +22,23 @@ except ImportError:
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_PATH = os.path.join(ROOT, "dist")
+WHEELS_PATH = os.path.join(ROOT, "build", "windows", "wheels")
 WORK_PATH = os.path.join(ROOT, "build", "smoke")
 APP_PATH = os.path.join(os.environ.get("ProgramFiles", ""), "Colony Print Node")
 DATA_PATH = os.path.join(os.environ.get("ProgramData", ""), "Colony Print Node")
 SETUP_LOG_PATH = os.path.join(WORK_PATH, "setup.log")
 SERVER_LOG_PATH = os.path.join(WORK_PATH, "server.log")
+INDEX_LOG_PATH = os.path.join(WORK_PATH, "index.log")
 
 SERVICE = "colony-print-node"
 NODE_ID = "ci-node"
 PDF_PRINTER = "Microsoft Print to PDF"
 PORT = 8686
 BASE_URL = "http://127.0.0.1:%d/" % PORT
-PLANTED_URL = b"http://127.0.0.1:1/packages"
-PACKAGES_KEY = "ci-packages"
+INDEX_PORT = 8687
+INDEX_URL = "http://127.0.0.1:%d/" % INDEX_PORT
+PLANTED_URL = b"http://127.0.0.1:1/"
+PACKAGES = ("colony-print", "npcolony")
 TRUSTED = ("BUILTIN\\Administrators", "NT AUTHORITY\\SYSTEM")
 
 ACCOUNT_SCRIPT = """
@@ -59,16 +63,18 @@ class Smoke(object):
     after the windows\\build.ps1 script, as it installs and uninstalls the
     node and its service.
 
-    Runs a local Colony Print server, that hosts the packages of the node
-    with a newer version of colony-print, silently installs the node with
-    the server and verifies that the node updates itself, registers itself
-    and prints a document, re-installing and uninstalling it at the end,
-    installing it once more with the configuration kept by the uninstall.
+    Runs a local Colony Print server, silently installs the node with the
+    server and verifies that the node updates itself from PyPI and registers
+    itself, then updates and rolls back the node from a local package index
+    (with a newer version of colony-print), prints a document, re-installs
+    and uninstalls it, installing it once more with the configuration kept
+    by the uninstall.
     """
 
     def __init__(self):
         self.key = None
         self.server = None
+        self.index = None
 
     def run(self):
         if os.path.exists(WORK_PATH):
@@ -77,14 +83,17 @@ class Smoke(object):
 
         try:
             self.start_server()
-            version = self.upload_packages()
-            self.test_install(version)
+            current, version = self.start_index()
+            self.test_install()
+            self.test_update(version)
             self.test_print()
-            self.test_reinstall(version)
+            self.test_rollback(current)
+            self.test_reinstall(current)
             self.test_uninstall()
-            self.test_install_kept(version)
+            self.test_install_kept(current)
         finally:
             self.dump_logs()
+            self.stop_index()
             self.stop_server()
 
     def start_server(self):
@@ -96,7 +105,6 @@ class Smoke(object):
             PORT=str(PORT),
             LEVEL="INFO",
             DATA_PATH=os.path.join(WORK_PATH, "data"),
-            PACKAGES_KEY=PACKAGES_KEY,
         )
 
         # creates the admin account whose secret key is used both by the
@@ -127,37 +135,45 @@ class Smoke(object):
         self.server.wait()
         self.server_log.close()
 
-    def upload_packages(self):
-        # uploads the packages built for the node (the ones of the installer)
-        # together with a newer version of colony-print, that the node must
-        # install when it boots, reporting the newer version
-        packages = glob.glob(os.path.join(DIST_PATH, "packages", "*.whl"))
-        assert packages, "No packages found in dist"
-        version, wheel_path = self.build_newer()
-        for path in packages + [wheel_path]:
-            name = os.path.basename(path)
-            with open(path, "rb") as file:
-                data = file.read()
+    def start_index(self):
+        # builds a local package index (PEP 503, as PyPI) with the wheels of
+        # the installer and a newer version of colony-print, served by the
+        # (directory listing of the) HTTP server of the standard library
+        current, version, wheel_path = self.build_newer()
+        index_path = os.path.join(WORK_PATH, "index")
+        for path in glob.glob(os.path.join(WHEELS_PATH, "*.whl")) + [wheel_path]:
+            name = os.path.basename(path).split("-", 1)[0].replace("_", "-").lower()
+            if not name in PACKAGES:
+                continue
+            if not os.path.exists(os.path.join(index_path, name)):
+                os.makedirs(os.path.join(index_path, name))
+            shutil.copy(path, os.path.join(index_path, name))
 
-            # the secret key (kept by the node) alone must not be able to
-            # publish packages, only together with the packages key
-            code, _data = self.request(
-                "PUT",
-                "packages/" + name,
-                data=data,
-                content_type="application/octet-stream",
-            )
-            assert code == 403, "Upload of '%s' without key (%d)" % (name, code)
-            code, _data = self.request(
-                "PUT",
-                "packages/" + name,
-                data=data,
-                content_type="application/octet-stream",
-                headers={"X-Packages-Key": PACKAGES_KEY},
-            )
-            assert code == 200, "Upload of '%s' failed (%d)" % (name, code)
-        log("Uploaded %d packages (colony-print %s)" % (len(packages) + 1, version))
-        return version
+        log("Starting index at %s" % INDEX_URL)
+        self.index_log = open(INDEX_LOG_PATH, "wb")
+        self.index = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "http.server",
+                str(INDEX_PORT),
+                "--bind",
+                "127.0.0.1",
+                "--directory",
+                index_path,
+            ],
+            stdout=self.index_log,
+            stderr=subprocess.STDOUT,
+        )
+        wait_for(lambda: fetch(INDEX_URL + "colony-print/") == 200, "index to start")
+        return current, version
+
+    def stop_index(self):
+        if not self.index:
+            return
+        self.index.terminate()
+        self.index.wait()
+        self.index_log.close()
 
     def build_newer(self):
         source_path = os.path.join(WORK_PATH, "newer")
@@ -193,9 +209,9 @@ class Smoke(object):
                 source_path,
             ]
         )
-        return version, glob.glob(os.path.join(wheels_path, "*.whl"))[0]
+        return current, version, glob.glob(os.path.join(wheels_path, "*.whl"))[0]
 
-    def test_install(self, version):
+    def test_install(self):
         # plants a data directory and a configuration owned by the administrators
         # but writable by the users, as created by an administrator (or by a user
         # that took the ownership of it) before the node is installed, that points
@@ -203,7 +219,7 @@ class Smoke(object):
         config_path = os.path.join(DATA_PATH, "config.env")
         os.makedirs(DATA_PATH)
         with open(config_path, "wb") as file:
-            file.write(b"PACKAGES_URL=%s\r\nNODE_NAME=Planted\r\n" % PLANTED_URL)
+            file.write(b"NODE_INDEX_URL=%s\r\nNODE_NAME=Planted\r\n" % PLANTED_URL)
         subprocess.check_call(["icacls", DATA_PATH, "/setowner", "*S-1-5-32-544", "/T"])
         subprocess.check_call(
             ["icacls", DATA_PATH, "/grant", "*S-1-5-32-545:(OI)(CI)F"]
@@ -230,7 +246,7 @@ class Smoke(object):
         config = read(config_path)
         assert "NODE_ID=%s" % NODE_ID in config, config
         assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
-        assert not "PACKAGES_URL" in config, "Planted configuration used"
+        assert not "NODE_INDEX_URL" in config, "Planted configuration used"
         assert not "Planted" in config, "Planted configuration used"
 
         # verifies that only the system account and the administrators have
@@ -245,11 +261,23 @@ class Smoke(object):
                 principal = line.strip().split(":(", 1)[0]
                 assert principal in TRUSTED, "%s accessible by %s" % (path, principal)
 
-        node = self.wait_node(version)
+        # the node updates itself from PyPI (the newest versions of the
+        # packages of the installer, or newer ones), before registering
+        node = self.wait_node()
         assert "npcolony" in node["engines"], node["engines"]
         devices = node["engine_info"]["colony"]["devices"]
         log("Node printers: %s" % ", ".join(device["name"] for device in devices))
+        errors = read(os.path.join(DATA_PATH, "logs", "colony-print-node.err.log"))
+        assert "Updating packages colony-print, npcolony" in errors, "No update"
+        assert not "Problem updating node" in errors, "Update from PyPI failed"
 
+    def test_update(self, version):
+        # configures the node to update itself from the local index (instead
+        # of PyPI), which must install the newer version of colony-print
+        last_ping = self.node()["last_ping"]
+        self.configure(NODE_INDEX_URL=INDEX_URL)
+        self.restart()
+        self.wait_node(version, last_ping=last_ping)
         installed = self.installed_version()
         assert installed == version, "Installed %s, expected %s" % (installed, version)
 
@@ -281,22 +309,33 @@ class Smoke(object):
         assert output.startswith(b"%PDF"), "Output is not a PDF document"
         log("Printed document (%d bytes)" % len(output))
 
-    def test_reinstall(self, version):
+    def test_rollback(self, current):
+        # pins the version of colony-print to the one of the installer, which
+        # must roll the node back to it (from the local index)
+        last_ping = self.node()["last_ping"]
+        self.configure(NODE_VERSION=current)
+        self.restart()
+        self.wait_node(current, last_ping=last_ping)
+
+    def test_reinstall(self, current):
         # runs the installer once more without any parameter, which must
-        # keep the configuration, while replacing the (updated) packages
-        # with the ones of the installer, that the node updates once more
+        # keep the configuration (including the pinned version and the
+        # index), while replacing the packages with the ones of the installer
         last_ping = self.node()["last_ping"]
         self.install([])
         assert self.service_state() == "RUNNING", "Service is not running"
-        assert "SECRET_KEY=%s" % self.key in read(os.path.join(DATA_PATH, "config.env"))
-        self.wait_node(version, last_ping=last_ping)
+        config = read(os.path.join(DATA_PATH, "config.env"))
+        assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
+        assert "NODE_INDEX_URL=%s" % INDEX_URL in config, "Index not in config"
+        assert "NODE_VERSION=%s" % current in config, "Version not in config"
+        self.wait_node(current, last_ping=last_ping)
 
     def test_uninstall(self):
         self.uninstall()
         assert not os.path.exists(os.path.join(APP_PATH, "python")), "Python left"
         assert os.path.exists(os.path.join(DATA_PATH, "config.env")), "Config removed"
 
-    def test_install_kept(self, version):
+    def test_install_kept(self, current):
         # installs the node once more without any parameter, which must use
         # the configuration kept by the uninstall, as the data directory and
         # the configuration written by the installer are trusted (owned by
@@ -305,7 +344,7 @@ class Smoke(object):
         self.install([])
         assert self.service_state() == "RUNNING", "Service is not running"
         assert "SECRET_KEY=%s" % self.key in read(os.path.join(DATA_PATH, "config.env"))
-        self.wait_node(version, last_ping=last_ping)
+        self.wait_node(current, last_ping=last_ping)
         self.uninstall()
 
     def uninstall(self):
@@ -317,6 +356,23 @@ class Smoke(object):
             lambda: not os.path.exists(uninstaller) and self.service_state() == None,
             "uninstall to finish",
         )
+
+    def configure(self, **values):
+        # sets the provided values in the configuration of the node, keeping
+        # its other values, as done by an administrator
+        config_path = os.path.join(DATA_PATH, "config.env")
+        lines = [
+            line
+            for line in read(config_path).splitlines()
+            if not line.split("=", 1)[0].strip() in values
+        ]
+        lines += ["%s=%s" % item for item in sorted(values.items())]
+        with open(config_path, "wb") as file:
+            file.write("\r\n".join(lines + [""]).encode("utf-8"))
+
+    def restart(self):
+        subprocess.check_call(["net", "stop", SERVICE])
+        subprocess.check_call(["net", "start", SERVICE])
 
     def install(self, args):
         setups = glob.glob(os.path.join(DIST_PATH, "colony-print-node-setup-*.exe"))
@@ -334,16 +390,23 @@ class Smoke(object):
         )
         assert code == 0, "Installer failed with code %d" % code
 
-    def wait_node(self, version, last_ping=0.0):
-        # waits for the node to register itself with the expected version,
-        # which means that it updated itself and runs the new version
+    def wait_node(self, version=None, last_ping=0.0):
+        # waits for the node to register itself with the expected version
+        # (any version when not provided), which means that it updated
+        # itself and runs the new version
         def registered():
             node = self.node()
             if not node or node.get("last_ping", 0.0) <= last_ping:
                 return None
+            if version == None:
+                return node
             return node if node.get("version", None) == version else None
 
-        node = wait_for(registered, "node to register with %s" % version, timeout=300)
+        node = wait_for(
+            registered,
+            "node to register with %s" % (version or "any version"),
+            timeout=300,
+        )
         log("Node registered: %s" % json.dumps(node, indent=4))
         return node
 
@@ -382,12 +445,8 @@ class Smoke(object):
         )
         return [line.strip() for line in output.decode("utf-8", "ignore").splitlines()]
 
-    def request(
-        self, method, path, data=None, content_type=None, headers=None, timeout=60
-    ):
-        headers = dict(headers or dict())
-        if self.key:
-            headers["X-Secret-Key"] = self.key
+    def request(self, method, path, data=None, content_type=None, timeout=60):
+        headers = {"X-Secret-Key": self.key} if self.key else dict()
         if content_type:
             headers["Content-Type"] = content_type
         request = urllib_request.Request(BASE_URL + path, data=data, headers=headers)
@@ -404,13 +463,24 @@ class Smoke(object):
             response.close()
 
     def dump_logs(self):
-        paths = [SETUP_LOG_PATH, SERVER_LOG_PATH]
+        paths = [SETUP_LOG_PATH, SERVER_LOG_PATH, INDEX_LOG_PATH]
         paths += sorted(glob.glob(os.path.join(DATA_PATH, "logs", "*.log")))
         for path in paths:
             if not os.path.exists(path):
                 continue
             log("==== %s ====" % path)
             log(read(path, errors="replace"))
+
+
+def fetch(url, timeout=10):
+    try:
+        response = urllib_request.urlopen(url, timeout=timeout)
+    except Exception:
+        return 0
+    try:
+        return response.getcode()
+    finally:
+        response.close()
 
 
 def wait_for(condition, message, timeout=120, interval=2.0):

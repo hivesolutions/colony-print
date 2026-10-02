@@ -75,7 +75,6 @@ Filename: "{app}\{#ServiceName}.exe"; Parameters: "uninstall"; Flags: runhidden 
 ; the configuration and the logs of the node are kept, so that they're
 ; reused in case the node is installed again
 Type: filesandordirs; Name: "{app}\python"
-Type: filesandordirs; Name: "{commonappdata}\{#AppName}\packages"
 
 [Code]
 const
@@ -284,8 +283,7 @@ end;
 
 { Verifies if the provided URL is secure for the node, either because it
   uses HTTPS or because it targets the local machine (loopback), as the
-  secret key is sent to the server and the packages installed by the
-  service are retrieved from it (only through HTTPS, by default) }
+  secret key is sent to the server }
 function SecureUrl(const Url: String): Boolean;
 var
   Host: String;
@@ -528,7 +526,7 @@ begin
   ServerPage := CreateInputQueryPage(wpSelectDir, 'Server',
     'Colony Print server of the node',
     'Enter the URL of the Colony Print server and the secret key the node uses ' +
-    'to authenticate with it. The node also updates itself from this server.');
+    'to authenticate with it.');
   ServerPage.Add('Server URL:', False);
   ServerPage.Add('Secret key:', True);
   ServerPage.Values[0] := InitialValue('URL', 'BASE_URL', DefaultUrl);
@@ -602,11 +600,9 @@ begin
       Result := False;
     end
     else if not SecureUrl(ServerPage.Values[0]) and (SuppressibleMsgBox(
-      'The server URL does not use HTTPS, so the secret key is sent unencrypted ' +
-      'and the node does not update itself from the server (unless the insecure ' +
-      'update is allowed with NODE_UPDATE_INSECURE=1).' + #13#10#13#10 +
-      'Continue with this server URL anyway?', mbConfirmation, MB_YESNO,
-      IDYES) <> IDYES) then
+      'The server URL does not use HTTPS, so the secret key is sent ' +
+      'unencrypted.' + #13#10#13#10 + 'Continue with this server URL anyway?',
+      mbConfirmation, MB_YESNO, IDYES) <> IDYES) then
       Result := False
     else if not TestServer(ServerPage.Values[0], Trim(ServerPage.Values[1]), Message) then
     begin
@@ -748,7 +744,7 @@ begin
     Exit;
 
   { restricts the access to the data directory (that contains the secret
-    key and the packages installed by the service) to the system account
+    key and the configuration of the service) to the system account
     and to the administrators, before writing the configuration to it, and
     takes the ownership and resets the access of its contents, so that the
     files created while it was open (since its creation) are not kept }

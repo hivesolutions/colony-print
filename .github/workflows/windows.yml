@@ -46,9 +46,7 @@ jobs:
         if: always()
         with:
           name: colony-print-node-windows
-          path: |
-            dist/*.exe
-            dist/packages/*.whl
+          path: dist/*.exe
           if-no-files-found: ignore
   release:
     name: Attach Installer to Release
