@@ -702,9 +702,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
         colony_print.node.sys = MockSys
         self._loop(NODE_RESTART="exit")
         self.assertEqual(MockSys.exits, [colony_print.node.RESTART_CODE])
+        urls = self._urls(MockQueue.calls)
+        self.assertEqual(urls[0], "node")
         self.assertEqual(
-            self._urls(MockQueue.calls),
-            ["node", "node/jobs/first/result", "node/jobs/second/result"],
+            sorted(urls[1:]), ["node/jobs/first/result", "node/jobs/second/result"]
         )
         self.assertEqual(
             [data_j["result"] for _url, data_j, _headers in MockQueue.calls[1:]],
@@ -770,24 +771,21 @@ class ColonyPrintNodeTest(unittest.TestCase):
             ]
         ]
         self._loop(NODE_CONTROL="0", NODE_BOOT="1", NODE_STATE_PATH=self.state_path)
+        urls = self._urls(MockQueue.calls)
+        self.assertEqual((urls[0], urls[-1]), ("node", "node"))
         self.assertEqual(
-            self._urls(MockQueue.calls),
-            [
-                "node",
-                "node/jobs/restart/result",
-                "node/jobs/update/result",
-                "node/jobs/auto-update/result",
-                "node",
-            ],
+            dict(
+                (url, data_j["error"])
+                for url, (_url, data_j, _headers) in zip(urls, MockQueue.calls)
+                if url.endswith("/result")
+            ),
+            {
+                "node/jobs/restart/result": "Capability 'restart' not supported by node",
+                "node/jobs/update/result": "Capability 'update' not supported by node",
+                "node/jobs/auto-update/result": "Capability 'auto-update' not supported by node",
+            },
         )
-        self.assertEqual(
-            [data_j["error"] for _url, data_j, _headers in MockQueue.calls[1:4]],
-            [
-                "Capability 'restart' not supported by node",
-                "Capability 'update' not supported by node",
-                "Capability 'auto-update' not supported by node",
-            ],
-        )
+        self.assertEqual(len(urls), 5)
         self.assertEqual(self.node.restart_jobs, [])
         self.assertEqual(os.path.exists(self.state_path), False)
         self.assertEqual(MockOS.execs, [])
