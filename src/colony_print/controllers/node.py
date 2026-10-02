@@ -151,8 +151,7 @@ class NodeController(appier.Controller):
             job_info["fonts"] = fonts_info
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
-        if fonts:
-            self.owner.jobs_fonts[job_id] = fonts
+        self.owner.jobs_fonts[job_id] = fonts
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
@@ -249,8 +248,7 @@ class NodeController(appier.Controller):
             job_info["fonts"] = fonts_info
         self.owner.jobs_info[job_id] = job_info
         self.owner.jobs_data[job_id] = data_b64
-        if fonts:
-            self.owner.jobs_fonts[job_id] = fonts
+        self.owner.jobs_fonts[job_id] = fonts
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds

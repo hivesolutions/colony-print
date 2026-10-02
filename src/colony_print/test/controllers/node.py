@@ -101,7 +101,7 @@ class NodeControllerTest(unittest.TestCase):
         code, job_info = self._print(format="binie")
         self.assertEqual(code, 200)
         self.assertEqual("fonts" in job_info, False)
-        self.assertEqual(job_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(self.app.jobs_fonts[job_info["id"]], None)
         self.assertEqual("fonts" in self.app.jobs["node"][1], False)
 
         # the fonts may also be sent for the jobs of the (explicit) npcolony
@@ -199,12 +199,32 @@ class NodeControllerTest(unittest.TestCase):
         code, job_info = self._print(data_b64=None, data=data, type="fonts")
         self.assertEqual(code, 200)
         self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
-        self.assertEqual(job_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(self.app.jobs_fonts[job_info["id"]], None)
         job = self.app.jobs["node"][0]
         self.assertEqual("fonts" in job, False)
         self.assertEqual(
             json.loads(base64.b64decode(job["data_b64"]).decode("utf-8")),
             dict(fonts=fonts),
+        )
+
+    def test_print_default_fonts_dropped(self):
+        # the fonts of the jobs are dropped together with the other (limited)
+        # structures of the jobs, even when the later jobs have no fonts
+        self.app.jobs_info = appier.LimitedSizeDict(max_size=2)
+        self.app.jobs_data = appier.LimitedSizeDict(max_size=2)
+        self.app.jobs_fonts = appier.LimitedSizeDict(max_size=2)
+        self._node()
+        fonts = [dict(name="Colonia", data_b64="QUJD")]
+        code, first = self._print(format="binie", fonts=fonts)
+        self.assertEqual(code, 200)
+        self.assertEqual(self.app.jobs_fonts[first["id"]], fonts)
+        for _index in range(2):
+            code, job_info = self._print(format="binie")
+            self.assertEqual(code, 200)
+        self.assertEqual(first["id"] in self.app.jobs_data, False)
+        self.assertEqual(first["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(
+            sorted(self.app.jobs_fonts.keys()), sorted(self.app.jobs_data.keys())
         )
 
     def test_print_default_xmpl(self):
@@ -246,7 +266,7 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
         self.assertEqual("fonts" in self.app.jobs["node"][2], False)
-        self.assertEqual(job_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(self.app.jobs_fonts[job_info["id"]], None)
 
     def test_print_default_xmpl_invalid(self):
         self._node(capabilities=["npcolony", "binie", "dynamic-fonts"])
@@ -374,7 +394,7 @@ class NodeControllerTest(unittest.TestCase):
                 dict(name="Binaria", url="https://fonts.hive.pt/binaria.ttf"),
             ],
         )
-        self.assertEqual(job_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(self.app.jobs_fonts[job_info["id"]], None)
         self.assertEqual("format" in job_info, False)
         job = self.app.jobs["node"][0]
         self.assertEqual(

@@ -126,7 +126,7 @@ class JobControllerTest(unittest.TestCase):
         clone_info = json.loads(response.data.decode("utf-8"))
         self.assertEqual(clone_info["fonts"], [dict(name="Colonia", data_length=4)])
         self.assertEqual("fonts" in self.app.jobs["node"][1], False)
-        self.assertEqual(clone_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(self.app.jobs_fonts[clone_info["id"]], None)
 
         # a job without fonts is cloned without any font
         self.app.jobs_info["other"] = dict(id="other", name="other", node_id="node")
@@ -135,7 +135,7 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual(response.code, 200)
         clone_info = json.loads(response.data.decode("utf-8"))
         self.assertEqual("fonts" in clone_info, False)
-        self.assertEqual(clone_info["id"] in self.app.jobs_fonts, False)
+        self.assertEqual(self.app.jobs_fonts[clone_info["id"]], None)
         self.assertEqual("fonts" in self.app.jobs["node"][2], False)
 
     def test_files(self):
