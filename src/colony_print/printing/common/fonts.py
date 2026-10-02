@@ -233,8 +233,9 @@ def register_font(font):
     registered for a name or for a face (eg: an older version of a font
     installed on demand or a font of the system with the same name).
 
-    The fonts of the same file share the same registered font, as a
-    document can't embed two fonts with the same face.
+    The fonts of the same file share the same registered font, and the
+    fonts of other files with the same face (PostScript name) get a face
+    of their own, as a document can't embed two fonts with the same face.
 
     :type font: TTFont
     :param font: The (true type) font to be registered.
@@ -242,10 +243,21 @@ def register_font(font):
 
     import reportlab.pdfbase.pdfmetrics
 
+    # renames the face of the font in case it's the face of a font of
+    # another file (eg: another version of the font or another font with
+    # the same PostScript name), with a name built from its file, so that
+    # the fonts of the same file keep sharing the same (renamed) face
+    file_path = font.face.filename
+    face_font = reportlab.pdfbase.pdfmetrics._dynFaceNames.get(font.face.name, None)
+    if face_font and not getattr(face_font.face, "filename", None) == file_path:
+        file_path_b = appier.legacy.bytes(file_path, encoding="utf-8", force=True)
+        digest = hashlib.md5(file_path_b).hexdigest()
+        font.face.name += appier.legacy.bytes("-" + digest[:8])
+
     # registers the font and verifies that the font registered for its
     # name is the one of its file, returning immediately if that's the case
     reportlab.pdfbase.pdfmetrics.registerFont(font)
-    name, face_name, file_path = font.fontName, font.face.name, font.face.filename
+    name, face_name = font.fontName, font.face.name
     registered = reportlab.pdfbase.pdfmetrics.getFont(name)
     if getattr(registered.face, "filename", None) == file_path:
         return

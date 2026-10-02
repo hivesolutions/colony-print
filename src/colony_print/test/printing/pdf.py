@@ -716,6 +716,38 @@ class BinieRendererTest(unittest.TestCase):
         renderer._match_font = lambda font_name, bold=False, italic=False: None
         self.assertEqual(renderer.ensure_font("Calibri", bold=True)[0], "c" * 32)
 
+    def test_ensure_font_files_face(self):
+        # the fonts installed on demand of different families with the same
+        # face (PostScript name), as the fonts built from the same template,
+        # are both used (embedded) in the same document
+        path_a = os.path.join(self.target_dir, "d" * 32 + ".ttf")
+        path_b = os.path.join(self.target_dir, "e" * 32 + ".ttf")
+        with open(path_a, "wb") as file:
+            file.write(build_font(name="Gemella"))
+        with open(path_b, "wb") as file:
+            file.write(build_font(name="Gemella") + b"\0")
+        data = self._binie(
+            [
+                self._text("Hello World", font=b"Colonia"),
+                self._text("Hello World", y=20, font=b"Binaria"),
+            ]
+        )
+        renderer = colony_print.BinieRenderer(
+            size=RECEIPT_SIZE,
+            margins=RECEIPT_MARGINS,
+            font_files={
+                ("colonia", "regular"): path_a,
+                ("binaria", "regular"): path_b,
+            },
+        )
+        file = appier.legacy.BytesIO()
+        renderer.render(data, file)
+        result = file.getvalue()
+        self.assertEqual(result[:5], b"%PDF-")
+        self.assertEqual(result.count(b"/FontFile2"), 2)
+        self.assertEqual(renderer.ensure_font("Colonia")[0], "d" * 32)
+        self.assertEqual(renderer.ensure_font("Binaria")[0], "e" * 32)
+
     def test_ensure_font_fallback(self):
         colony_print.printing.pdf.visitor.FONT_PATHS = (
             os.path.join(self.target_dir, ""),

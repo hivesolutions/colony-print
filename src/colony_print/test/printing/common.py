@@ -300,6 +300,7 @@ class FontsTest(unittest.TestCase):
         self.assertEqual(font_file(None, "Colonia", "regular"), None)
 
     def test_register_font(self):
+        import reportlab.pdfgen.canvas
         import reportlab.pdfbase.ttfonts
         import reportlab.pdfbase.pdfmetrics
 
@@ -320,10 +321,20 @@ class FontsTest(unittest.TestCase):
         self.assertEqual(get_font("RegisterD") is font_a, True)
 
         # another file of the same face (eg: a newer version of the font)
-        # replaces the font that reportlab would use for its face
+        # replaces the font that reportlab would use for its face, with a
+        # face of its own, so that both fonts are used in the same document
         font_b = reportlab.pdfbase.ttfonts.TTFont("RegisterB", path_b)
         colony_print.register_font(font_b)
         self.assertEqual(get_font("RegisterB") is font_b, True)
+        self.assertNotEqual(font_b.face.name, font_a.face.name)
+        file = appier.legacy.BytesIO()
+        canvas = reportlab.pdfgen.canvas.Canvas(file)
+        canvas.setFont("RegisterA", 9)
+        canvas.drawString(0, 0, "Hello World")
+        canvas.setFont("RegisterB", 9)
+        canvas.drawString(0, 9, "Hello World")
+        canvas.save()
+        self.assertEqual(file.getvalue().count(b"/FontFile2"), 2)
 
         # another file for an already registered name replaces its font,
         # with the font already registered for that file (and its face)
