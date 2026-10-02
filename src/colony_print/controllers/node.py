@@ -134,7 +134,9 @@ class NodeController(appier.Controller):
             data_b64 = base64.b64encode(
                 appier.legacy.bytes(data, encoding="utf-8")
             ).decode("utf-8")
-        fonts_info = self._verify_fonts(id, data_b64, format=format, fonts=fonts)
+        fonts_info = self._verify_fonts(
+            id, data_b64, type=type, format=format, fonts=fonts
+        )
 
         job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
@@ -228,7 +230,9 @@ class NodeController(appier.Controller):
             data_b64 = base64.b64encode(
                 appier.legacy.bytes(data, encoding="utf-8")
             ).decode("utf-8")
-        fonts_info = self._verify_fonts(id, data_b64, format=format, fonts=fonts)
+        fonts_info = self._verify_fonts(
+            id, data_b64, type=type, format=format, fonts=fonts
+        )
 
         job_info = dict(
             id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
@@ -288,20 +292,11 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>/fonts", "POST", json=True)
     @appier.ensure(token="admin")
     def install_fonts(self, id):
-        import colony_print
-
         fonts = self.field("fonts", None, cast=json.loads)
-        appier.verify(
-            fonts and isinstance(fonts, list),
-            message="List of fonts must be provided",
-            code=400,
-        )
-        for font in fonts:
-            colony_print.verify_font(font, reference=False)
-        self._ensure_capability(id, "dynamic-fonts")
 
         # sends the fonts to the node as a job of the fonts type, whose
-        # (JSON) payload contains the fonts to be installed by the node
+        # (JSON) payload contains the fonts to be installed by the node,
+        # verified as the payload of any other job of the fonts type
         self.set_field("data", json.dumps(dict(fonts=fonts)))
         self.set_field("data_b64", None)
         self.set_field("name", self.field("name", "fonts"))
@@ -339,11 +334,12 @@ class NodeController(appier.Controller):
         node["stats"] = self.owner.node_stats(id)
         return node
 
-    def _verify_fonts(self, id, data_b64, format=None, fonts=None):
+    def _verify_fonts(self, id, data_b64, type=None, format=None, fonts=None):
         """
         Verifies the fonts of a print job, the ones of the print request
-        and the ones declared by its document (for XMPL documents), and
-        that the node supports them, raising an exception otherwise.
+        and the ones declared by its document (for XMPL documents) or by
+        its payload (for the jobs of the fonts type), and that the node
+        supports them, raising an exception otherwise.
 
         XMPL documents are verified (converted as the node does) so that
         invalid documents are refused before being sent to the node.
@@ -352,6 +348,8 @@ class NodeController(appier.Controller):
         :param id: The identifier of the node of the job.
         :type data_b64: String
         :param data_b64: The base64 encoded document of the job.
+        :type type: String
+        :param type: The type (engine) of the job, if any.
         :type format: String
         :param format: The format of the document of the job, if any.
         :type fonts: List
@@ -364,11 +362,17 @@ class NodeController(appier.Controller):
         import colony_print
 
         # verifies the fonts of the print request, that are only valid for
-        # the documents of the formats that may be printed with them
+        # the documents of the formats that may be printed with them, by
+        # the npcolony engine (the other engines don't use them)
         if fonts:
             appier.verify(
                 isinstance(fonts, list),
                 message="Fonts must be a list",
+                code=400,
+            )
+            appier.verify(
+                type in (None, "npcolony"),
+                message="Fonts require the npcolony type",
                 code=400,
             )
             appier.verify(
@@ -383,6 +387,11 @@ class NodeController(appier.Controller):
         # the document is valid, retrieving the fonts it declares
         declared = []
         if format == "xmpl":
+            appier.verify(
+                type in (None, "npcolony"),
+                message="XMPL documents require the npcolony type",
+                code=400,
+            )
             self._ensure_capability(id, "xmpl")
             try:
                 data = base64.b64decode(data_b64)
@@ -396,6 +405,24 @@ class NodeController(appier.Controller):
                 )
             for font in declared:
                 colony_print.verify_font(font)
+
+        # verifies the payload of the jobs of the fonts type, retrieving the
+        # fonts to be installed by the node, that must not be references
+        if type == "fonts":
+            try:
+                data = base64.b64decode(data_b64)
+                declared = json.loads(data.decode("utf-8"))["fonts"]
+            except Exception:
+                raise appier.OperationalError(
+                    message="Payload is not a valid fonts payload", code=400
+                )
+            appier.verify(
+                declared and isinstance(declared, list),
+                message="List of fonts must be provided",
+                code=400,
+            )
+            for font in declared:
+                colony_print.verify_font(font, reference=False)
 
         # builds the information of the fonts without their (heavy) data
         # and verifies that the node supports the fonts (if any)

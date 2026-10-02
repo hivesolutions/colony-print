@@ -138,7 +138,7 @@ In `email` mode the PDF document is written to the output file (print to file) i
 
 ### Print Fonts
 
-The fonts of a Binie or XMPL document may be sent in the `fonts` field of the print request, so that the nodes with the `dynamic-fonts` capability install them on demand before printing the document. Each entry of the `fonts` array accepts the following fields:
+The fonts of a Binie or XMPL document may be sent in the `fonts` field of the print request, so that the nodes with the `dynamic-fonts` capability install them on demand before printing the document. The fonts (and the XMPL documents) are only accepted for the jobs of the `npcolony` type, as the other engines don't use them. Each entry of the `fonts` array accepts the following fields:
 
 | Field      | Type   | Required | Notes                                                                                                                                           |
 | ---------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
