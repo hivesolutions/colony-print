@@ -18,6 +18,7 @@ CLONE_FIELDS = set(
         "type",
         "format",
         "options",
+        "fonts",
     ]
 )
 
@@ -97,20 +98,27 @@ class JobController(appier.Controller):
 
         # builds the clone job info as a copy of the original one keeping
         # only the static fields and assigning a new identifier so that
-        # the clone starts its life cycle as a freshly queued job
+        # the clone starts its life cycle as a freshly queued job, with
+        # the same fonts (if any) as the original one, kept for every job
+        # so that they're dropped together with the other job structures
         job_info = self.owner.jobs_info[id]
         job_id = str(uuid.uuid4())
         node_id = job_info["node_id"]
+        fonts = self.owner.jobs_fonts.get(id, None)
         clone_info = dict((k, v) for k, v in job_info.items() if k in CLONE_FIELDS)
         clone_info["id"] = job_id
         self.owner.jobs_info[job_id] = clone_info
         self.owner.jobs_data[job_id] = data_b64
+        self.owner.jobs_fonts[job_id] = fonts
 
         # creates a copy of the job info as starting
         # point for the job structure and then adds
         # the "heavy" data (base64 encoded) to it
         job = dict(clone_info)
         job["data_b64"] = data_b64
+        job.pop("fonts", None)
+        if fonts:
+            job["fonts"] = fonts
         jobs = self.owner.jobs.get(node_id, [])
         jobs.append(job)
         self.owner.jobs[node_id] = jobs
@@ -197,8 +205,12 @@ class JobController(appier.Controller):
     def enrich_job_info(self, job_info):
         # enriches a copy of the provided job info with the decoded request
         # payload pulled from the persisted data on demand, so that it is not
-        # kept within the (listed) job info and the listing stays lean
+        # kept within the (listed) job info and the listing stays lean, the
+        # payload of the jobs of the fonts type is not decoded, as it holds
+        # the (heavy) data of the fonts whose information the job keeps
         job_info = dict(job_info)
+        if job_info.get("type", None) == "fonts":
+            return job_info
         data_b64 = self.owner.jobs_data.get(job_info["id"], None)
         request_payload = self._decode_payload(data_b64) if data_b64 else None
         if request_payload:

@@ -21,6 +21,9 @@ class ColonyPrintApp(appier.APIApp):
         self.jobs_data = appier.LimitedSizeDict(
             max_size=appier.conf("JOB_SIZE", 128, cast=int)
         )
+        self.jobs_fonts = appier.LimitedSizeDict(
+            max_size=appier.conf("JOB_SIZE", 128, cast=int)
+        )
 
     def node_stats(self, id):
         """

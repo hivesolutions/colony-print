@@ -100,3 +100,8 @@ class Text(AstNode):
 class Image(AstNode):
     def __init__(self):
         AstNode.__init__(self)
+
+
+class Font(AstNode):
+    def __init__(self):
+        AstNode.__init__(self)

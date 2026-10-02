@@ -20,6 +20,8 @@ export interface NodeInfo {
     engines: string[];
     engine_info: Record<string, Record<string, string>>;
     libraries?: Record<string, string>;
+    capabilities?: string[];
+    fonts?: NodeFontInfo[];
     platform: string;
     os: string;
     system?: {
@@ -47,6 +49,24 @@ export interface NodeInfo {
     };
 }
 
+export interface NodeFontInfo {
+    name: string;
+    style: string;
+    md5: string;
+    url?: string;
+    size: number;
+    time: number;
+    active: boolean;
+}
+
+export interface JobFontInfo {
+    name: string;
+    style?: string;
+    url?: string;
+    md5?: string;
+    data_length?: number;
+}
+
 export interface JobInfo {
     id: string;
     name: string;
@@ -55,6 +75,7 @@ export interface JobInfo {
     type?: string;
     format?: string;
     options?: Record<string, unknown>;
+    fonts?: JobFontInfo[];
     status: string;
     queued_time: number;
     printing_time?: number;

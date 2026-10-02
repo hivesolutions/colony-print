@@ -10,6 +10,12 @@
     gap: 12px;
 }
 
+.node-show-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
 .node-show-subsection {
     display: flex;
     flex-direction: column;

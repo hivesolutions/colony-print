@@ -8,6 +8,7 @@ import json
 import zlib
 import base64
 import shutil
+import hashlib
 import struct
 import tempfile
 import unittest
@@ -83,6 +84,43 @@ LABEL_B64 = base64.b64encode(
 """ The hello world binie document with the size (80 x 8 mm) of a
 product label, as the ones printed by Omni """
 
+COLONIA_B64 = base64.b64encode(
+    base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64).replace(
+        b"Calibri", b"Colonia"
+    )
+).decode("utf-8")
+""" The hello world binie document using the Colonia font, a font
+that is not installed in the system (only installed on demand) """
+
+XMPL = '<?xml version="1.0" encoding="UTF-8"?>\
+    <printing_document name="hello_world" font="%s" font_size="9">\
+        %s\
+        <paragraph text_align="center">\
+            <line><text>Hello World</text></line>\
+        </paragraph>\
+    </printing_document>'
+""" The template of the hello world XMPL document, with the name
+of its font and its font elements (declarations) """
+
+
+def build_font(name="Colonia"):
+    """
+    Builds a true type font file from the Calibri font bundled with the
+    repository, renaming its family into the provided name, so that the
+    font is not installed in the system.
+
+    :type name: String
+    :param name: The name of the family of the font, with the same
+    size of the original name (Calibri), as the names are replaced.
+    :rtype: String
+    :return: The contents of the built font file.
+    """
+
+    with open(os.path.join(FONTS_PATH, "calibri.ttf"), "rb") as file:
+        data = file.read()
+    data = data.replace(b"Calibri", name.encode("utf-8"))
+    return data.replace("Calibri".encode("utf-16-be"), name.encode("utf-16-be"))
+
 
 class MockGravostyleAPI(object):
     """
@@ -152,6 +190,47 @@ class MockNPColony(object):
     @staticmethod
     def print_base64(data_b64):
         MockNPColony.calls.append((None, data_b64, dict()))
+
+
+class MockNPColonyWindows(object):
+    """
+    Stand-in for the npcolony module of windows systems, that prints the
+    binie documents (through GDI) and loads the fonts installed on demand
+    in the system, recording both the printed documents and the fonts.
+    """
+
+    calls = []
+    fonts = []
+    features = ["load-fonts"]
+    errors = dict()
+
+    @staticmethod
+    def get_format():
+        return "binie"
+
+    @staticmethod
+    def get_devices():
+        return []
+
+    @staticmethod
+    def get_features():
+        return MockNPColonyWindows.features
+
+    @staticmethod
+    def print_printer_base64(printer, data_b64, options=None):
+        MockNPColonyWindows.calls.append((printer, data_b64, dict(options or dict())))
+
+    @staticmethod
+    def load_font(path):
+        if path in MockNPColonyWindows.errors:
+            raise MockNPColonyWindows.errors[path]
+        MockNPColonyWindows.fonts.append(("load", path))
+
+    @staticmethod
+    def unload_font(path):
+        if path in MockNPColonyWindows.errors:
+            raise MockNPColonyWindows.errors[path]
+        MockNPColonyWindows.fonts.append(("unload", path))
 
 
 class MockNPColonyLegacy(object):
@@ -232,6 +311,12 @@ class ColonyPrintNodeTest(unittest.TestCase):
     def setUp(self):
         self.node = colony_print.node.ColonyPrintNode()
         self.target_dir = tempfile.mkdtemp(prefix="colony-print-fonts-test-")
+        self.fonts_dir = tempfile.mkdtemp(prefix="colony-print-fonts-cache-test-")
+        self.node.font_cache = colony_print.FontCache(self.fonts_dir)
+        MockNPColonyWindows.calls = []
+        MockNPColonyWindows.fonts = []
+        MockNPColonyWindows.features = ["load-fonts"]
+        MockNPColonyWindows.errors = dict()
         MockGravostyleAPI.calls = []
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
@@ -253,6 +338,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.target_dir, ignore_errors=True)
+        shutil.rmtree(self.fonts_dir, ignore_errors=True)
         if self._gravo_pilot == None:
             sys.modules.pop("gravo_pilot", None)
         else:
@@ -274,6 +360,29 @@ class ColonyPrintNodeTest(unittest.TestCase):
     def _os_release(self, data, path=None):
         with open(path or self.os_release_path, "wb") as file:
             file.write(data)
+
+    def _font(self, name="Colonia", **kwargs):
+        font = dict(name=name, data_b64=base64.b64encode(build_font(name)).decode())
+        font.update(kwargs)
+        return font
+
+    def _xmpl(self, font_name="Calibri", fonts=[]):
+        elements = "".join(
+            "<font %s/>" % " ".join('%s="%s"' % item for item in sorted(font.items()))
+            for font in fonts
+        )
+        data = XMPL % (font_name, elements)
+        return base64.b64encode(data.encode("utf-8")).decode("utf-8")
+
+    def _hello_world(self, data_b64):
+        # verifies that the binie document is the hello world one, as
+        # converted from the hello world XMPL document (with its title)
+        data = base64.b64decode(data_b64)
+        hello_world = base64.b64decode(colony_print.controllers.node.HELLO_WORLD_B64)
+        return (
+            data[:256].rstrip(b"\0") == b"hello_world"
+            and data[256:] == hello_world[256:]
+        )
 
     def _media_box(self, data_b64):
         data = base64.b64decode(data_b64)
@@ -310,9 +419,14 @@ class ColonyPrintNodeTest(unittest.TestCase):
         # retried forever by the loop
         sys.modules["gravo_pilot"] = MockLibrary
         self._os_release(b'PRETTY_NAME="Ubuntu 24.04.1 LTS"\n')
+        colony_print.FontCache(self.fonts_dir).install(self._font())
         appier.post = MockServer.post
+        appier.conf_s("FONTS_PATH", self.fonts_dir)
         self.node.sleep_time = None
-        self.assertRaises(MockInterrupt, self.node.loop)
+        try:
+            self.assertRaises(MockInterrupt, self.node.loop)
+        finally:
+            appier.conf_r("FONTS_PATH")
         self.assertEqual(len(MockServer.calls), 1)
 
         url, data_j, _headers = MockServer.calls[0]
@@ -322,7 +436,31 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(data_j["libraries"]["gravo_pilot"], "1.0.0")
         self.assertEqual(data_j["system"], self.node.system)
         self.assertEqual(data_j["system"]["distribution"], "Ubuntu 24.04.1 LTS")
+        self.assertEqual(data_j["capabilities"], self.node.capabilities)
+        self.assertEqual("dynamic-fonts" in data_j["capabilities"], True)
+        self.assertEqual(self.node.font_cache.path, self.fonts_dir)
+        self.assertEqual(
+            [(font["name"], font["active"]) for font in data_j["fonts"]],
+            [("Colonia", True)],
+        )
         self.assertEqual(json.loads(json.dumps(data_j)), data_j)
+
+    def test_loop_fonts_error(self):
+        # a font of the cache that fails to load in the system (windows) is
+        # logged and doesn't prevent the node from submitting its information
+        info = colony_print.FontCache(self.fonts_dir).install(self._font())
+        sys.modules["npcolony"] = MockNPColonyWindows
+        MockNPColonyWindows.errors = {info["path"]: IOError("Problem loading font")}
+        appier.post = MockServer.post
+        appier.conf_s("FONTS_PATH", self.fonts_dir)
+        self.node.sleep_time = None
+        try:
+            self.assertRaises(MockInterrupt, self.node.loop)
+        finally:
+            appier.conf_r("FONTS_PATH")
+        self.assertEqual(len(MockServer.calls), 1)
+        self.assertEqual(self.node.loaded_fonts, set())
+        self.assertEqual(len(MockServer.calls[0][1]["fonts"]), 1)
 
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
@@ -375,6 +513,45 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(json.loads(json.dumps(result)), result)
         self.assertEqual(result["output_data"], None)
+
+    def test_print_job_email_xmpl(self):
+        self.node.node_printer = "Receipt"
+        self.node.node_email_receivers = []
+        result = self.node.print_job_email(
+            dict(
+                data_b64=self._xmpl(font_name="Colonia", fonts=[self._font()]),
+                name="hello_world",
+                format="xmpl",
+                options=dict(save_output=True, send_email=False),
+            )
+        )
+        self.assertEqual(result["result"], "success")
+        output_data = base64.b64decode(result["output_data"])
+        self.assertEqual(output_data[:5], b"%PDF-")
+        self.assertEqual(b"Colonia" in output_data, True)
+
+        printer, _data_b64, options = MockNPColony.calls[0]
+        self.assertEqual(printer, "Receipt")
+        self.assertEqual(options["media"], "RP80x297")
+        self.assertEqual(len(self.node.font_cache.installed()), 1)
+
+    def test_print_job_email_fonts(self):
+        # the installation of fonts is not a document to be printed and
+        # sent by email, the fonts are installed as in the normal mode
+        self.node.node_mode = "email"
+        data_b64 = base64.b64encode(
+            json.dumps(dict(fonts=[self._font()])).encode("utf-8")
+        )
+        result = self.node.print_job(
+            dict(data_b64=data_b64, name="fonts", type="fonts")
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["handler"], "fonts")
+        self.assertEqual(result["data"]["fonts"][0]["name"], "Colonia")
+        self.assertEqual(MockNPColony.calls, [])
+        self.assertEqual(
+            list(self.node.font_cache.files().keys()), [("colonia", "regular")]
+        )
 
     def test_libraries(self):
         sys.modules["npcolony"] = MockLibrary
@@ -447,6 +624,67 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self._os_release(b'NAME="Ubuntu"\nPRETTY_NAME=""\n')
         self.assertEqual("distribution" in self.node.system, False)
 
+    def test_capabilities(self):
+        self.assertEqual(
+            self.node.capabilities,
+            [
+                "npcolony",
+                "gravo",
+                "text",
+                "binie",
+                "xmpl",
+                "pdf",
+                "custom-paper",
+                "dynamic-fonts",
+                "gravo-extra-fonts",
+                "gravo-record",
+                "gravo-check-path",
+            ],
+        )
+
+        # the printers don't report their custom paper sizes (an older
+        # version of npcolony) or there are no printers to report them
+        MockNPColony.devices = [
+            dict(
+                (key, value)
+                for key, value in OFFICE_DEVICE.items()
+                if not key == "custom"
+            )
+        ]
+        self.assertEqual("custom-paper" in self.node.capabilities, False)
+        MockNPColony.devices = []
+        self.assertEqual("custom-paper" in self.node.capabilities, False)
+        MockNPColony.devices = [dict(OFFICE_DEVICE, custom=None)]
+        self.assertEqual("custom-paper" in self.node.capabilities, True)
+
+        self.node.node_mode = "email"
+        self.assertEqual(self.node.capabilities[-1], "email")
+
+    def test_capabilities_windows(self):
+        sys.modules["npcolony"] = MockNPColonyWindows
+        sys.modules["gravo_pilot"] = None
+        self.assertEqual(
+            self.node.capabilities,
+            ["npcolony", "text", "binie", "xmpl", "custom-paper", "dynamic-fonts"],
+        )
+
+        # the npcolony of the system doesn't report the loading of fonts
+        # (eg: a build without the feature), so the fonts can't be installed
+        MockNPColonyWindows.features = []
+        self.assertEqual(
+            self.node.capabilities,
+            ["npcolony", "text", "binie", "xmpl", "custom-paper"],
+        )
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        self.assertEqual(
+            self.node.capabilities,
+            ["npcolony", "text", "binie", "xmpl", "custom-paper"],
+        )
+
+        sys.modules["npcolony"] = None
+        self.assertEqual(self.node.capabilities, ["text"])
+
     def test_handle_job_title(self):
         data_b64 = base64.b64encode(b"%PDF-1.4 document").decode("utf-8")
         result = self.node._handle_job(
@@ -486,6 +724,46 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(MockNPColony.calls, [])
         self.assertEqual(MockGravostyleAPI.calls, [])
+
+    def test_handle_job_fonts(self):
+        fonts = [self._font(), self._font(name="Binaria", style="regular")]
+        data_b64 = base64.b64encode(json.dumps(dict(fonts=fonts)).encode("utf-8"))
+        result = self.node._handle_job(
+            dict(data_b64=data_b64, name="fonts", type="fonts")
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["handler"], "fonts")
+        self.assertEqual(
+            [(font["name"], font["md5"]) for font in result["data"]["fonts"]],
+            [
+                ("Colonia", hashlib.md5(build_font()).hexdigest()),
+                ("Binaria", hashlib.md5(build_font("Binaria")).hexdigest()),
+            ],
+        )
+        self.assertEqual(MockNPColony.calls, [])
+        self.assertEqual(
+            sorted(self.node.font_cache.files().keys()),
+            [("binaria", "regular"), ("colonia", "regular")],
+        )
+
+    def test_handle_job_xmpl(self):
+        result = self.node._handle_job(
+            dict(
+                data_b64=self._xmpl(font_name="Colonia"),
+                name="hello_world",
+                printer="Receipt",
+                format="xmpl",
+                fonts=[self._font()],
+            )
+        )
+        self.assertEqual(result["result"], "success")
+        printer, data_b64, options = MockNPColony.calls[0]
+        self.assertEqual(printer, "Receipt")
+        self.assertEqual(base64.b64decode(data_b64)[:5], b"%PDF-")
+        self.assertEqual(b"Colonia" in base64.b64decode(data_b64), True)
+        self.assertEqual(
+            options, dict(title="hello_world", media="RP80x297", scaling="none")
+        )
 
     def test_handle_npcolony_binie(self):
         self.node._handle_npcolony(
@@ -571,6 +849,119 @@ class ColonyPrintNodeTest(unittest.TestCase):
             ),
         )
         self.assertEqual(MockNPColony.calls, [])
+
+    def test_handle_npcolony_fonts(self):
+        self.node._handle_npcolony(
+            COLONIA_B64, format="binie", printer="Receipt", fonts=[self._font()]
+        )
+        printer, data_b64, options = MockNPColony.calls[0]
+        self.assertEqual(printer, "Receipt")
+        self.assertEqual(b"Colonia" in base64.b64decode(data_b64), True)
+        self.assertEqual(options, dict(media="RP80x297", scaling="none"))
+
+        # the installed font is used by the documents of the jobs that don't
+        # provide it, as the fonts of the system are (no substitution)
+        self.node._handle_npcolony(COLONIA_B64, format="binie", printer="Receipt")
+        _printer, data_b64, _options = MockNPColony.calls[1]
+        self.assertEqual(b"Colonia" in base64.b64decode(data_b64), True)
+
+        # the same font referenced by its MD5 (no data) is the one used
+        md5 = hashlib.md5(build_font()).hexdigest()
+        self.node._handle_npcolony(
+            COLONIA_B64, format="binie", fonts=[dict(name="Colonia", md5=md5)]
+        )
+        self.assertEqual(len(MockNPColony.calls), 3)
+        self.assertEqual(len(self.node.font_cache.installed()), 1)
+
+    def test_handle_npcolony_fonts_windows(self):
+        sys.modules["npcolony"] = MockNPColonyWindows
+        self.node._handle_npcolony(
+            COLONIA_B64, format="binie", printer="Receipt", fonts=[self._font()]
+        )
+        path = os.path.join(
+            self.fonts_dir, "%s.ttf" % hashlib.md5(build_font()).hexdigest()
+        )
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", path)])
+        self.assertEqual(MockNPColonyWindows.calls, [("Receipt", COLONIA_B64, dict())])
+
+        # a job with the same (already loaded) font doesn't load it again
+        self.node._handle_npcolony(
+            COLONIA_B64, format="binie", printer="Receipt", fonts=[self._font()]
+        )
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", path)])
+        self.assertEqual(len(MockNPColonyWindows.calls), 2)
+
+    def test_handle_npcolony_fonts_invalid(self):
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_npcolony(
+                COLONIA_B64,
+                format="binie",
+                printer="Receipt",
+                fonts=[self._font(), dict(name="Binaria", md5="0" * 32)],
+            ),
+        )
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_npcolony(
+                COLONIA_B64,
+                format="binie",
+                printer="Receipt",
+                fonts=[dict(name="Calibri", data_b64=self._font()["data_b64"])],
+            ),
+        )
+        self.assertEqual(MockNPColony.calls, [])
+
+        # the npcolony of the system is not able to load the fonts
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_npcolony(
+                COLONIA_B64, format="binie", fonts=[self._font()]
+            ),
+        )
+
+    def test_handle_npcolony_xmpl(self):
+        self.node._handle_npcolony(
+            self._xmpl(font_name="Colonia", fonts=[self._font()]),
+            format="xmpl",
+            printer="Receipt",
+        )
+        printer, data_b64, options = MockNPColony.calls[0]
+        self.assertEqual(printer, "Receipt")
+        self.assertEqual(b"Colonia" in base64.b64decode(data_b64), True)
+        self.assertEqual(options, dict(media="RP80x297", scaling="none"))
+
+        # prints a document declaring another font on windows, where the
+        # installed fonts are loaded in the system (GDI) for the printing
+        sys.modules["npcolony"] = MockNPColonyWindows
+        self.node._handle_npcolony(
+            self._xmpl(fonts=[self._font(name="Binaria")]),
+            format="xmpl",
+            printer="Receipt",
+        )
+        printer, data_b64, options = MockNPColonyWindows.calls[0]
+        self.assertEqual(printer, "Receipt")
+        self.assertEqual(self._hello_world(data_b64), True)
+        self.assertEqual(options, dict())
+        self.assertEqual(
+            sorted(MockNPColonyWindows.fonts),
+            sorted(("load", path) for path in self.node.font_cache.files().values()),
+        )
+        self.assertEqual(len(MockNPColonyWindows.fonts), 2)
+
+        self.assertRaises(
+            Exception,
+            lambda: self.node._handle_npcolony(
+                base64.b64encode(b"<printing_document>"), format="xmpl"
+            ),
+        )
+        data = b'<printing_document name="logo"><image path="/etc/passwd"/></printing_document>'
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_npcolony(base64.b64encode(data), format="xmpl"),
+        )
+        self.assertEqual(len(MockNPColonyWindows.calls), 1)
 
     def test_is_binie(self):
         binie_b64 = colony_print.controllers.node.HELLO_WORLD_B64
@@ -750,6 +1141,17 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(options, dict(media="A5", scaling="none"))
         self.assertEqual(self._media_box(data_b64), (0.0, 0.0, 419.53, 595.28))
 
+    def test_convert_binie_fonts(self):
+        self.node.font_cache.install(self._font())
+        data_b64, _options = self.node._convert_binie(COLONIA_B64, printer="Receipt")
+        self.assertEqual(b"Colonia" in base64.b64decode(data_b64), True)
+
+        self.node.font_cache = None
+        data_b64, _options = self.node._convert_binie(
+            colony_print.controllers.node.HELLO_WORLD_B64, printer="Receipt"
+        )
+        self.assertEqual(base64.b64decode(data_b64)[:5], b"%PDF-")
+
     def test_device(self):
         self.assertEqual(self.node._device("Receipt"), RECEIPT_DEVICE)
         self.assertEqual(self.node._device("receipt"), RECEIPT_DEVICE)
@@ -797,6 +1199,35 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
         device = dict(name="legacy", media="A4", width=595.28, length=841.89)
         self.assertEqual(is_custom(device, (425.2, 566.93)), False)
+
+    def test_convert_xmpl(self):
+        data_b64, fonts = self.node._convert_xmpl(self._xmpl())
+        self.assertEqual(self._hello_world(data_b64), True)
+        self.assertEqual(fonts, [])
+
+        url = "https://fonts.hive.pt/colonia.ttf"
+        data_b64, fonts = self.node._convert_xmpl(
+            self._xmpl(fonts=[dict(name="Colonia", url=url)]),
+            fonts=[dict(name="Binaria", md5="0" * 32)],
+        )
+        self.assertEqual(self._hello_world(data_b64), True)
+        self.assertEqual(
+            fonts,
+            [dict(name="Colonia", url=url), dict(name="Binaria", md5="0" * 32)],
+        )
+
+        self.assertRaises(
+            Exception,
+            lambda: self.node._convert_xmpl(base64.b64encode(b"not a document")),
+        )
+
+        # an image read from the file system of the node is refused (as the
+        # server may not have verified the document), only inline images
+        data = b'<printing_document name="logo"><image path="/etc/passwd"/></printing_document>'
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._convert_xmpl(base64.b64encode(data)),
+        )
 
     def test_handle_gravo_forwards_check_path(self):
         self.node._handle_gravo(self._gravo_payload(check_path=True, dry_run=True))
@@ -864,6 +1295,221 @@ class ColonyPrintNodeTest(unittest.TestCase):
     def test_decode_payload_invalid(self):
         data_b64 = base64.b64encode(b"not a json payload")
         self.assertRaises(ValueError, lambda: self.node._decode_payload(data_b64))
+
+    def test_handle_fonts(self):
+        data_b64 = base64.b64encode(
+            json.dumps(dict(fonts=[self._font()])).encode("utf-8")
+        )
+        result = self.node._handle_fonts(data_b64)
+        self.assertEqual(len(result["fonts"]), 1)
+        self.assertEqual(result["fonts"][0]["name"], "Colonia")
+        self.assertEqual(
+            result["fonts"][0]["md5"], hashlib.md5(build_font()).hexdigest()
+        )
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        self.assertRaises(
+            appier.OperationalError, lambda: self.node._handle_fonts(data_b64)
+        )
+
+    def test_build_font_cache(self):
+        self.node.font_cache.install(self._font())
+        appier.conf_s("FONTS_PATH", self.fonts_dir)
+        appier.conf_s("FONT_MAX_SIZE", "1024")
+        try:
+            font_cache = self.node._build_font_cache()
+        finally:
+            appier.conf_r("FONTS_PATH")
+            appier.conf_r("FONT_MAX_SIZE")
+        self.assertEqual(font_cache.path, self.fonts_dir)
+        self.assertEqual(font_cache.max_size, 1024)
+        self.assertEqual(font_cache.installed(), self.node.font_cache.installed())
+
+        font_cache = self.node._build_font_cache()
+        self.assertEqual(
+            font_cache.path, os.path.expanduser(colony_print.node.FONTS_PATH)
+        )
+        self.assertEqual(font_cache.max_size, colony_print.FONT_MAX_SIZE)
+
+        # a windows node (service) without the path configured keeps the
+        # fonts in its data directory (the one with its configuration)
+        with open(os.path.join(self.target_dir, "config.env"), "wb") as file:
+            file.write(b"NODE_ID=node\r\n")
+        name, cwd = os.name, os.getcwd()
+        os.name = "nt"
+        os.chdir(self.target_dir)
+        try:
+            font_cache = self.node._build_font_cache()
+        finally:
+            os.name = name
+            os.chdir(cwd)
+        self.assertEqual(
+            os.path.realpath(font_cache.path),
+            os.path.realpath(os.path.join(self.target_dir, "fonts")),
+        )
+
+    def test_build_font_cache_invalid(self):
+        # an index of the font cache that fails to load (eg: corrupted by a
+        # power loss) doesn't prevent the node from running, that starts with
+        # an empty cache where the fonts are installed again
+        self.node.font_cache.install(self._font())
+        with open(os.path.join(self.fonts_dir, "index.json"), "wb") as file:
+            file.write(b"\x00" * 64)
+        appier.conf_s("FONTS_PATH", self.fonts_dir)
+        try:
+            font_cache = self.node._build_font_cache()
+        finally:
+            appier.conf_r("FONTS_PATH")
+        self.assertEqual(font_cache.path, self.fonts_dir)
+        self.assertEqual(font_cache.installed(), [])
+        self.assertEqual(font_cache.files(), {})
+        font = font_cache.install(self._font())
+        self.assertEqual(font_cache.installed()[0]["md5"], font["md5"])
+
+    def test_install_fonts(self):
+        fonts = self.node._install_fonts([self._font(), self._font(name="Binaria")])
+        self.assertEqual([font["name"] for font in fonts], ["Colonia", "Binaria"])
+        self.assertEqual(MockNPColonyWindows.fonts, [])
+
+        # installs the fonts on windows, where all the installed fonts
+        # are loaded in the system (GDI) for the printing
+        sys.modules["npcolony"] = MockNPColonyWindows
+        fonts = self.node._install_fonts([self._font()])
+        self.assertEqual(fonts[0]["path"] in self.node.loaded_fonts, True)
+        self.assertEqual(
+            MockNPColonyWindows.fonts,
+            [("load", path) for path in sorted(self.node.font_cache.files().values())],
+        )
+
+        # one of the fonts fails to install after the previous one has been
+        # installed (as the active one), that is still loaded in the system
+        MockNPColonyWindows.fonts = []
+        data = build_font("Fontana")
+        font = dict(name="Fontana", data_b64=base64.b64encode(data).decode())
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._install_fonts(
+                [font, dict(name="Binaria", md5="0" * 32)]
+            ),
+        )
+        path = self.node.font_cache._file(hashlib.md5(data).hexdigest())
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", path)])
+        self.assertEqual(path in self.node.loaded_fonts, True)
+
+        # a font of the job that fails to load in the system fails the job,
+        # while a (broken) font of the cache that is not of the job doesn't
+        data = build_font("Telhado")
+        font = dict(name="Telhado", data_b64=base64.b64encode(data).decode())
+        path = self.node.font_cache._file(hashlib.md5(data).hexdigest())
+        MockNPColonyWindows.errors = {path: IOError("Problem loading font")}
+        self.assertRaises(
+            appier.OperationalError, lambda: self.node._install_fonts([font])
+        )
+        fonts = self.node._install_fonts([self._font(name="Fontana")])
+        self.assertEqual(fonts[0]["name"], "Fontana")
+        self.assertEqual(path in self.node.loaded_fonts, False)
+
+        # two files of the same font in the job, the last one is the active
+        # one (loaded) and the first one is not required to be loaded
+        data = build_font("Ovelhas")
+        fonts = self.node._install_fonts(
+            [
+                dict(name="Ovelhas", data_b64=base64.b64encode(data).decode()),
+                dict(name="Ovelhas", data_b64=base64.b64encode(data + b"\0").decode()),
+            ]
+        )
+        self.assertEqual(fonts[0]["path"] in self.node.loaded_fonts, False)
+        self.assertEqual(fonts[1]["path"] in self.node.loaded_fonts, True)
+
+    def test_load_fonts(self):
+        regular = self.node.font_cache.install(self._font())
+        binaria = self.node.font_cache.install(self._font(name="Binaria"))
+
+        # the npcolony of the system (CUPS) doesn't load fonts
+        self.node._load_fonts()
+        self.assertEqual(self.node.loaded_fonts, set())
+
+        sys.modules["npcolony"] = MockNPColonyWindows
+        self.node._load_fonts()
+        self.assertEqual(
+            MockNPColonyWindows.fonts,
+            [("load", path) for path in sorted([regular["path"], binaria["path"]])],
+        )
+        self.assertEqual(
+            self.node.loaded_fonts, set([regular["path"], binaria["path"]])
+        )
+
+        # installs an updated file of the font, that replaces the loaded one
+        # (unloaded) as the active one for its family and style
+        MockNPColonyWindows.fonts = []
+        data = build_font() + b"\0"
+        updated = self.node.font_cache.install(
+            dict(name="Colonia", data_b64=base64.b64encode(data))
+        )
+        self.node._load_fonts()
+        self.assertEqual(
+            MockNPColonyWindows.fonts,
+            [("unload", regular["path"]), ("load", updated["path"])],
+        )
+        self.assertEqual(
+            self.node.loaded_fonts, set([updated["path"], binaria["path"]])
+        )
+
+        MockNPColonyWindows.fonts = []
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [])
+
+        # a font that fails to load (eg: refused by GDI) doesn't prevent the
+        # other fonts from loading, and it's retried on the next load
+        MockNPColonyWindows.fonts = []
+        self.node.loaded_fonts = set()
+        MockNPColonyWindows.errors = {updated["path"]: IOError("Problem loading")}
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", binaria["path"])])
+        self.assertEqual(self.node.loaded_fonts, set([binaria["path"]]))
+        MockNPColonyWindows.errors = dict()
+        self.node._load_fonts()
+        self.assertEqual(
+            self.node.loaded_fonts, set([updated["path"], binaria["path"]])
+        )
+
+        # a font that fails to unload is no longer considered loaded, as it's
+        # not used anymore (another file of the font is active)
+        MockNPColonyWindows.fonts = []
+        MockNPColonyWindows.errors = {updated["path"]: IOError("Problem unloading")}
+        self.node.font_cache.install(dict(name="Colonia", md5=regular["md5"]))
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [("load", regular["path"])])
+        self.assertEqual(
+            self.node.loaded_fonts, set([regular["path"], binaria["path"]])
+        )
+        MockNPColonyWindows.errors = dict()
+        MockNPColonyWindows.fonts = []
+
+        # the npcolony of the system doesn't report the loading of fonts
+        # (eg: a build without the feature), so the fonts are not loaded
+        MockNPColonyWindows.features = []
+        self.node.loaded_fonts = set()
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [])
+        self.assertEqual(self.node.loaded_fonts, set())
+
+        sys.modules["npcolony"] = None
+        self.node._load_fonts()
+        self.assertEqual(MockNPColonyWindows.fonts, [])
+
+    def test_has_feature(self):
+        self.assertEqual(self.node._has_feature("load-fonts"), False)
+
+        sys.modules["npcolony"] = MockNPColonyWindows
+        self.assertEqual(self.node._has_feature("load-fonts"), True)
+        self.assertEqual(self.node._has_feature("unknown"), False)
+
+        MockNPColonyWindows.features = []
+        self.assertEqual(self.node._has_feature("load-fonts"), False)
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        self.assertEqual(self.node._has_feature("load-fonts"), False)
 
     def test_info_distribution(self):
         self.assertEqual(self.node._info_distribution(), None)
@@ -939,15 +1585,34 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.node._ensure_format(None)
         self.node._ensure_format("pdf")
         self.node._ensure_format("binie")
+        self.node._ensure_format("xmpl")
         self.assertRaises(
             appier.OperationalError, lambda: self.node._ensure_format("zpl")
         )
 
         MockNPColony.format = "binie"
         self.node._ensure_format("binie")
+        self.node._ensure_format("xmpl")
         self.assertRaises(
             appier.OperationalError, lambda: self.node._ensure_format("pdf")
         )
 
         sys.modules["npcolony"] = MockNPColonyLegacy
         self.node._ensure_format("pdf")
+
+    def test_ensure_capability(self):
+        self.node._ensure_capability("xmpl")
+        self.node._ensure_capability("dynamic-fonts")
+        self.assertRaises(
+            appier.OperationalError, lambda: self.node._ensure_capability("email")
+        )
+        self.assertRaises(
+            appier.OperationalError, lambda: self.node._ensure_capability("unknown")
+        )
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        self.node._ensure_capability("xmpl")
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._ensure_capability("dynamic-fonts"),
+        )

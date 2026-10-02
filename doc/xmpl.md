@@ -74,6 +74,18 @@ Used for embedding images within the document layout.
 </image>
 ```
 
+The image is either inline, with its base64 encoded data in the `source` attribute, or read from the file system with the `path` attribute. The XMPL documents printed by the nodes (print jobs) only accept inline images, as the paths would be read from the file system of the node.
+
+#### Font Element: `font`
+
+Declares a font used by the document, to be installed on demand by the node that prints the document (with the `dynamic-fonts` capability). Font elements are direct children of the `printing_document` element (they are ignored elsewhere) and are never printed.
+
+```xml
+<font name="2 of 5" url="https://fonts.example.com/2of5.ttf" />
+```
+
+The attributes of the element are the fields of the entries of the fonts of a print request: `name` (the family name of the font, as used by the `font` attributes of the document), `style` (`regular`, `bold`, `italic` or `bold_italic`, read from the font file when omitted) and exactly one of `data_b64` (the base64 encoded TrueType font file) or `url` (the URL of the font file), or `md5` alone (a reference to a font already installed in the node). See [Print Fonts](../README.md#print-fonts) for the complete description.
+
 ### Attributes and Properties
 
 Elements in XMPL files may have various attributes defining their properties, such as font for text or size for images.
@@ -82,6 +94,7 @@ Elements in XMPL files may have various attributes defining their properties, su
 
 The XMPL format has been designed for easy and efficient conversion to the Binie file format.
 This feature allows XMPL to serve as a flexible tool for creating structured documents that can be readily transformed into a print-ready format.
+The font elements are not part of the converted Binie document, the fonts they declare are sent with the print job instead.
 
 ### Example
 

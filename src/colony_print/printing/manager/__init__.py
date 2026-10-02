@@ -16,6 +16,7 @@ from .ast import (
     Line,
     Text,
     Image,
+    Font,
 )
 from .exceptions import PrintingManagerException, PrintingPluginNotAvailable
 from .parser import Parser, valid_node

@@ -9,6 +9,7 @@ import PIL.Image
 
 from . import exceptions
 
+from ..common import fonts
 from ..common.base import *
 from ..manager.ast import *
 
@@ -407,10 +408,21 @@ class Visitor(object):
 
             # retrieves the proper suffix for the requested font style
             # and uses it to create the complete font name ensuring that
-            # it's currently loaded in the PDF context
+            # it's currently loaded in the PDF context, using the file of
+            # the font installed on demand with the exact style (if any),
+            # then the font of the system and then another style of the
+            # font installed on demand (as windows synthesizes it)
             suffix = FONT_SUFFIX_MAP.get(font_style, "")
             font_name_c = font_name + suffix
-            self.ensure_font(font_name_c)
+            font_files = self.options.get("font_files", None)
+            file_path = fonts.font_file(font_files, font_name, font_style, exact=True)
+            try:
+                self.ensure_font(font_name_c, file_path=file_path)
+            except exceptions.InvalidFont:
+                file_path = fonts.font_file(font_files, font_name, font_style)
+                if not file_path:
+                    raise
+                self.ensure_font(font_name_c, file_path=file_path)
 
             # sets the complete computed font in the current canvas context
             # note that the leading value is overridden to avoid font sizing
@@ -702,7 +714,6 @@ class Visitor(object):
         """
 
         import reportlab.pdfbase.ttfonts
-        import reportlab.pdfbase.pdfmetrics
 
         # in case the font is already present in the fonts
         # map it's considered to be loaded and so the control
@@ -722,8 +733,10 @@ class Visitor(object):
         error = True
 
         # iterates over all the font paths trying to find a path
-        # that can correctly load the requested font
-        for font_path in FONT_PATHS:
+        # that can correctly load the requested font, note that an
+        # absolute path is used as it is (not in the font paths)
+        font_paths = ("",) if os.path.isabs(file_path) else FONT_PATHS
+        for font_path in font_paths:
             try:
                 # creates the complete font path with the current
                 # base path in iteration and the font name in case
@@ -736,7 +749,7 @@ class Visitor(object):
                 # and the registers it in the the current report lab
                 # metrics (to be used in further operations)
                 font = reportlab.pdfbase.ttfonts.TTFont(font_name, file_path_f)
-                reportlab.pdfbase.pdfmetrics.registerFont(font)
+                fonts.register_font(font)
             except Exception:
                 continue
             else:

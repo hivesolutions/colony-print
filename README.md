@@ -12,7 +12,10 @@ This project includes two main components:
 * Cloud printing, with minimal configuration
 * Multiple engine support (npcolony, gravo, text)
 * XMPL to Binie conversion
+* XMPL printing, with the documents converted into Binie by the nodes
 * PDF generation with custom fonts and images
+* Fonts sent with the print jobs, installed on demand by the nodes
+* Node capabilities, advertised by the nodes and verified by the server
 * [GDI](https://en.wikipedia.org/wiki/Graphics_Device_Interface) printing (Windows) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * [CUPS](https://en.wikipedia.org/wiki/CUPS) printing (Linux) via [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi)
 * Windows installer for the nodes, which update themselves from PyPI (see [Windows Node](#windows-node))
@@ -24,6 +27,10 @@ For a detailed understanding of the Binie file format used in this project, refe
 ## XMPL Specification
 
 The XML Markup Language for Printing (XMPL) is integral to our document processing pipeline. For an in-depth understanding of the XMPL structure and its seamless convertibility to Binie, see the [XMPL File Format Specification](doc/xmpl.md).
+
+## Node Capabilities
+
+The features supported by each node (e.g. `xmpl` or `dynamic-fonts`) are advertised by the node as capabilities, and the requests that need a capability the node doesn't advertise are refused. The complete list of capabilities is described in [Node Capabilities](doc/capabilities.md).
 
 ## Installation
 
@@ -53,12 +60,15 @@ NODE_LOCATION=$NODE_LOCATION \
 python -m colony_print.node
 ```
 
+The fonts installed on demand by the node (see [Print Fonts](#print-fonts)) are kept in the `FONTS_PATH` directory (defaults to `~/.colony_print/fonts`, and to the `fonts` directory of the data directory on the Windows nodes, see [Windows Node](#windows-node)), with each font file limited to `FONT_MAX_SIZE` bytes (defaults to 16 MB).
+
 ### Fonts
 
 To be able to use new fonts (other than the ones provided by the system), one must install them into the `/usr/share/fonts/truetype` directory so they are exposed and ready to be used by the PDF generation infra-structure. For example, Calibri is one type of font that should be exported to a UNIX machine as many colony-generated documents use it.
 
 The `/usr/share/fonts/truetype` install path is shared by the PDF generation engine.
 Linux (CUPS) nodes need the same fonts to lay out the Binie documents they print. They look for the font files by name in the same paths and, as Windows does, fall back to the closest installed font found through fontconfig (`fc-match`), so installing Calibri (or the metric compatible Carlito font) keeps the layout identical to the Windows one. The same applies to the barcode fonts of the documents (e.g. the `2 of 5` font of the Omni product labels, looked up as `2 of 5.ttf`), whose barcodes are otherwise printed as the letters they are encoded with.
+Binie and XMPL documents may also send their fonts with the print job (see [Print Fonts](#print-fonts)), so that nodes with the `dynamic-fonts` capability install them on demand, on Windows and Linux alike, without any manual install.
 The `gravo` engine receives its fonts on a per print job basis through the `extra_fonts` field of the gravo print payload (see [Gravo Print Payload](#gravo-print-payload)) and stages them on a per job temporary directory, so the two flows are independent and operators should not confuse them.
 
 ### Engines
@@ -73,14 +83,15 @@ There are currently three engines available for printing in Colony Print:
 
 Every engine is reached through the same print endpoint and request envelope. A job is submitted to `/nodes/<id>/print` (or `/nodes/<id>/printers/<printer>/print` to target a specific printer) with the following fields:
 
-| Field      | Type   | Required | Notes                                                                                                      |
-| ---------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------- |
-| `data`     | string | yes\*    | Raw document data, base64 encoded by the server before dispatch. Mutually exclusive with `data_b64`.       |
-| `data_b64` | string | yes\*    | Base64 encoded document data, the engine specific payload described below. Mutually exclusive with `data`. |
-| `name`     | string | no       | Human readable job name. Defaults to the generated job identifier.                                         |
-| `type`     | string | no       | Target engine: `npcolony` (default), `gravo` or `text`.                                                    |
-| `format`   | string | no       | Expected document format (e.g. `binie`, `pdf`). Validated against the node format when provided.           |
-| `options`  | object | no       | Extra per job options (see table below). Keys outside the supported set are discarded.                     |
+| Field      | Type   | Required | Notes                                                                                                                      |
+| ---------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `data`     | string | yes\*    | Raw document data, base64 encoded by the server before dispatch. Mutually exclusive with `data_b64`.                       |
+| `data_b64` | string | yes\*    | Base64 encoded document data, the engine specific payload described below. Mutually exclusive with `data`.                 |
+| `name`     | string | no       | Human readable job name. Defaults to the generated job identifier.                                                         |
+| `type`     | string | no       | Target engine: `npcolony` (default), `gravo` or `text`, or `fonts` to install fonts. See [Print Fonts](#print-fonts).      |
+| `format`   | string | no       | Expected document format (e.g. `binie`, `pdf` or `xmpl`). Validated against the node format when provided.                 |
+| `options`  | object | no       | Extra per job options (see table below). Keys outside the supported set are discarded.                                     |
+| `fonts`    | array  | no       | Fonts of the document (`binie` and `xmpl` formats only), installed on demand by the node. See [Print Fonts](#print-fonts). |
 
 \* Exactly one of `data` or `data_b64` must be provided.
 
@@ -101,11 +112,15 @@ The `options` map is filtered to the following keys:
 
 The `save_output` and `email_*` options only take effect on nodes running in `email` mode (`NODE_MODE=email`).
 
+The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format or the `fonts` field) fail with `409`, see [Node Capabilities](doc/capabilities.md).
+
 ### npcolony Print Payload
 
 The `npcolony` engine is the default and prints through [Colony NPAPI](https://github.com/hivesolutions/colony-npapi) using GDI on Windows and CUPS on Linux. Its payload is the binary print document carried in `data_b64`, typically a [Binie](doc/binie.md) document produced by the XMPL to Binie conversion, dispatched directly to the target printer. There are no JSON fields: the printing behaviour is tuned through the options and the optional `format` field described in [Print Request](#print-request).
 
 On Windows the Binie document is drawn directly through GDI. Linux (CUPS) nodes only print PDF documents, so they convert Binie jobs (with the `binie` format, or without a format when the payload is a valid Binie document) into a PDF laid out with the same rules as GDI: the paper size of the document when it defines one and the printer accepts it as a custom paper size (as the Windows driver of the printer does), and the printer's default paper size otherwise (e.g. a label printed on an A4 printer comes out at its real size in the top left corner of the page), with the content laid out from the top left corner of the printable area of the page and printed without scaling. The `media` option doesn't apply to them, as their pages are always laid out for that paper size. PDF documents and any other data are sent to CUPS untouched.
+
+XMPL documents (with the `xmpl` format) are converted into Binie documents by the nodes with the `xmpl` capability, and then printed as any other Binie document. The document is verified (converted) by the server when the job is submitted, so that an invalid document fails with `400`, and the fonts declared by its `font` elements (see [XMPL Specification](doc/xmpl.md)) are installed together with the ones of the `fonts` field. Only inline images (`source`) are accepted, the documents with image paths (`path`) are refused by the server and by the nodes, as the paths would be read from the file system of the node.
 
 ### Linux (CUPS) Printing
 
@@ -120,6 +135,31 @@ Each queue should use a driver for its printer and a default paper size that mat
 The custom paper sizes a printer accepts, and their margins, are the ones of the PPD of its queue, as reported by npcolony. With npcolony versions that don't report them, a Binie document only uses its own size when it matches the default paper size of the queue.
 
 In `email` mode the PDF document is written to the output file (print to file) instead of being printed, as it happens with the PDF printer on Windows.
+
+### Print Fonts
+
+The fonts of a Binie or XMPL document may be sent in the `fonts` field of the print request, so that the nodes with the `dynamic-fonts` capability install them on demand before printing the document. The fonts (and the XMPL documents) are only accepted for the jobs of the `npcolony` type, as the other engines don't use them. Each entry of the `fonts` array accepts the following fields:
+
+| Field      | Type   | Required | Notes                                                                                                                                           |
+| ---------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | string | yes      | Family name of the font as the document uses it (e.g. `2 of 5`), at most 31 characters. Must match the (Windows) family name of the font file.  |
+| `style`    | string | no       | `regular`, `bold`, `italic` or `bold_italic`. Read from the font file when omitted, verified against it otherwise.                              |
+| `data_b64` | string | yes\*    | Base64 encoded TrueType font file.                                                                                                              |
+| `url`      | string | yes\*    | `http` or `https` URL of the TrueType font file, downloaded by the node.                                                                        |
+| `md5`      | string | yes\*    | Hexadecimal MD5 of the font file. When alone it references a font already installed on the node, otherwise it's verified against the font file. |
+
+\* Exactly one of `data_b64` or `url` (with an optional `md5` that is verified against the font file), or `md5` alone (a reference to a font installed on the node).
+
+* Only TrueType fonts are supported (single fonts with TrueType outlines), OpenType fonts with PostScript (CFF) outlines and font collections are refused.
+* The nodes keep the installed fonts in a cache that never expires, by the MD5 of their files, and download the font of a URL only once (URLs are considered immutable, so a changed font must be published at a new URL).
+* The installed fonts are available to every later job of the node, as the fonts installed in the system are, and they are used before the system ones. When several files of the same family and style are installed, the most recently installed (or referenced) one is used.
+* A font that can't be installed (download failure, MD5 not installed or not matching, not TrueType, license that doesn't allow embedding the font, name or style not matching the font file, larger than `FONT_MAX_SIZE`) fails the job with an error that names it, the fonts are never silently replaced by other fonts.
+* On Linux (CUPS) the fonts are embedded in the PDF document, on Windows they're loaded in the system for the node process only, so no administration rights are required.
+* On Windows the font files are parsed by the font engine of the system (in kernel mode before Windows 10, eg: Windows XP), so fonts should only be sent by trusted clients, as the admin token they require already implies.
+
+The fonts installed on a node are listed by `GET /nodes/<id>/fonts`, and may be installed before any job (so that later jobs reference them by `md5` alone or not at all) by `POST /nodes/<id>/fonts`, with the same `fonts` array (`data_b64` or `url` entries), which queues a job of the `fonts` type whose result lists the installed fonts. The same job may also be sent to the print endpoints, with the `fonts` type and a `{"fonts": [...]}` JSON payload with the same entries.
+
+The server side conversion of XMPL documents into PDF (`/documents.pdf`) also uses the fonts declared by the documents, installed in the font cache of the server (in `FONTS_PATH`, defaulting to the `fonts` directory of `DATA_PATH`), which requires the admin token.
 
 ### Gravo Print Payload
 
@@ -181,7 +221,7 @@ The parameters that aren't given keep the values of the existing configuration, 
 
 The service runs under the system account, so it only sees the printers installed for all users and has no default printer. The installer suggests the default printer of the user running it, and the printer should be set, otherwise the jobs that don't select one fail. In email mode the printer must be a PDF printer (e.g. `Microsoft Print to PDF`), as the jobs are printed to PDF files.
 
-The node is installed in `C:\Program Files\Colony Print Node` (other directories are refused, as the service runs its files as the system account). Its configuration (`config.env`) and logs are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
+The node is installed in `C:\Program Files\Colony Print Node` (other directories are refused, as the service runs its files as the system account). Its configuration (`config.env`), logs and fonts installed on demand (`fonts`) are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
 
 ### Self-Update
 
