@@ -196,6 +196,81 @@ class ColonyPrintBootTest(unittest.TestCase):
         )
         self.assertEqual(MockColonyPrintNode.loops, 1)
 
+        # the node is told that it's run by the boot, together with the path
+        # of its state file (next to the configuration file), the outcome of
+        # the update and the names of the values that were set by the boot
+        self.assertEqual(environ["NODE_BOOT"], "1")
+        self.assertEqual(
+            environ["NODE_STATE_PATH"],
+            os.path.join(
+                os.path.dirname(os.path.abspath(self.config_path)), "state.env"
+            ),
+        )
+        self.assertEqual(environ["NODE_UPDATE_STATUS"], "success")
+        self.assertEqual(float(environ["NODE_UPDATE_TIME"]) > 0.0, True)
+        self.assertEqual("NODE_UPDATE_ERROR" in environ, False)
+        self.assertEqual(environ["NODE_BOOT_KEYS"].split(","), sorted(environ.keys()))
+        for value in environ.values():
+            self.assertEqual(type(value), str)
+
+    def test_main_boot_keys(self):
+        # only the values set by the boot (the ones of the configuration file,
+        # of the state file and the ones handed over to the node) are named,
+        # so that removing them results in the environment the boot was
+        # started with, even for the values that were changed by the boot
+        self._write(
+            self.config_path,
+            b"BASE_URL=https://other.example.com/\r\n"
+            + b"SECRET_KEY=secret\r\n"
+            + b"NODE_NAME=Shop\r\n",
+        )
+        self._write(os.path.join(self.temp_path, "state.env"), b"NODE_UPDATE=0\r\n")
+        original = dict(
+            BASE_URL="https://print.example.com",
+            NODE_UPDATE="1",
+            NODE_UPDATE_ERROR="Package update failed with code 1",
+            PATH="/usr/bin",
+        )
+        environ = dict(original)
+        boot = colony_print.boot.ColonyPrintBoot(environ=environ, retry_delay=0.0)
+
+        boot.main(["--config", self.config_path])
+        self.assertEqual(environ["BASE_URL"], "https://print.example.com/")
+        self.assertEqual(environ["NODE_UPDATE"], "0")
+        keys = environ["NODE_BOOT_KEYS"].split(",")
+        self.assertEqual(
+            keys,
+            [
+                "FONTS_PATH",
+                "NODE_BOOT",
+                "NODE_BOOT_KEYS",
+                "NODE_NAME",
+                "NODE_STATE_PATH",
+                "NODE_UPDATE_STATUS",
+                "NODE_UPDATE_TIME",
+                "SECRET_KEY",
+            ],
+        )
+        self.assertEqual(
+            sorted(key for key in environ if not key in keys),
+            ["BASE_URL", "NODE_UPDATE", "PATH"],
+        )
+
+        # the error of the update of a previous boot is not kept when the
+        # update doesn't fail, even if it's part of the environment
+        self.assertEqual(environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual("NODE_UPDATE_ERROR" in environ, False)
+
+        # the names handed over by a previous boot are not part of the
+        # environment the boot was started with, so they're named once more
+        environ = dict(PATH="/usr/bin", NODE_BOOT_KEYS="NODE_BOOT,NODE_BOOT_KEYS")
+        boot = colony_print.boot.ColonyPrintBoot(environ=environ, retry_delay=0.0)
+        boot.main(["--config", self.config_path, "--no-update"])
+        keys = environ["NODE_BOOT_KEYS"].split(",")
+        self.assertEqual("NODE_BOOT_KEYS" in keys, True)
+        self.assertEqual(keys.count("NODE_BOOT_KEYS"), 1)
+        self.assertEqual(sorted(key for key in environ if not key in keys), ["PATH"])
+
     def test_main_config_default(self):
         self._write(self.config_path, b"NODE_UPDATE=0\r\nNODE_NAME=Shop\r\n")
         environ = dict(COLONY_PRINT_CONFIG=self.config_path)
@@ -243,6 +318,8 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.boot.main(["--config", self.config_path])
         self.assertEqual(MockSubprocess.calls, [])
         self.assertEqual(MockColonyPrintNode.loops, 1)
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual("NODE_UPDATE_ERROR" in self.environ, False)
 
     def test_main_update_error(self):
         # makes sure that a failed update (pip failing on every attempt or
@@ -260,11 +337,33 @@ class ColonyPrintBootTest(unittest.TestCase):
             self.assertEqual(len(MockSubprocess.calls), colony_print.boot.RETRIES)
             self.assertEqual(MockColonyPrintNode.loops, 1)
 
+            # the failure of the update is handed over to the node (that
+            # reports it), which is still run by the boot
+            self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "failure")
+            self.assertEqual(
+                self.environ["NODE_UPDATE_ERROR"], "Package update failed with code 1"
+            )
+            self.assertEqual(
+                "NODE_UPDATE_ERROR" in self.environ["NODE_BOOT_KEYS"].split(","), True
+            )
+
             MockSubprocess.calls = []
             MockSubprocess.error = OSError("No such file or directory")
             self.boot.main(["--config", self.config_path])
             self.assertEqual(len(MockSubprocess.calls), 1)
             self.assertEqual(MockColonyPrintNode.loops, 2)
+            self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "failure")
+            self.assertEqual(
+                self.environ["NODE_UPDATE_ERROR"], "No such file or directory"
+            )
+
+            # the error is no longer handed over once the update succeeds
+            MockSubprocess.error = None
+            MockSubprocess.codes = [0]
+            self.boot.main(["--config", self.config_path])
+            self.assertEqual(MockColonyPrintNode.loops, 3)
+            self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "success")
+            self.assertEqual("NODE_UPDATE_ERROR" in self.environ, False)
         finally:
             logger.removeHandler(handler)
             logger.setLevel(level)
@@ -285,9 +384,143 @@ class ColonyPrintBootTest(unittest.TestCase):
             [],
         )
 
+    def test_main_state(self):
+        # the state file of the node (next to the configuration file) holds
+        # the auto-update set from the admin, that takes precedence over the
+        # one of the configuration (and of the environment)
+        state_path = os.path.join(self.temp_path, "state.env")
+        self._write(self.config_path, b"NODE_UPDATE=1\r\n")
+        self._write(state_path, b"NODE_UPDATE=0\r\n")
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_UPDATE"], "0")
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual(MockSubprocess.calls, [])
+        self.assertEqual(MockColonyPrintNode.loops, 1)
+        self.assertEqual(self.boot.load_config(state_path), dict(NODE_UPDATE="0"))
+
+        self._write(state_path, b"NODE_UPDATE=1\r\n")
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_UPDATE"], "1")
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "success")
+        self.assertEqual(self._requirements(), [["colony-print", "npcolony"]])
+
+        # the update forced from the admin runs even with the auto-update
+        # disabled, but only once, as it's removed from the state file (that
+        # keeps its other values) before the update runs
+        self._write(state_path, b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+        MockSubprocess.calls = []
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_UPDATE"], "0")
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "success")
+        self.assertEqual("NODE_UPDATE_ONCE" in self.environ, False)
+        self.assertEqual(self._requirements(), [["colony-print", "npcolony"]])
+        self.assertEqual(self.boot.load_config(state_path), dict(NODE_UPDATE="0"))
+
+        MockSubprocess.calls = []
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual(MockSubprocess.calls, [])
+        self.assertEqual(MockColonyPrintNode.loops, 4)
+
+        # a forced update that fails is also consumed and handed over to
+        # the node as a failure, the node being run anyway
+        self._write(state_path, b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+        MockSubprocess.codes = [1]
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "failure")
+        self.assertEqual(
+            self.environ["NODE_UPDATE_ERROR"], "Package update failed with code 1"
+        )
+        self.assertEqual(self.boot.load_config(state_path), dict(NODE_UPDATE="0"))
+        self.assertEqual(MockColonyPrintNode.loops, 5)
+
+        # the update is not forced when the boot is told to skip it, the
+        # forced update being consumed anyway
+        self._write(state_path, b"NODE_UPDATE_ONCE=1\r\n")
+        MockSubprocess.codes = [0]
+        MockSubprocess.calls = []
+        self.boot.main(["--config", self.config_path, "--no-update"])
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual(MockSubprocess.calls, [])
+        self.assertEqual(self.boot.load_config(state_path), dict())
+
+    def test_main_state_error(self):
+        # a state file that can't be loaded (a directory in its place) only
+        # logs a warning, the node being updated and run as without it
+        state_path = os.path.join(self.temp_path, "state.env")
+        os.makedirs(state_path)
+        handler = MockLoggingHandler()
+        logger = logging.getLogger()
+        level = logger.level
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
+        try:
+            self.boot.main(["--config", self.config_path])
+            self.assertEqual(self._requirements(), [["colony-print", "npcolony"]])
+            self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "success")
+            self.assertEqual(MockColonyPrintNode.loops, 1)
+            shutil.rmtree(state_path)
+
+            # a forced update that can't be consumed (the state file can't be
+            # saved) is not run, as it would be run by every boot, the
+            # auto-update of the state file being applied anyway
+            self._write(state_path, b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+            os.makedirs(state_path + ".tmp")
+            MockSubprocess.calls = []
+            self.boot.main(["--config", self.config_path])
+            self.assertEqual(MockSubprocess.calls, [])
+            self.assertEqual(self.environ["NODE_UPDATE"], "0")
+            self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+            self.assertEqual(MockColonyPrintNode.loops, 2)
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(level)
+
+        problems = [
+            record
+            for record in handler.records
+            if "Problem applying state" in record.getMessage()
+        ]
+        self.assertEqual(len(problems), 2)
+        self.assertEqual([record.levelno for record in problems], [logging.WARNING] * 2)
+        self.assertEqual(state_path in problems[0].getMessage(), True)
+
+    def test_main_control_disabled(self):
+        # the state file is ignored (and left untouched) when the remote
+        # control of the node is disabled in its configuration, which can't
+        # be changed from the admin, the node being told about the boot anyway
+        state_path = os.path.join(self.temp_path, "state.env")
+        self._write(self.config_path, b"NODE_CONTROL=0\r\nNODE_UPDATE=0\r\n")
+        self._write(state_path, b"NODE_UPDATE=1\r\nNODE_UPDATE_ONCE=1\r\n")
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(MockSubprocess.calls, [])
+        self.assertEqual(self.environ["NODE_UPDATE"], "0")
+        self.assertEqual(self.environ["NODE_CONTROL"], "0")
+        self.assertEqual(self.environ["NODE_BOOT"], "1")
+        self.assertEqual(self.environ["NODE_STATE_PATH"], state_path)
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual(
+            self.boot.load_config(state_path),
+            dict(NODE_UPDATE="1", NODE_UPDATE_ONCE="1"),
+        )
+        self.assertEqual(MockColonyPrintNode.loops, 1)
+
     def test_run(self):
         self.boot.run()
         self.assertEqual(MockColonyPrintNode.loops, 1)
+
+        # the values set in the environment after appier is imported (as the
+        # ones of the configuration file, when the boot is run as a module of
+        # the package) are part of the configuration of the node
+        os.environ["COLONY_PRINT_BOOT_TEST"] = "value"
+        try:
+            self.assertEqual(appier.conf("COLONY_PRINT_BOOT_TEST", None), None)
+            self.boot.run()
+            self.assertEqual(appier.conf("COLONY_PRINT_BOOT_TEST", None), "value")
+        finally:
+            del os.environ["COLONY_PRINT_BOOT_TEST"]
+            appier.conf_r("COLONY_PRINT_BOOT_TEST")
+        self.assertEqual(MockColonyPrintNode.loops, 2)
 
     def test_update(self):
         requirements = self.boot.update()
@@ -516,6 +749,45 @@ class ColonyPrintBootTest(unittest.TestCase):
             ),
         )
 
+    def test_save_config(self):
+        # the values are saved one by line (sorted by name), so that they're
+        # loaded back as they were, leaving no temporary file behind
+        config = dict(NODE_UPDATE="0", NODE_UPDATE_ONCE="1")
+        self.boot.save_config(self.config_path, config)
+        with open(self.config_path, "rb") as file:
+            data = file.read()
+        self.assertEqual(data, b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+        self.assertEqual(self.boot.load_config(self.config_path), config)
+        self.assertEqual(os.listdir(self.temp_path), ["config.env"])
+
+        # an existing file is replaced, the values that are not ASCII being
+        # saved as UTF-8 (the encoding of the configuration)
+        label = appier.legacy.u("São João")
+        self.boot.save_config(self.config_path, dict(NODE_LABEL=label))
+        self.assertEqual(
+            self.boot.load_config(self.config_path), dict(NODE_LABEL=label)
+        )
+        self.boot.save_config(self.config_path, dict())
+        self.assertEqual(self.boot.load_config(self.config_path), dict())
+        with open(self.config_path, "rb") as file:
+            self.assertEqual(file.read(), b"")
+
+        # a save that fails (a directory in the place of the file) leaves no
+        # temporary file behind and keeps the directory as it was
+        path = os.path.join(self.temp_path, "state.env")
+        os.makedirs(path)
+        self.assertRaises(Exception, lambda: self.boot.save_config(path, config))
+        self.assertEqual(os.path.isdir(path), True)
+        self.assertEqual(
+            sorted(os.listdir(self.temp_path)), ["config.env", "state.env"]
+        )
+
+        # a temporary file that can't be written (no directory) keeps the
+        # file as it was, as it's only replaced once the values are written
+        path = os.path.join(self.temp_path, "missing", "state.env")
+        self.assertRaises(IOError, lambda: self.boot.save_config(path, config))
+        self.assertEqual(os.path.exists(os.path.dirname(path)), False)
+
     def test_apply_config(self):
         environ = dict(BASE_URL="https://other.example.com/")
         boot = colony_print.boot.ColonyPrintBoot(environ=environ)
@@ -523,6 +795,14 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(
             environ, dict(BASE_URL="https://other.example.com/", SECRET_KEY="key")
         )
+
+        # the values that are defined in the environment are only replaced
+        # when the configuration overrides them (as the state of the node)
+        boot.apply_config(dict(BASE_URL="https://print.example.com/"), override=True)
+        self.assertEqual(
+            environ, dict(BASE_URL="https://print.example.com/", SECRET_KEY="key")
+        )
+        boot.apply_config(dict(BASE_URL="https://other.example.com/"), override=True)
 
         # the values loaded from the configuration file (unicode strings) are
         # set as the strings of the environment, which are byte strings (so
@@ -543,6 +823,58 @@ class ColonyPrintBootTest(unittest.TestCase):
         for key, value in environ.items():
             self.assertEqual(type(key), str)
             self.assertEqual(type(value), str)
+
+    def test_apply_state(self):
+        # a node without a state file has nothing applied (nor created)
+        state_path = os.path.join(self.temp_path, "state.env")
+        self.assertEqual(self.boot.apply_state(state_path), False)
+        self.assertEqual("NODE_UPDATE" in self.environ, False)
+        self.assertEqual(os.path.exists(state_path), False)
+
+        # the auto-update of the state file is set in the environment, even
+        # when it's already defined in it, leaving the state file untouched
+        self._write(state_path, b"# state\r\nNODE_UPDATE=0\r\n")
+        self.assertEqual(self.boot.apply_state(state_path), False)
+        self.assertEqual(self.environ["NODE_UPDATE"], "0")
+        self.assertEqual(self.boot.update_enabled, False)
+        with open(state_path, "rb") as file:
+            self.assertEqual(file.read(), b"# state\r\nNODE_UPDATE=0\r\n")
+
+        self._write(state_path, b"NODE_UPDATE=yes\r\n")
+        self.assertEqual(self.boot.apply_state(state_path), False)
+        self.assertEqual(self.environ["NODE_UPDATE"], "yes")
+        self.assertEqual(self.boot.update_enabled, True)
+
+        # the forced update is removed from the state file, that keeps its
+        # other values, and is never set in the environment
+        self._write(
+            state_path, b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\nOTHER=value\r\n"
+        )
+        self.assertEqual(self.boot.apply_state(state_path), True)
+        self.assertEqual(self.environ["NODE_UPDATE"], "0")
+        self.assertEqual("NODE_UPDATE_ONCE" in self.environ, False)
+        self.assertEqual("OTHER" in self.environ, False)
+        self.assertEqual(
+            self.boot.load_config(state_path), dict(NODE_UPDATE="0", OTHER="value")
+        )
+        self.assertEqual(self.boot.apply_state(state_path), False)
+
+        # a forced update with a false value doesn't force the update, but
+        # is removed from the state file as any other
+        for value in (b"0", b"false", b" Off "):
+            self._write(state_path, b"NODE_UPDATE_ONCE=" + value + b"\r\n")
+            self.assertEqual(self.boot.apply_state(state_path), False)
+            self.assertEqual(self.boot.load_config(state_path), dict())
+        for value in (b"1", b"true", b""):
+            self._write(state_path, b"NODE_UPDATE_ONCE=" + value + b"\r\n")
+            self.assertEqual(self.boot.apply_state(state_path), True)
+            self.assertEqual(self.boot.load_config(state_path), dict())
+
+        # the values of the state file (unicode strings) are set as the
+        # strings of the environment, as the ones of the configuration
+        self._write(state_path, b"NODE_UPDATE=1\r\n")
+        self.boot.apply_state(state_path)
+        self.assertEqual(type(self.environ["NODE_UPDATE"]), str)
 
     def test_requirements(self):
         self.assertEqual(self.boot.requirements, ["colony-print", "npcolony"])
@@ -596,3 +928,15 @@ class ColonyPrintBootTest(unittest.TestCase):
         for value in ("1", "true", "yes", ""):
             boot = colony_print.boot.ColonyPrintBoot(environ=dict(NODE_UPDATE=value))
             self.assertEqual(boot.update_enabled, True)
+
+    def test_control_enabled(self):
+        boot = colony_print.boot.ColonyPrintBoot(environ=dict())
+        self.assertEqual(boot.control_enabled, True)
+
+        for value in ("0", "false", "False", "no", " off "):
+            boot = colony_print.boot.ColonyPrintBoot(environ=dict(NODE_CONTROL=value))
+            self.assertEqual(boot.control_enabled, False)
+
+        for value in ("1", "true", "yes", ""):
+            boot = colony_print.boot.ColonyPrintBoot(environ=dict(NODE_CONTROL=value))
+            self.assertEqual(boot.control_enabled, True)

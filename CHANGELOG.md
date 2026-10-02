@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Update of the nodes forced for their next start, even with the auto-update disabled - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ### Changed
 
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Configuration file of the nodes ignored when their boot is run outside of the Windows service - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ## [0.23.0] - 2026-10-02
 

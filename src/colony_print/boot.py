@@ -16,6 +16,11 @@ BASE_URL = "https://print.bemisc.com/"
 """ The default base URL to be used for the communication with the
 Colony Print server, should be the same as the one of the node """
 
+STATE_NAME = "state.env"
+""" The name of the state file of the node, kept next to its configuration
+file and with its format, that is written by the node (as requested from
+the admin) and read by the boot, which never writes the configuration """
+
 PACKAGES = (("colony-print", "NODE_VERSION"), ("npcolony", "NODE_NPCOLONY_VERSION"))
 """ The packages of the node that are updated by the boot, together
 with the name of the configuration that (optionally) constrains the
@@ -51,6 +56,11 @@ class ColonyPrintBoot(object):
     Boot sequence of the (Windows) nodes, that updates the packages of
     the node from the package index (PyPI by default) and then runs the
     node, being the entry point of the node (Windows) service.
+
+    The node is told that it's run by the boot (through the environment),
+    together with the outcome of the update and the path of the state file
+    where it keeps the values set from the admin (the auto-update and the
+    update forced for the next boot), that are applied over the configuration.
 
     The module is meant to be run as a script (not imported as part of
     the package) and uses only the standard library until the update is
@@ -89,8 +99,11 @@ class ColonyPrintBoot(object):
         )
 
         # loads the configuration file of the node into the environment
-        # so that it's used by the update and by the node itself
+        # so that it's used by the update and by the node itself, keeping
+        # the names of the values the boot was started with, as a node that
+        # restarts itself must run the boot once more with only those
         config_path = os.path.abspath(args.config)
+        original = set(self.environ)
         self.apply_config(self.load_config(config_path))
         self.environ["BASE_URL"] = self.base_url
 
@@ -102,18 +115,51 @@ class ColonyPrintBoot(object):
                 os.path.dirname(config_path), "fonts"
             )
 
-        # updates the packages of the node, notice that a failed update (eg:
-        # without internet access) only logs a warning and never prevents the
-        # node from running, as the installed packages keep being used until
-        # the next (successful) update
-        if not args.no_update and self.update_enabled:
+        # applies the state file of the node (kept next to the configuration
+        # file) over the configuration, unless the remote control of the node
+        # is disabled, notice that a state file that can't be applied only
+        # logs a warning and never prevents the node from running
+        state_path = os.path.join(os.path.dirname(config_path), STATE_NAME)
+        force = False
+        if self.control_enabled:
             try:
-                self.update()
+                force = self.apply_state(state_path)
             except Exception as exception:
                 logging.warning(
-                    "Problem updating node, running the installed packages: %s"
-                    % str(exception)
+                    "Problem applying state '%s': %s" % (state_path, str(exception))
                 )
+
+        # updates the packages of the node, even with the auto-update disabled
+        # when the update is forced (from the admin), notice that a failed
+        # update (eg: without internet access) only logs a warning and never
+        # prevents the node from running, as the installed packages keep being
+        # used until the next (successful) update
+        status, error = "skipped", None
+        if not args.no_update and (self.update_enabled or force):
+            try:
+                self.update()
+                status = "success"
+            except Exception as exception:
+                status, error = "failure", str(exception)
+                logging.warning(
+                    "Problem updating node, running the installed packages: %s" % error
+                )
+
+        # hands the marker of the boot, the path of the state file and the
+        # outcome of the update over to the node (through the environment),
+        # together with the names of the values set by the boot, the ones
+        # that are not part of the environment the boot was started with
+        self.environ["NODE_BOOT"] = "1"
+        self.environ["NODE_STATE_PATH"] = state_path
+        self.environ["NODE_UPDATE_STATUS"] = status
+        self.environ["NODE_UPDATE_TIME"] = str(time.time())
+        self.environ.pop("NODE_UPDATE_ERROR", None)
+        if error:
+            self.environ["NODE_UPDATE_ERROR"] = error
+        keys = set(self.environ) - original
+        self.environ["NODE_BOOT_KEYS"] = ",".join(
+            sorted(keys | set(["NODE_BOOT_KEYS"]))
+        )
 
         if args.update_only:
             return
@@ -126,7 +172,14 @@ class ColonyPrintBoot(object):
         if hasattr(importlib, "invalidate_caches"):
             importlib.invalidate_caches()
 
+        import appier
         import colony_print.node
+
+        # loads the environment into the configuration of appier once more,
+        # as it's loaded when appier is imported, which happens before the
+        # configuration file is applied when the boot is run as a module of
+        # the package (python -m colony_print.boot)
+        appier.config.load_env()
 
         node = colony_print.node.ColonyPrintNode()
         node.loop()
@@ -302,21 +355,82 @@ class ColonyPrintBoot(object):
             config[key] = value
         return config
 
-    def apply_config(self, config):
+    def save_config(self, path, config):
+        """
+        Saves the provided configuration values in the (.env like) file in
+        the provided path, so that they're loaded back by the loading of
+        the configuration, the file being replaced atomically (written to
+        a temporary file that then takes its place), so that an interrupted
+        save never leaves a partial file behind.
+
+        The values are saved as they are (without quotes), which is enough
+        for the values of the state file of the node.
+
+        :type path: String
+        :param path: The path to the configuration file.
+        :type config: Dictionary
+        :param config: The configuration values to be saved.
+        """
+
+        lines = ["%s=%s" % item for item in sorted(config.items())]
+        data = "\r\n".join(lines + [""]).encode("utf-8")
+
+        # replaces the file with the temporary one, with a try and finally
+        # block guaranteeing that the temporary file is removed when the save
+        # fails, notice that the legacy interpreters (Python 2) are not able
+        # to replace a file on windows, where the file is removed first
+        temp_path = path + ".tmp"
+        try:
+            with open(temp_path, "wb") as file:
+                file.write(data)
+            if os.name == "nt" and not hasattr(os, "replace") and os.path.exists(path):
+                os.remove(path)
+            getattr(os, "replace", os.rename)(temp_path, path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def apply_config(self, config, override=False):
         # sets the configuration values in the environment, notice that
         # the values that are already defined in the environment take
-        # precedence, as in the configuration loading of appier, and that
-        # the strings are encoded (as UTF-8) in the interpreters whose
-        # environment only accepts byte strings (Python 2), which refuses
-        # the values that are not ASCII otherwise (eg: the name of the node)
+        # precedence (unless they're overridden), as in the configuration
+        # loading of appier, and that the strings are encoded (as UTF-8) in
+        # the interpreters whose environment only accepts byte strings
+        # (Python 2), which refuses the values that are not ASCII otherwise
+        # (eg: the name of the node)
         for key, value in config.items():
             if not isinstance(key, str):
                 key = key.encode("utf-8")
             if not isinstance(value, str):
                 value = value.encode("utf-8")
-            if key in self.environ:
+            if key in self.environ and not override:
                 continue
             self.environ[key] = value
+
+    def apply_state(self, path):
+        """
+        Applies the state file of the node in the provided path, the one
+        written by the node (as requested from the admin), over the
+        configuration: the auto-update of the node (NODE_UPDATE), that takes
+        precedence over the one of the configuration, and the update forced
+        for a single boot (NODE_UPDATE_ONCE), that is removed from the file
+        (consumed) before the update runs, so that only this boot is forced.
+
+        :type path: String
+        :param path: The path to the state file.
+        :rtype: bool
+        :return: If the update of the packages is forced for this boot,
+        even with the auto-update disabled.
+        """
+
+        state = self.load_config(path)
+        if "NODE_UPDATE" in state:
+            self.apply_config(dict(NODE_UPDATE=state["NODE_UPDATE"]), override=True)
+        if not "NODE_UPDATE_ONCE" in state:
+            return False
+        value = state.pop("NODE_UPDATE_ONCE")
+        self.save_config(path, state)
+        return not value.strip().lower() in FALSE_VALUES
 
     @property
     def requirements(self):
@@ -339,6 +453,11 @@ class ColonyPrintBoot(object):
     @property
     def update_enabled(self):
         value = self.environ.get("NODE_UPDATE", "1")
+        return not value.strip().lower() in FALSE_VALUES
+
+    @property
+    def control_enabled(self):
+        value = self.environ.get("NODE_CONTROL", "1")
         return not value.strip().lower() in FALSE_VALUES
 
 
