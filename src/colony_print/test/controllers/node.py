@@ -139,24 +139,56 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual(result["message"], "Fonts require the npcolony type")
 
     def test_print_default_fonts_capability(self):
+        # the jobs with fonts are accepted for the nodes that don't support
+        # the fonts (unknown, without the capability or older nodes, that
+        # don't advertise their capabilities), that print their documents
+        # with their own fonts, so the fonts are not sent to them and they
+        # are marked as skipped in the information of the job
         font = dict(name="Colonia", data_b64="QUJD")
-        code, result = self._print(
+        code, job_info = self._print(
             url="/nodes/unknown/print", format="binie", fonts=[font]
         )
-        self.assertEqual(code, 409)
-        self.assertEqual(
-            result["message"], "Node 'unknown' doesn't support 'dynamic-fonts'"
-        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual(self.app.jobs_fonts[job_info["id"]], None)
+        self.assertEqual("fonts" in self.app.jobs["unknown"][0], False)
 
         self._node(capabilities=["npcolony", "binie", "xmpl"])
-        code, result = self._print(format="binie", fonts=[font])
-        self.assertEqual(code, 409)
+        code, job_info = self._print(format="binie", fonts=[font])
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual("fonts" in self.app.jobs["node"][0], False)
 
-        # an older node that doesn't advertise its capabilities
+        # a job without fonts has no fonts to be skipped, whatever the node
+        code, job_info = self._print(format="binie")
+        self.assertEqual(code, 200)
+        self.assertEqual("fonts_skipped" in job_info, False)
+        self.app.jobs["node"].pop()
+
         self.app.nodes["node"] = dict(name="node")
-        code, result = self._print(format="binie", fonts=[font])
-        self.assertEqual(code, 409)
-        self.assertEqual(self.app.jobs.get("node", []), [])
+        code, job_info = self._print(format="binie", fonts=[font])
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual("fonts" in self.app.jobs["node"][1], False)
+        self.assertEqual(
+            base64.b64decode(self.app.jobs["node"][1]["data_b64"]), b"Hello World"
+        )
+
+        # the fonts are sent to the node (not skipped) once it supports them
+        self._node()
+        code, job_info = self._print(format="binie", fonts=[font])
+        self.assertEqual(code, 200)
+        self.assertEqual("fonts_skipped" in job_info, False)
+        self.assertEqual(self.app.jobs["node"][2]["fonts"], [font])
+
+        # invalid fonts are still refused, whatever the node
+        self.app.nodes["node"] = dict(name="node")
+        code, result = self._print(format="binie", fonts=[dict(name="Colonia")])
+        self.assertEqual(code, 400)
+        code, result = self._print(format="pdf", fonts=[font])
+        self.assertEqual(code, 400)
+        self.assertEqual(len(self.app.jobs["node"]), 3)
 
     def test_print_default_fonts_type(self):
         # the jobs of the fonts type (as queued by the installation of the
@@ -238,13 +270,18 @@ class NodeControllerTest(unittest.TestCase):
             base64.b64decode(job["data_b64"]), self._xmpl().encode("utf-8")
         )
 
-        # a document declaring fonts (with the ones of the request) requires
-        # the node to support the fonts, the information of both is kept
+        # a document declaring fonts (with the ones of the request) is printed
+        # by a node that doesn't support the fonts with its own fonts, the
+        # fonts being marked as skipped (none of them sent to the node)
         declared = dict(name="Colonia", url="https://fonts.hive.pt/colonia.ttf")
         font = dict(name="Binaria", data_b64="QUJD")
         data = self._xmpl(fonts=[declared])
-        code, result = self._print(data_b64=None, data=data, format="xmpl")
-        self.assertEqual(code, 409)
+        code, job_info = self._print(
+            data_b64=None, data=data, format="xmpl", fonts=[font]
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual("fonts" in self.app.jobs["node"].pop(), False)
 
         self._node()
         code, job_info = self._print(
@@ -348,6 +385,19 @@ class NodeControllerTest(unittest.TestCase):
             url="/nodes/node/printers/receipt/print", format="pdf", fonts=fonts
         )
         self.assertEqual(code, 400)
+
+        # the fonts are skipped (not sent) for a node that doesn't support
+        # them, that prints the document in the printer with its own fonts
+        self._node(capabilities=["npcolony", "binie", "xmpl"])
+        code, job_info = self._print(
+            url="/nodes/node/printers/receipt/print", format="binie", fonts=fonts
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["printer"], "receipt")
+        self.assertEqual(job_info["fonts"], [dict(name="Colonia", data_length=4)])
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual("fonts" in self.app.jobs["node"][2], False)
+        self.assertEqual(self.app.jobs_fonts[job_info["id"]], None)
 
     def test_fonts(self):
         response = self.app.get("/nodes/node/fonts")
@@ -524,14 +574,14 @@ class NodeControllerTest(unittest.TestCase):
                 "node", data_b64, format="binie", fonts=dict(name="Colonia")
             ),
         )
-        self.assertRaises(
-            appier.OperationalError,
-            lambda: controller._verify_fonts(
+        self.assertEqual(
+            controller._verify_fonts(
                 "other",
                 data_b64,
                 format="binie",
                 fonts=[dict(name="Colonia", md5="a" * 32)],
             ),
+            [dict(name="Colonia", md5="a" * 32)],
         )
 
         # the fonts and the XMPL documents are only valid for the jobs of
@@ -621,3 +671,14 @@ class NodeControllerTest(unittest.TestCase):
             appier.OperationalError,
             lambda: controller._ensure_capability("node", "xmpl"),
         )
+
+    def test_has_capability(self):
+        controller = colony_print.controllers.NodeController(self.app)
+        self._node()
+        self.assertEqual(controller._has_capability("node", "xmpl"), True)
+        self.assertEqual(controller._has_capability("node", "dynamic-fonts"), True)
+        self.assertEqual(controller._has_capability("node", "email"), False)
+        self.assertEqual(controller._has_capability("unknown", "xmpl"), False)
+
+        self.app.nodes["node"] = dict(name="node")
+        self.assertEqual(controller._has_capability("node", "xmpl"), False)
