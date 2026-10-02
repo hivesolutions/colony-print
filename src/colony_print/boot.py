@@ -84,6 +84,14 @@ class ColonyPrintBoot(object):
         self.apply_config(self.load_config(config_path))
         self.environ["BASE_URL"] = self.base_url
 
+        # keeps the fonts installed on demand next to the configuration file
+        # (in the data directory of the node, only accessible to the system
+        # and the administrators), unless their path is configured
+        if not self.environ.get("FONTS_PATH", None):
+            self.environ["FONTS_PATH"] = os.path.join(
+                os.path.dirname(config_path), "fonts"
+            )
+
         # updates the packages of the node, notice that a failed update (eg:
         # without internet access) only logs a warning and never prevents the
         # node from running, as the installed packages keep being used until

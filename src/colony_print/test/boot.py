@@ -147,6 +147,10 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(environ["BASE_URL"], "https://print.example.com/")
         self.assertEqual(environ["SECRET_KEY"], "secret")
         self.assertEqual(
+            environ["FONTS_PATH"],
+            os.path.join(os.path.dirname(os.path.abspath(self.config_path)), "fonts"),
+        )
+        self.assertEqual(
             MockSubprocess.calls,
             [INDEX_COMMAND, PIP_COMMAND + ["colony-print==0.21.0", "npcolony"]],
         )
@@ -160,8 +164,24 @@ class ColonyPrintBootTest(unittest.TestCase):
         boot.main([])
         self.assertEqual(environ["NODE_NAME"], "Shop")
         self.assertEqual(environ["BASE_URL"], colony_print.boot.BASE_URL)
+        self.assertEqual(environ["FONTS_PATH"].endswith("fonts"), True)
+
         self.assertEqual(MockSubprocess.calls, [])
         self.assertEqual(MockColonyPrintNode.loops, 1)
+
+    def test_main_fonts_path(self):
+        # the path of the fonts given in the configuration (or in the
+        # environment) is kept as it is, instead of the data directory
+        self._write(self.config_path, b"NODE_UPDATE=0\r\nFONTS_PATH=D:\\fonts\r\n")
+        environ = dict(COLONY_PRINT_CONFIG=self.config_path)
+        boot = colony_print.boot.ColonyPrintBoot(environ=environ, retry_delay=0.0)
+        boot.main([])
+        self.assertEqual(environ["FONTS_PATH"], "D:\\fonts")
+
+        environ = dict(COLONY_PRINT_CONFIG=self.config_path, FONTS_PATH="E:\\fonts")
+        boot = colony_print.boot.ColonyPrintBoot(environ=environ, retry_delay=0.0)
+        boot.main([])
+        self.assertEqual(environ["FONTS_PATH"], "E:\\fonts")
 
     def test_main_config_missing(self):
         self.boot.main(["--config", self.config_path, "--no-update"])

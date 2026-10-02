@@ -60,7 +60,7 @@ NODE_LOCATION=$NODE_LOCATION \
 python -m colony_print.node
 ```
 
-The fonts installed on demand by the node (see [Print Fonts](#print-fonts)) are kept in the `FONTS_PATH` directory (defaults to `~/.colony_print/fonts`), with each font file limited to `FONT_MAX_SIZE` bytes (defaults to 16 MB).
+The fonts installed on demand by the node (see [Print Fonts](#print-fonts)) are kept in the `FONTS_PATH` directory (defaults to `~/.colony_print/fonts`, and to the `fonts` directory of the data directory on the Windows nodes, see [Windows Node](#windows-node)), with each font file limited to `FONT_MAX_SIZE` bytes (defaults to 16 MB).
 
 ### Fonts
 
@@ -220,7 +220,7 @@ The parameters that aren't given keep the values of the existing configuration, 
 
 The service runs under the system account, so it only sees the printers installed for all users and has no default printer. The installer suggests the default printer of the user running it, and the printer should be set, otherwise the jobs that don't select one fail. In email mode the printer must be a PDF printer (e.g. `Microsoft Print to PDF`), as the jobs are printed to PDF files.
 
-The node is installed in `C:\Program Files\Colony Print Node` (other directories are refused, as the service runs its files as the system account). Its configuration (`config.env`) and logs are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
+The node is installed in `C:\Program Files\Colony Print Node` (other directories are refused, as the service runs its files as the system account). Its configuration (`config.env`), logs and fonts installed on demand (`fonts`) are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
 
 ### Self-Update
 
