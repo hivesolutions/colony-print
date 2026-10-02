@@ -161,9 +161,13 @@ class ColonyPrintBootTest(unittest.TestCase):
     def test_main_update_error(self):
         # makes sure that a failed update (pip failing on every attempt or
         # not even running) only logs a warning and never prevents the node
-        # from running (with the installed packages)
+        # from running (with the installed packages), notice that the level
+        # of the root logger is set as it's changed by the apps of the tests
         handler = MockLoggingHandler()
-        logging.getLogger().addHandler(handler)
+        logger = logging.getLogger()
+        level = logger.level
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
         try:
             MockSubprocess.codes = [1]
             self.boot.main(["--config", self.config_path])
@@ -176,7 +180,8 @@ class ColonyPrintBootTest(unittest.TestCase):
             self.assertEqual(len(MockSubprocess.calls), 1)
             self.assertEqual(MockColonyPrintNode.loops, 2)
         finally:
-            logging.getLogger().removeHandler(handler)
+            logger.removeHandler(handler)
+            logger.setLevel(level)
 
         problems = [
             record
