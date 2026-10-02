@@ -181,6 +181,26 @@ class FontsTest(unittest.TestCase):
             ),
         )
 
+        # the message of a font without a source names the allowed sources,
+        # that don't include the MD5 (alone) when references are not allowed
+        try:
+            colony_print.verify_font(dict(name="Colonia"))
+        except appier.OperationalError as exception:
+            message = exception.message
+        self.assertEqual(
+            message, "Either data_b64, url or md5 must be provided for font 'Colonia'"
+        )
+
+        try:
+            colony_print.verify_font(
+                dict(name="Colonia", md5="a" * 32), reference=False
+            )
+        except appier.OperationalError as exception:
+            message = exception.message
+        self.assertEqual(
+            message, "Either data_b64 or url must be provided for font 'Colonia'"
+        )
+
     def test_font_info(self):
         self.assertEqual(colony_print.font_info(build_font()), ("Colonia", "regular"))
         self.assertEqual(

@@ -89,6 +89,7 @@ def verify_font(font, reference=True):
     url = font.get("url", None)
     md5 = font.get("md5", None)
     data_b64 = font.get("data_b64", None)
+    sources = "data_b64, url or md5" if reference else "data_b64 or url"
     appier.verify(
         not (data_b64 and url),
         message="Only one of data_b64 or url must be provided for font '%s'" % name,
@@ -96,7 +97,7 @@ def verify_font(font, reference=True):
     )
     appier.verify(
         data_b64 or url or (md5 and reference),
-        message="Either data_b64, url or md5 must be provided for font '%s'" % name,
+        message="Either %s must be provided for font '%s'" % (sources, name),
         code=400,
     )
 
