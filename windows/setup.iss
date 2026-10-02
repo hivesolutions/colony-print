@@ -11,6 +11,11 @@
 ;
 ; Other parameters are /ID, /MODE (normal or email), /EMAILS, /MAILMEKEY,
 ; /MAILMEURL and /CONFIG (path to a config.env file with the values to use).
+;
+; The installer of the Windows XP nodes (32 bit) is the one compiled with the
+; XP definition and with Inno Setup 5 (the last one that supports Windows XP),
+; that installs a Python extracted from its installer, with NSSM as the service
+; wrapper, as WinSW requires a .NET Framework that Windows XP lacks.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -25,6 +30,16 @@
 #define AppName "Colony Print Node"
 #define ServiceName "colony-print-node"
 
+; the name of the installer and the constant of the program files directory,
+; as Inno Setup 5 has no constant for the one common to every user
+#ifdef XP
+  #define SetupName "colony-print-node-setup-xp"
+  #define ProgramFiles "{pf}"
+#else
+  #define SetupName "colony-print-node-setup"
+  #define ProgramFiles "{commonpf}"
+#endif
+
 [Setup]
 AppId={{08AC6285-8BAA-453D-8EF4-72F19B392ED3}
 AppName={#AppName}
@@ -33,19 +48,24 @@ AppVerName={#AppName} {#AppVersion}
 AppPublisher=Hive Solutions Lda.
 AppPublisherURL=https://github.com/hivesolutions/colony-print
 AppSupportURL=https://github.com/hivesolutions/colony-print/issues
-DefaultDirName={autopf}\{#AppName}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
+#ifdef XP
+DefaultDirName={pf}\{#AppName}
+MinVersion=5.1sp3
+#else
+DefaultDirName={autopf}\{#AppName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
+WizardStyle=modern
+#endif
 PrivilegesRequired=admin
 CloseApplications=no
 OutputDir={#OutputDir}
-OutputBaseFilename=colony-print-node-setup-{#AppVersion}
+OutputBaseFilename={#SetupName}-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
-WizardStyle=modern
 UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\python\python.exe
 VersionInfoVersion={#AppVersion}
@@ -57,12 +77,20 @@ Type: filesandordirs; Name: "{app}\python"
 
 [Files]
 Source: "{#BuildDir}\python\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs
+; the service wrapper of the Windows XP nodes (NSSM) has no configuration
+; file, as the service is configured by the installer, that also runs the
+; redistributable of the Visual C++ 2008 runtime required by their Python
+#ifdef XP
+Source: "{#BuildDir}\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\vcredist_x86.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+#else
 Source: "{#BuildDir}\{#ServiceName}.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "service.xml"; DestDir: "{app}"; DestName: "{#ServiceName}.xml"; Flags: ignoreversion
+#endif
 ; the boot script is run from a copy outside of the packages updated by it,
 ; so that an interrupted (or broken) update never prevents the service from
 ; starting and updating the packages once more
 Source: "{#BuildDir}\boot.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "service.xml"; DestDir: "{app}"; DestName: "{#ServiceName}.xml"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\{#AppName}"
@@ -70,7 +98,11 @@ Name: "{commonappdata}\{#AppName}\logs"
 
 [UninstallRun]
 Filename: "{sys}\net.exe"; Parameters: "stop {#ServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "StopService"
+#ifdef XP
+Filename: "{app}\nssm.exe"; Parameters: "remove {#ServiceName} confirm"; Flags: runhidden waituntilterminated; RunOnceId: "DeleteService"
+#else
 Filename: "{app}\{#ServiceName}.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "DeleteService"
+#endif
 
 [UninstallDelete]
 ; the configuration and the logs of the node are kept, so that they're
@@ -303,6 +335,131 @@ begin
       Result := False;
 end;
 
+#ifdef XP
+function ConvertStringSecurityDescriptorToSecurityDescriptor(Descriptor: String;
+  Revision: Cardinal; var SecurityDescriptor: Longint; Size: Longint): BOOL;
+  external 'ConvertStringSecurityDescriptorToSecurityDescriptorW@advapi32.dll stdcall';
+
+function SetFileSecurity(FileName: String; Information: Cardinal;
+  SecurityDescriptor: Longint): BOOL;
+  external 'SetFileSecurityW@advapi32.dll stdcall';
+
+function LocalFree(Memory: Longint): Longint;
+  external 'LocalFree@kernel32.dll stdcall';
+
+function GetVolumeInformation(RootPath: String; Name: Longint; NameSize: Cardinal;
+  var Serial, Component, Flags: Cardinal; FileSystem: Longint;
+  FileSystemSize: Cardinal): BOOL;
+  external 'GetVolumeInformationW@kernel32.dll stdcall';
+
+{ The owner and the access of a file (or directory) can't be verified in the
+  Windows XP nodes, as PowerShell is not part of Windows XP, so that no file
+  (or directory) is trusted, meaning that only the data directory of an
+  installed node (restricted by the installer) is used, any other one (eg:
+  the one kept by an uninstall) being removed as an untrusted one }
+function TrustedPath(const Path: String): Boolean;
+begin
+  Log('Owner and access of ' + Path + ' not verified');
+  Result := False;
+end;
+
+{ Restricts the access to the provided directory (and to the contents created
+  in it) to the system account and to the administrators, that become its
+  owners, returning if it succeeded, the security functions of Windows are
+  used (with a security descriptor that identifies the accounts by their well
+  known identifiers) as Windows XP has no icacls and its cacls requires the
+  names of the accounts (and an answer) in the language of Windows, notice
+  that it's not possible in the volumes without security (eg: FAT32) }
+function RestrictDir(const Path: String): Boolean;
+var
+  Descriptor: Longint;
+begin
+  Result := False;
+  if ConvertStringSecurityDescriptorToSecurityDescriptor(
+    'O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)', 1, Descriptor, 0) then
+  begin
+    if SetFileSecurity(Path, 5, Descriptor) then
+      Result := True;
+    LocalFree(Descriptor);
+  end;
+  if not Result then
+    Log('Could not restrict the access to ' + Path);
+end;
+
+{ Verifies if the volume of the provided path supports the security of its
+  files (access control lists), which is not the case of the FAT32 ones, a
+  volume whose information can't be retrieved is considered to support it,
+  so that a failure to restrict the access to its files is never ignored }
+function SecureVolume(const Path: String): Boolean;
+var
+  Serial, Component, Flags: Cardinal;
+begin
+  Result := True;
+  if GetVolumeInformation(AddBackslash(ExtractFileDrive(Path)), 0, 0, Serial,
+    Component, Flags, 0, 0) then
+    Result := (Flags and 8) <> 0;
+end;
+
+{ Verifies if the registry has application paths of Python 2.7 (for the
+  machine or for the system account), the directories (eg: added by another
+  program) where Python always searches for its modules before its own
+  library, which can't be disabled in the Python of the Windows XP nodes }
+function ApplicationPaths: Boolean;
+var
+  Names: TArrayOfString;
+begin
+  Result := (RegGetSubkeyNames(HKLM, 'SOFTWARE\Python\PythonCore\2.7\PythonPath', Names) and
+    (GetArrayLength(Names) > 0)) or
+    (RegGetSubkeyNames(HKU, 'S-1-5-18\Software\Python\PythonCore\2.7\PythonPath', Names) and
+    (GetArrayLength(Names) > 0));
+end;
+
+{ Runs NSSM (the service wrapper of the Windows XP nodes) with the provided
+  parameters, returning if it succeeded }
+function Nssm(const Params: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{app}\nssm.exe'), Params, '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+{ Configures the service of the node with the values of the configuration
+  file of WinSW (service.xml), as NSSM is configured with commands, the node
+  is run without a console, as NSSM is not able to create it in the current
+  versions of Windows, and the paths of the parameters are quoted (with the
+  quotes escaped) as they contain spaces, notice that the rotated log files
+  are not removed and that the path of the wrapper is quoted in the service,
+  as NSSM registers it without quotes, which would allow another program
+  (eg: C:\Program.exe) to be run by the service as the system account }
+function ConfigureService: Boolean;
+var
+  Prefix, Logs: String;
+  ResultCode: Integer;
+begin
+  Prefix := 'set ' + ServiceName + ' ';
+  Logs := DataDir + '\logs\' + ServiceName;
+  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'config ' + ServiceName + ' binPath= "\"' +
+    ExpandConstant('{app}\nssm.exe') + '\""', '', SW_HIDE, ewWaitUntilTerminated,
+    ResultCode) and (ResultCode = 0) and
+    Nssm(Prefix + 'DisplayName {#AppName}') and
+    Nssm(Prefix + 'Description Receives the print jobs of the Colony Print server ' +
+      'and prints them on the printers of this machine, updating itself from PyPI ' +
+      'whenever it starts.') and
+    Nssm(Prefix + 'Application "' + ExpandConstant('{app}\python\python.exe') + '"') and
+    Nssm(Prefix + 'AppParameters -E -s -u "\"' + ExpandConstant('{app}\boot.py') +
+      '\"" --config "\"' + ConfigPath + '\""') and
+    Nssm(Prefix + 'AppDirectory "' + DataDir + '"') and
+    Nssm(Prefix + 'AppStdout "' + Logs + '.out.log"') and
+    Nssm(Prefix + 'AppStderr "' + Logs + '.err.log"') and
+    Nssm(Prefix + 'AppRotateFiles 1') and
+    Nssm(Prefix + 'AppRotateOnline 1') and
+    Nssm(Prefix + 'AppRotateBytes 10485760') and
+    Nssm(Prefix + 'AppNoConsole 1') and
+    Nssm(Prefix + 'AppRestartDelay 10000') and
+    Nssm(Prefix + 'DependOnService Spooler');
+end;
+#else
 { Verifies if the provided file (or directory) can be trusted, meaning that
   only the system account and the administrators own it and have access to it
   (as the data directory restricted by the installer), as one created by any
@@ -347,16 +504,21 @@ begin
   Result := Exec(ExpandConstant('{sys}\icacls.exe'), Params, '', SW_HIDE,
     ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
+#endif
 
 { Removes a data directory that was not created by the installer (it's not
   trusted), taking its ownership and resetting its access first, as its
   creator may have denied the access to the administrators, so that its
-  contents (eg: a configuration pointing to other packages) are never used }
+  contents (eg: a configuration pointing to other packages) are never used,
+  notice that its ownership is not taken (nor its access reset) in the
+  Windows XP nodes, that are not able to do it for its contents }
 function RemoveUntrustedDataDir: Boolean;
 begin
   Log('Removing the untrusted data directory ' + DataDir);
+#ifndef XP
   Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /T /C /Q');
   Icacls('"' + DataDir + '" /reset /T /C /Q');
+#endif
   DelTree(DataDir, True, True, True);
   Result := not DirExists(DataDir);
 end;
@@ -367,18 +529,23 @@ end;
   the same volume, which fails in case the data directory exists (eg: created
   by another user meanwhile), so that no other user ever has access to it
   (not even for an instant), notice that its access is reset first, so that
-  only the restricted access is kept }
+  only the restricted access is kept, and that in the Windows XP nodes it's
+  created without being restricted in the volumes without security (FAT32) }
 function CreateDataDir: Boolean;
 var
   TempDir: String;
 begin
   Result := False;
   Log('Creating the data directory ' + DataDir);
-  TempDir := ExpandConstant('{commonpf}\{#AppName}.data');
+  TempDir := ExpandConstant('{#ProgramFiles}\{#AppName}.data');
   if DirExists(TempDir) then
     DelTree(TempDir, True, True, True);
   if not CreateDir(TempDir) then
     Exit;
+#ifdef XP
+  if not RestrictDir(TempDir) and SecureVolume(TempDir) then
+    Exit;
+#else
   if not Icacls('"' + TempDir + '" /reset /C /Q') then
     Exit;
   if not Icacls('"' + TempDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F ' +
@@ -386,6 +553,7 @@ begin
     Exit;
   if not Icacls('"' + TempDir + '" /setowner *S-1-5-32-544 /C /Q') then
     Exit;
+#endif
   Result := RenameFile(TempDir, DataDir);
   if not Result then
   begin
@@ -400,6 +568,86 @@ var
 begin
   Result := Exec(ExpandConstant('{sys}\sc.exe'), 'query ' + ServiceName, '', SW_HIDE,
     ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+{ Retrieves the path to the wrapper (image) of the existing service, without
+  its quotes and arguments, empty in case there's no service }
+function ServiceImage: String;
+var
+  Index: Integer;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'ImagePath', Result) then
+    Exit;
+  Result := Trim(Result);
+  if (Result <> '') and (Result[1] = '"') then
+  begin
+    Result := Copy(Result, 2, Length(Result));
+    Index := Pos('"', Result) - 1;
+  end
+  else
+    Index := Pos('.exe', Lowercase(Result)) + 3;
+  if Index > 3 then
+    Result := Copy(Result, 1, Index);
+end;
+
+{ Verifies if the existing service is the one of this installer, the one
+  whose wrapper is in its directory, as the installer of the Windows XP nodes
+  and the one of the other nodes use the same service name with different
+  wrappers in different directories, the short names of the directories are
+  compared, so that the same directory is never taken as another one }
+function OwnService: Boolean;
+begin
+  Result := CompareText(GetShortName(ExtractFilePath(ServiceImage)),
+    GetShortName(AddBackslash(ExpandConstant('{app}')))) = 0;
+end;
+
+{ Retrieves the directory where the other installer (the one of the Windows
+  XP nodes or the one of the other nodes) installs its node, the program files
+  of the other architecture, empty in case there's none (32 bit Windows) }
+function OtherDir: String;
+begin
+  Result := '';
+#ifdef XP
+  if IsWin64 then
+    Result := ExpandConstant('{pf64}\{#AppName}');
+#else
+  Result := ExpandConstant('{commonpf32}\{#AppName}');
+#endif
+end;
+
+{ Removes the node of the other installer, whose service would otherwise be
+  kept instead of the one of this installer, by running its uninstaller, that
+  removes its service and its files while keeping its configuration, and
+  waiting for the service to be removed (as the uninstaller returns before
+  it's done), notice that the uninstaller is only run when the wrapper of the
+  service is in the directory of the other installer, so that no other program
+  is ever run, the service is deleted in case it's not the one of the other
+  installer (or its uninstaller fails), returning if it was removed }
+function RemoveOtherNode: Boolean;
+var
+  Uninstaller: String;
+  ResultCode, I: Integer;
+begin
+  Log('Removing the ' + ServiceName + ' service of another installer');
+  Uninstaller := AddBackslash(OtherDir) + 'unins000.exe';
+  if (OtherDir <> '') and (CompareText(GetShortName(ExtractFilePath(ServiceImage)),
+    GetShortName(AddBackslash(OtherDir))) = 0) and FileExists(Uninstaller) then
+  begin
+    Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode);
+    for I := 1 to 60 do
+    begin
+      if not ServiceExists then
+        Break;
+      Sleep(1000);
+    end;
+  end;
+  if ServiceExists then
+    Exec(ExpandConstant('{sys}\sc.exe'), 'delete ' + ServiceName, '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode);
+  Result := not ServiceExists;
 end;
 
 { Retrieves the default printer of the user running the installer, as the
@@ -434,12 +682,24 @@ begin
 end;
 
 { Verifies that the server is reachable and accepts the secret key, by
-  listing its nodes (an operation that requires the secret key) }
+  listing its nodes (an operation that requires the secret key), notice
+  that the installer of the Windows XP nodes doesn't verify a server that
+  uses HTTPS in the versions of Windows older than 8.1, as their HTTP client
+  doesn't enable (by default) the secure protocols (TLS 1.2) required by the
+  current servers, which are supported by the Python of the node }
 function TestServer(const Url, Key: String; var Message: String): Boolean;
 var
   Request: Variant;
 begin
   Result := False;
+#ifdef XP
+  if (Pos('https://', Lowercase(Url)) = 1) and (GetWindowsVersion < $06030000) then
+  begin
+    Log('Server not verified, as this version of Windows lacks its secure protocols');
+    Result := True;
+    Exit;
+  end;
+#endif
   try
     Request := CreateOleObject('WinHttp.WinHttpRequest.5.1');
     Request.SetTimeouts(10000, 10000, 15000, 15000);
@@ -675,12 +935,42 @@ begin
   { the node is only installed under the program files, where the users
     can't change anything, as the service runs its files (eg: the boot
     script and the Python interpreter) as the system account }
-  if Pos(Lowercase(AddBackslash(ExpandConstant('{commonpf}'))),
+  if Pos(Lowercase(AddBackslash(ExpandConstant('{#ProgramFiles}'))),
     Lowercase(AddBackslash(ExpandFileName(ExpandConstant('{app}'))))) <> 1 then
   begin
-    Result := 'The node must be installed in ' + ExpandConstant('{commonpf}') + '.';
+    Result := 'The node must be installed in ' + ExpandConstant('{#ProgramFiles}') + '.';
     Exit;
   end;
+
+#ifdef XP
+  { warns that the node can't be protected in the volumes without security
+    (eg: FAT32), where any user is able to read the secret key and to change
+    the files run by the service (as the system account), silent installs
+    continue, as the machines are prepared by their administrators }
+  if not SecureVolume(ExpandConstant('{app}')) or not SecureVolume(DataDir) then
+    if SuppressibleMsgBox('The disk of this machine has no file security (eg: FAT32), ' +
+      'so any user of this machine is able to read the secret key of the server ' +
+      'and to change the files of the node, that run as the system account.' + #13#10#13#10 +
+      'Continue with the installation anyway?', mbConfirmation, MB_YESNO, IDYES) <> IDYES then
+    begin
+      Result := 'The node was not installed, as its disk has no file security.';
+      Exit;
+    end;
+
+  { warns that the modules of the node may be loaded from other directories,
+    the application paths of Python 2.7 in the registry, so that any user
+    able to write in them is able to run code as the system account, silent
+    installs continue, as the machines are prepared by their administrators }
+  if ApplicationPaths then
+    if SuppressibleMsgBox('The registry of this machine has application paths of Python 2.7 ' +
+      '(eg: added by another program), where the node also searches for its modules, so ' +
+      'any user able to write in them is able to run code as the system account.' + #13#10#13#10 +
+      'Continue with the installation anyway?', mbConfirmation, MB_YESNO, IDYES) <> IDYES then
+    begin
+      Result := 'The node was not installed, as Python 2.7 has application paths.';
+      Exit;
+    end;
+#endif
 
   { validates the configuration once more, as the pages are not
     shown (and so not validated) when running silently }
@@ -718,8 +1008,10 @@ begin
   if FileExists(DataDir) then
   begin
     Log('Removing the file in the place of the data directory ' + DataDir);
+#ifndef XP
     Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /C /Q');
     Icacls('"' + DataDir + '" /reset /C /Q');
+#endif
     DeleteFile(DataDir);
   end;
   if not Trusted or not DirExists(DataDir) then
@@ -737,6 +1029,13 @@ begin
     Exec(ExpandConstant('{sys}\net.exe'), 'stop ' + ServiceName, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
   end;
+
+  { removes the node of the other installer (the one of the Windows XP
+    nodes or the one of the other nodes), so that this one replaces it,
+    notice that its configuration is kept (it was already loaded) }
+  if ServiceExists and not OwnService then
+    if not RemoveOtherNode then
+      Result := 'Could not remove the ' + ServiceName + ' service of another installer.';
 end;
 
 procedure WriteConfig;
@@ -778,24 +1077,61 @@ begin
     key and the configuration of the service) to the system account
     and to the administrators, before writing the configuration to it, and
     takes the ownership and resets the access of its contents, so that the
-    files created while it was open (since its creation) are not kept }
+    files created while it was open (since its creation) are not kept, notice
+    that only the data directory is restricted in the Windows XP nodes, its
+    contents inheriting its access, which is only allowed to fail in the
+    volumes without security (FAT32), after the warning of the installer }
+#ifdef XP
+  if not RestrictDir(DataDir) and SecureVolume(DataDir) then
+    RaiseException('Could not restrict the access to ' + DataDir);
+#else
   if not Icacls('"' + DataDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F ' +
     '*S-1-5-32-544:(OI)(CI)F') then
     RaiseException('Could not restrict the access to ' + DataDir);
   Icacls('"' + DataDir + '" /setowner *S-1-5-32-544 /T /C /Q');
   Icacls('"' + DataDir + '\*" /reset /T /C /Q');
+#endif
 
   { writes the configuration and takes its ownership, as a (new) file is
     owned by the user running the installer (unless the policy makes the
     administrators the owners), that is not trusted by the next install }
   WriteConfig;
+#ifndef XP
   Icacls('"' + ConfigPath + '" /setowner *S-1-5-32-544 /C /Q');
+#endif
 
+#ifdef XP
+  { installs the runtime of the Python of the Windows XP nodes (Visual C++
+    2008), that is not part of that Python nor of Windows XP, so that the
+    node is not able to start without it, notice that an already installed
+    runtime and a required restart are not failures, and that a failure
+    doesn't prevent the service from being installed and started, as the
+    runtime may already be installed (eg: by a previous install) }
+  Log('Installing the Visual C++ 2008 runtime');
+  if not Exec(ExpandConstant('{tmp}\vcredist_x86.exe'), '/q', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) or ((ResultCode <> 0) and
+    (ResultCode <> 1638) and (ResultCode <> 3010)) then
+  begin
+    ServiceError := True;
+    Log('Could not install the Visual C++ 2008 runtime (code ' + IntToStr(ResultCode) + ')');
+    SuppressibleMsgBox('The Visual C++ 2008 runtime, required by the node, could not ' +
+      'be installed (code ' + IntToStr(ResultCode) + ').', mbError, MB_OK, IDOK);
+  end;
+#endif
+
+  { installs the service, the one of the Windows XP nodes (NSSM) being
+    configured on every install, as it has no configuration file }
   if not ServiceExists then
   begin
     Log('Installing the ' + ServiceName + ' service');
+#ifdef XP
+    if not Exec(ExpandConstant('{app}\nssm.exe'), 'install ' + ServiceName + ' "' +
+      ExpandConstant('{app}\python\python.exe') + '"', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+#else
     if not Exec(ExpandConstant('{app}\' + ServiceName + '.exe'), 'install', '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+#endif
     begin
       ServiceError := True;
       Log('Could not install the service (code ' + IntToStr(ResultCode) + ')');
@@ -804,6 +1140,16 @@ begin
       Exit;
     end;
   end;
+#ifdef XP
+  if not ConfigureService then
+  begin
+    ServiceError := True;
+    Log('Could not configure the service');
+    SuppressibleMsgBox('The ' + ServiceName + ' service could not be configured.',
+      mbError, MB_OK, IDOK);
+    Exit;
+  end;
+#endif
 
   Log('Starting the ' + ServiceName + ' service');
   if not Exec(ExpandConstant('{sys}\net.exe'), 'start ' + ServiceName, '', SW_HIDE,

@@ -20,11 +20,20 @@ except ImportError:
     import urllib as urllib_parse
     import urllib2 as urllib_error
 
+XP = "--xp" in sys.argv[1:]
+REPLACE = "--replace" in sys.argv[1:]
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_PATH = os.path.join(ROOT, "dist")
 WHEELS_PATH = os.path.join(ROOT, "build", "windows", "wheels")
 WORK_PATH = os.path.join(ROOT, "build", "smoke")
-APP_PATH = os.path.join(os.environ.get("ProgramFiles", ""), "Colony Print Node")
+XP_SETUP_NAME = "colony-print-node-setup-xp-*.exe"
+XP_APP_PATH = os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Colony Print Node")
+SETUP_NAME = XP_SETUP_NAME if XP else "colony-print-node-setup-[0-9]*.exe"
+APP_PATH = (
+    XP_APP_PATH
+    if XP
+    else os.path.join(os.environ.get("ProgramFiles", ""), "Colony Print Node")
+)
 DATA_PATH = os.path.join(os.environ.get("ProgramData", ""), "Colony Print Node")
 SETUP_LOG_PATH = os.path.join(WORK_PATH, "setup.log")
 SERVER_LOG_PATH = os.path.join(WORK_PATH, "server.log")
@@ -68,7 +77,17 @@ class Smoke(object):
     itself, then updates and rolls back the node from a local package index
     (with a newer version of colony-print), prints a document, re-installs
     and uninstalls it, installing it once more with the configuration kept
-    by the uninstall.
+    by the uninstall and then over the service of another installer.
+
+    The installer of the Windows XP nodes (32 bit) is the one tested when
+    run with the --xp argument, on any version of Windows, with the Python
+    of the node (2.7) updating itself with a pip that is not able to list
+    the versions of a package and with a configuration that is not kept by
+    the uninstall, as its installer is not able to verify (and trust) it.
+
+    The replacement of the node of each installer by the one of the other
+    installer is the one tested when run with the --replace argument, which
+    requires both installers.
     """
 
     def __init__(self):
@@ -83,6 +102,9 @@ class Smoke(object):
 
         try:
             self.start_server()
+            if REPLACE:
+                self.test_replace_other()
+                return
             current, version = self.start_index()
             self.test_install()
             self.test_update(version)
@@ -91,6 +113,7 @@ class Smoke(object):
             self.test_reinstall(current)
             self.test_uninstall()
             self.test_install_kept(current)
+            self.test_replace()
         finally:
             self.dump_logs()
             self.stop_index()
@@ -176,9 +199,13 @@ class Smoke(object):
         self.index_log.close()
 
     def build_newer(self):
+        # copies the sources of the package, including the configuration that
+        # makes its wheel an universal one, so that it's installed by both the
+        # Python of the node and the one of the Windows XP nodes (2.7)
         source_path = os.path.join(WORK_PATH, "newer")
         os.makedirs(source_path)
         shutil.copy(os.path.join(ROOT, "setup.py"), source_path)
+        shutil.copy(os.path.join(ROOT, "setup.cfg"), source_path)
         shutil.copy(os.path.join(ROOT, "README.md"), source_path)
         shutil.copytree(
             os.path.join(ROOT, "src", "colony_print"),
@@ -249,6 +276,11 @@ class Smoke(object):
         assert not "NODE_INDEX_URL" in config, "Planted configuration used"
         assert not "Planted" in config, "Planted configuration used"
 
+        # the path of the wrapper of the service (that has spaces) must be
+        # quoted, as another program (eg: C:\Program.exe) is run otherwise
+        image = self.service_image(raw=True)
+        assert image.startswith('"%s' % APP_PATH), "Service path not quoted"
+
         # verifies that only the system account and the administrators have
         # access to the data directory and to the configuration, so that the
         # next install trusts them (and any other user can't access them)
@@ -260,6 +292,17 @@ class Smoke(object):
                     continue
                 principal = line.strip().split(":(", 1)[0]
                 assert principal in TRUSTED, "%s accessible by %s" % (path, principal)
+
+        # the volumes of the runner support the security of their files, so
+        # the installer of the Windows XP nodes must not warn about it
+        setup_log = read(SETUP_LOG_PATH, errors="replace")
+        assert not "no file security" in setup_log, "Volume taken as not secure"
+        assert not "application paths" in setup_log, "Application paths found"
+
+        # verifies that the access to the data directory is protected, so
+        # that the access of its parent is never inherited by it (eg: when
+        # the access of the parent is changed), exposing the secret key
+        assert self.protected(DATA_PATH), "Data directory access not protected"
 
         # the node updates itself from PyPI (the newest versions of the
         # packages of the installer, or newer ones), before registering
@@ -342,10 +385,83 @@ class Smoke(object):
         # the configuration written by the installer are trusted (owned by
         # the administrators), even without the service, uninstalling it
         last_ping = self.node()["last_ping"]
+        if XP:
+            self.test_install_untrusted(last_ping)
+            return
         self.install([])
         assert self.service_state() == "RUNNING", "Service is not running"
         assert "SECRET_KEY=%s" % self.key in read(os.path.join(DATA_PATH, "config.env"))
         self.wait_node(current, last_ping=last_ping)
+        self.uninstall()
+
+    def test_install_untrusted(self, last_ping):
+        # installs the Windows XP node once more, which must not use the
+        # configuration kept by the uninstall (its index and its pinned
+        # version), as its installer is not able to verify (and trust) it,
+        # so that the node is configured by the parameters, uninstalling it,
+        # an application path of Python 2.7 (a directory that doesn't exist) is
+        # added to the registry for the install, as the installer must warn
+        # about it (and continue)
+        path = os.path.join(WORK_PATH, "paths")
+        path_key = "HKLM\\SOFTWARE\\Python\\PythonCore\\2.7\\PythonPath\\Smoke"
+        subprocess.check_call(
+            ["reg.exe", "add", path_key, "/ve", "/d", path, "/f", "/reg:32"]
+        )
+        try:
+            self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        finally:
+            subprocess.check_call(["reg.exe", "delete", path_key, "/f", "/reg:32"])
+        setup_log = read(SETUP_LOG_PATH, errors="replace")
+        assert "application paths" in setup_log, "No application paths warning"
+        assert self.service_state() == "RUNNING", "Service is not running"
+        config = read(os.path.join(DATA_PATH, "config.env"))
+        assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
+        assert not "NODE_INDEX_URL" in config, "Untrusted configuration used"
+        assert not "NODE_VERSION" in config, "Untrusted configuration used"
+        self.wait_node(last_ping=last_ping)
+        self.uninstall()
+
+    def test_replace(self):
+        # creates a service with the name of the one of the node but with
+        # another wrapper (image), as the one of the other installer (of the
+        # Windows XP nodes or of the other nodes), and installs the node,
+        # which must replace it with its own service, uninstalling it
+        last_ping = self.node()["last_ping"]
+        image = os.path.join(os.environ.get("SystemRoot", ""), "System32", "cmd.exe")
+        subprocess.check_call(["sc.exe", "create", SERVICE, "binPath=", image])
+        assert self.service_image() == image, "Service not created"
+        self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        assert self.service_state() == "RUNNING", "Service is not running"
+        image = self.service_image()
+        assert image.lower().startswith(APP_PATH.lower()), "Service not replaced"
+        self.wait_node(last_ping=last_ping)
+        self.uninstall()
+
+    def test_replace_other(self):
+        # installs the node and then, without any parameter, the Windows XP
+        # node over it and the node over the Windows XP one, each of them must
+        # replace the node of the other installer (uninstalling it) and keep
+        # its configuration, so that the node registers itself once more with
+        # the Python of the installer, uninstalling it
+        self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        node = self.wait_node()
+        assert not "CPython 2.7" in node["platform"], node["platform"]
+        for name, path, other_path in (
+            (XP_SETUP_NAME, XP_APP_PATH, APP_PATH),
+            (SETUP_NAME, APP_PATH, XP_APP_PATH),
+        ):
+            last_ping = self.node()["last_ping"]
+            self.install([], name=name)
+            assert self.service_state() == "RUNNING", "Service is not running"
+            image = self.service_image()
+            assert image.lower().startswith(path.lower() + os.sep), "Not replaced"
+            uninstaller = os.path.join(other_path, "unins000.exe")
+            wait_for(lambda: not os.path.exists(uninstaller), "other node uninstall")
+            config = read(os.path.join(DATA_PATH, "config.env"))
+            assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
+            node = self.wait_node(last_ping=last_ping)
+            xp = "CPython 2.7" in node["platform"]
+            assert xp == (path == XP_APP_PATH), node["platform"]
         self.uninstall()
 
     def uninstall(self):
@@ -375,8 +491,8 @@ class Smoke(object):
         subprocess.check_call(["net", "stop", SERVICE])
         subprocess.check_call(["net", "start", SERVICE])
 
-    def install(self, args):
-        setups = glob.glob(os.path.join(DIST_PATH, "colony-print-node-setup-*.exe"))
+    def install(self, args, name=SETUP_NAME):
+        setups = glob.glob(os.path.join(DIST_PATH, name))
         assert setups, "No installer found in dist"
         log("Installing %s" % os.path.basename(setups[0]))
         code = subprocess.call(
@@ -418,12 +534,16 @@ class Smoke(object):
         return json.loads(data.decode("utf-8")).get(NODE_ID, None)
 
     def installed_version(self):
+        # the Python of the Windows XP nodes (2.7) has no metadata module,
+        # the resources module bundled with its pip being used instead
+        script = "import importlib.metadata as m; print(m.version('colony-print'))"
+        if XP:
+            script = (
+                "from pip._vendor import pkg_resources as r; "
+                "print(r.get_distribution('colony-print').version)"
+            )
         output = subprocess.check_output(
-            [
-                os.path.join(APP_PATH, "python", "python.exe"),
-                "-c",
-                "import importlib.metadata as m; print(m.version('colony-print'))",
-            ]
+            [os.path.join(APP_PATH, "python", "python.exe"), "-c", script]
         )
         return output.decode("utf-8").strip()
 
@@ -435,6 +555,17 @@ class Smoke(object):
         match = re.search(r"STATE\s*:\s*\d+\s+(\w+)", output)
         return match.group(1) if match else None
 
+    def service_image(self, raw=False):
+        process = subprocess.Popen(
+            ["sc.exe", "qc", SERVICE], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        output = process.communicate()[0].decode("utf-8", "ignore")
+        match = re.search(r"BINARY_PATH_NAME\s*:\s*(.+)", output)
+        if not match:
+            return None
+        image = match.group(1).strip()
+        return image if raw else image.strip('"')
+
     def printers(self):
         output = subprocess.check_output(
             [
@@ -445,6 +576,20 @@ class Smoke(object):
             ]
         )
         return [line.strip() for line in output.decode("utf-8", "ignore").splitlines()]
+
+    def protected(self, path):
+        # the access is retrieved directly with .NET, as the security module
+        # of PowerShell may not be loaded (eg: the one of another PowerShell)
+        output = subprocess.check_output(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                "[System.IO.Directory]::GetAccessControl('%s').AreAccessRulesProtected"
+                % path,
+            ]
+        )
+        return output.decode("utf-8", "ignore").strip() == "True"
 
     def request(self, method, path, data=None, content_type=None, timeout=60):
         headers = {"X-Secret-Key": self.key} if self.key else dict()

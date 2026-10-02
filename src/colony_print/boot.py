@@ -5,8 +5,10 @@ import os
 import sys
 import time
 import codecs
+import shutil
 import logging
 import argparse
+import tempfile
 import importlib
 import subprocess
 
@@ -38,6 +40,11 @@ RETRY_DELAY = 10.0
 FALSE_VALUES = ("0", "false", "no", "off")
 """ The (lower cased) configuration values considered to be false """
 
+LEGACY_VERSION = (3, 6)
+""" The first version of the interpreter that is not a legacy one, as
+the versions of pip that run on the older ones (eg: Python 2.7, the one
+of the Windows XP nodes) are not able to list the versions of a package """
+
 
 class ColonyPrintBoot(object):
     """
@@ -52,10 +59,13 @@ class ColonyPrintBoot(object):
     including the one that contains this file.
     """
 
-    def __init__(self, environ=None, retries=RETRIES, retry_delay=RETRY_DELAY):
+    def __init__(
+        self, environ=None, retries=RETRIES, retry_delay=RETRY_DELAY, legacy=None
+    ):
         self.environ = os.environ if environ == None else environ
         self.retries = retries
         self.retry_delay = retry_delay
+        self.legacy = sys.version_info < LEGACY_VERSION if legacy == None else legacy
 
     def main(self, args=None):
         parser = argparse.ArgumentParser(
@@ -136,6 +146,10 @@ class ColonyPrintBoot(object):
         as pip keeps the installed packages (exiting with success) when it
         can't reach the index, which would skip the update silently.
 
+        The legacy interpreters (eg: Python 2.7) verify the package index
+        by downloading the package of the node, as their versions of pip
+        are not able to list the versions of a package (index command).
+
         :rtype: List
         :return: The requirements that were installed.
         """
@@ -184,21 +198,51 @@ class ColonyPrintBoot(object):
         env = dict(self.environ)
         env["PIP_CONFIG_FILE"] = os.devnull
 
-        retries = max(self.retries, 1)
-        for attempt in range(retries):
-            code = subprocess.call(check, env=env)
-            if code == 0:
-                code = subprocess.call(command, env=env)
-            if code == 0:
-                return requirements
-            if attempt == retries - 1:
-                break
-            logging.warning(
-                "Problem updating packages (code %d), retrying in %.2f seconds"
-                % (code, self.retry_delay)
-            )
-            time.sleep(self.retry_delay)
-        raise RuntimeError("Package update failed with code %d" % code)
+        # downloads the package of the node into a temporary directory to
+        # verify the package index in the legacy interpreters, with a try
+        # and finally block guaranteeing that the directory is removed
+        # regardless of whether the update succeeds or raises
+        temp_dir = tempfile.mkdtemp() if self.legacy else None
+        if temp_dir:
+            check = [
+                sys.executable,
+                "-m",
+                "pip",
+                "download",
+                PACKAGES[0][0],
+                "--no-deps",
+                "--only-binary",
+                ":all:",
+                "--no-cache-dir",
+                "--dest",
+                temp_dir,
+                "--timeout",
+                str(TIMEOUT),
+                "--retries",
+                "1",
+                "--disable-pip-version-check",
+                "--no-input",
+            ] + index
+
+        try:
+            retries = max(self.retries, 1)
+            for attempt in range(retries):
+                code = subprocess.call(check, env=env)
+                if code == 0:
+                    code = subprocess.call(command, env=env)
+                if code == 0:
+                    return requirements
+                if attempt == retries - 1:
+                    break
+                logging.warning(
+                    "Problem updating packages (code %d), retrying in %.2f seconds"
+                    % (code, self.retry_delay)
+                )
+                time.sleep(self.retry_delay)
+            raise RuntimeError("Package update failed with code %d" % code)
+        finally:
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     def requirement(self, name, constraint):
         """
@@ -261,8 +305,15 @@ class ColonyPrintBoot(object):
     def apply_config(self, config):
         # sets the configuration values in the environment, notice that
         # the values that are already defined in the environment take
-        # precedence, as in the configuration loading of appier
+        # precedence, as in the configuration loading of appier, and that
+        # the strings are encoded (as UTF-8) in the interpreters whose
+        # environment only accepts byte strings (Python 2), which refuses
+        # the values that are not ASCII otherwise (eg: the name of the node)
         for key, value in config.items():
+            if not isinstance(key, str):
+                key = key.encode("utf-8")
+            if not isinstance(value, str):
+                value = value.encode("utf-8")
             if key in self.environ:
                 continue
             self.environ[key] = value

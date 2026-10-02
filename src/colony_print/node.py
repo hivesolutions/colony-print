@@ -195,7 +195,7 @@ class ColonyPrintNode(object):
         save_output = options.get("save_output", False)
         send_email = options.get("send_email", True)
         safe_sleep = options.get("safe_sleep", 0.0)
-        printer_s = printer if printer else self.node_printer
+        printer_s = appier.legacy.u(printer if printer else self.node_printer)
         short_name = name[-12:]
 
         self._ensure_format(format)
@@ -403,7 +403,11 @@ class ColonyPrintNode(object):
         format = job.get("format", None)
         options = job.get("options", dict())
         fonts = job.get("fonts", None)
-        printer_s = printer if printer else self.node_printer
+
+        # handles the name of the printer as an unicode string, as the one of
+        # the node is a byte string (encoded as UTF-8) in Python 2, that can't
+        # be mixed with the unicode strings of the job when it's not ASCII
+        printer_s = appier.legacy.u(printer if printer else self.node_printer)
 
         logging.info("Printing job '%s' with '%s' printer" % (name, printer_s))
         if format:
@@ -459,6 +463,14 @@ class ColonyPrintNode(object):
             format = "pdf"
 
         self._ensure_format(format)
+
+        # encodes the name of the printer (as UTF-8) in Python 2, as npcolony
+        # only accepts it as an unicode string when it's ASCII (unlike the
+        # values of the options, that are encoded by npcolony), the encoded
+        # name being converted by npcolony into the one of the system (eg:
+        # the ANSI code page of windows)
+        if printer and not isinstance(printer, str):
+            printer = printer.encode("utf-8")
 
         if printer:
             self.npcolony.print_printer_base64(printer, data_b64, options=options)

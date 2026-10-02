@@ -185,7 +185,7 @@ The `text` engine is a virtual printer that does not talk to any physical device
 
 ## Windows Node
 
-Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It installs everything the node needs: an embedded Python, colony-print, [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi) for the native (GDI) printing, and their dependencies. The node runs as the `colony-print-node` Windows service, which starts with the machine and updates itself from [PyPI](https://pypi.org) every time it starts.
+Windows 10 and 11 (64 bit) nodes are installed with a `setup.exe` installer. It installs everything the node needs: an embedded Python, colony-print, [Colony NPAPI (npcolony)](https://github.com/hivesolutions/colony-npapi) for the native (GDI) printing, and their dependencies. The node runs as the `colony-print-node` Windows service, which starts with the machine and updates itself from [PyPI](https://pypi.org) every time it starts. The older versions of Windows (from Windows XP on) and the 32 bit ones have their own installer (see [Windows XP](#windows-xp)).
 
 ### Building the Installer
 
@@ -221,6 +221,8 @@ The parameters that aren't given keep the values of the existing configuration, 
 
 The service runs under the system account, so it only sees the printers installed for all users and has no default printer. The installer suggests the default printer of the user running it, and the printer should be set, otherwise the jobs that don't select one fail. In email mode the printer must be a PDF printer (e.g. `Microsoft Print to PDF`), as the jobs are printed to PDF files.
 
+The service also prints with the settings of the printer that apply to all users (`Printer properties`, `Advanced`, `Printing Defaults`), and not with the `Printing Preferences` of a user, as Windows keeps them per user. A node that used to run under a user account (e.g. from a script) may print with other settings once it's installed as a service (e.g. the label size, the orientation or the offsets of a label printer, moving the content of the labels), in which case the values of the `Printing Preferences` of that user should be copied to the `Printing Defaults` of the printer.
+
 The node is installed in `C:\Program Files\Colony Print Node` (other directories are refused, as the service runs its files as the system account). Its configuration (`config.env`), logs and fonts installed on demand (`fonts`) are in `C:\ProgramData\Colony Print Node`, which only the system account and the administrators can access, as it holds the secret key. A data directory (or configuration) owned by, or accessible to, any other user (e.g. created by a user before the install) is never used, the installer removes it and creates the data directory already restricted. The installer verifies the owner and the access with PowerShell when the service isn't installed, and stops (removing nothing) when it can't verify them. Changes to `config.env` apply on the next start of the service (`Restart-Service colony-print-node`). Uninstalling keeps the configuration and the logs.
 
 ### Self-Update
@@ -237,6 +239,26 @@ The update is configured in `config.env`:
 | `NODE_INDEX_URL`        | URL of the package index to use instead of PyPI (e.g. a private mirror).                          |
 
 The versions pin a node (or roll it back), as the node installs the newest version they allow, including an older one.
+
+### Windows XP
+
+Windows XP (SP3) nodes are installed with a second installer (`colony-print-node-setup-xp-<version>.exe`), which runs on every version of Windows from Windows XP SP3 on (32 and 64 bit). It's used, configured and updated as the other one (same parameters, service, `config.env` and self-update), with the following differences:
+
+* It installs a 32 bit Python 2.7.18 (the last one that runs on Windows XP), together with the Visual C++ 2008 runtime that it requires (Microsoft's redistributable), and requires npcolony 1.7.0 or newer (the first one with wheels for it). The node only updates itself while colony-print, npcolony and their dependencies keep publishing wheels for Python 2.7.
+* The service is run by [NSSM](https://nssm.cc) instead of WinSW, which requires a .NET Framework that Windows XP lacks. The log files are rotated when they reach 10 MB, but the rotated ones are never removed.
+* The node is installed in the 32 bit program files (`C:\Program Files (x86)\Colony Print Node` on a 64 bit Windows) and, on Windows XP, its configuration and logs are in `C:\Documents and Settings\All Users\Application Data\Colony Print Node`.
+* The access to the configuration is restricted as in the other installer, except on the disks without file security (e.g. FAT32), where it's not possible: the installer warns (and asks to continue) that any user of the machine is able to read the secret key and to change the files of the node, which run as the system account. The access is not verified by the installer, as Windows XP has no PowerShell. So the configuration kept by an uninstall is not used by the next install, which must be given the configuration again, only an install over an installed node keeps its configuration.
+* Python 2.7 always searches for its modules in the application paths of the registry (the subkeys of `Software\Python\PythonCore\2.7\PythonPath`, e.g. added by pywin32) before its own library, which can't be disabled. The installer warns (and asks to continue) when they exist, as any user able to write in those directories is able to run code as the system account.
+* The installer doesn't verify the server URL and the secret key on the versions of Windows older than 8.1 when the server uses HTTPS, as they don't enable its secure protocols (TLS 1.2) by default, which the node itself supports.
+* Windows XP has no PDF printer, so one must be installed to use the email mode.
+
+Both installers use the same service, so only one of the nodes is installed in a machine. Installing one of them over the node of the other one (e.g. after upgrading the machine to Windows 10) replaces it, uninstalling the other node and keeping its configuration.
+
+```powershell
+.\windows\build.ps1 -XP -Python C:\Python27\python.exe
+```
+
+The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release. It also installs each of the installers over the node of the other one, to verify that the node is replaced.
 
 ## Admin UI
 
