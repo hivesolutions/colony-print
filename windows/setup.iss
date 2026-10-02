@@ -1076,7 +1076,9 @@ begin
   { installs the runtime of the Python of the Windows XP nodes (Visual C++
     2008), that is not part of that Python nor of Windows XP, so that the
     node is not able to start without it, notice that an already installed
-    runtime and a required restart are not failures }
+    runtime and a required restart are not failures, and that a failure
+    doesn't prevent the service from being installed and started, as the
+    runtime may already be installed (eg: by a previous install) }
   Log('Installing the Visual C++ 2008 runtime');
   if not Exec(ExpandConstant('{tmp}\vcredist_x86.exe'), '/q', '', SW_HIDE,
     ewWaitUntilTerminated, ResultCode) or ((ResultCode <> 0) and
@@ -1086,7 +1088,6 @@ begin
     Log('Could not install the Visual C++ 2008 runtime (code ' + IntToStr(ResultCode) + ')');
     SuppressibleMsgBox('The Visual C++ 2008 runtime, required by the node, could not ' +
       'be installed (code ' + IntToStr(ResultCode) + ').', mbError, MB_OK, IDOK);
-    Exit;
   end;
 #endif
 
