@@ -15,3 +15,26 @@
     flex-direction: column;
     gap: 8px;
 }
+
+.node-show-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.node-show-stat-error .stat-card-value {
+    color: var(--color-error-700);
+}
+
+.node-show-last {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 480px) {
+    .node-show-stats {
+        grid-template-columns: 1fr;
+    }
+}

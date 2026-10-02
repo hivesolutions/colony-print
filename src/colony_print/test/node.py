@@ -12,7 +12,10 @@ import struct
 import tempfile
 import unittest
 
+import PIL
 import appier
+import reportlab
+import appier_extras
 
 import colony_print.node
 
@@ -162,6 +165,69 @@ class MockNPColonyLegacy(object):
         pass
 
 
+class MockLibrary(object):
+    """
+    Stand-in for the module of a library that exposes only its version,
+    so that the versions of the libraries reported by the node can be
+    verified without the real dependency installed.
+    """
+
+    VERSION = "1.0.0"
+
+
+class MockPlatform(object):
+    """
+    Stand-in for the platform module that describes a configurable
+    operating system (name, release, version and machine), so that
+    the information of the system reported by the node can be verified
+    in any machine.
+    """
+
+    uname = ("Linux", "6.8.0-45-generic", "#45-Ubuntu SMP", "x86_64")
+
+    @staticmethod
+    def system():
+        return MockPlatform.uname[0]
+
+    @staticmethod
+    def release():
+        return MockPlatform.uname[1]
+
+    @staticmethod
+    def version():
+        return MockPlatform.uname[2]
+
+    @staticmethod
+    def machine():
+        return MockPlatform.uname[3]
+
+
+class MockInterrupt(BaseException):
+    """
+    Interruption raised by the stand-in of the server, that is not
+    handled by the (endless) loop of the node, so that the loop can be
+    exercised for a single iteration.
+    """
+
+    pass
+
+
+class MockServer(object):
+    """
+    Stand-in for the post operation of appier that records the requests
+    posted to the server and then interrupts the node, so that the
+    information submitted by the loop of the node can be inspected
+    without a server.
+    """
+
+    calls = []
+
+    @staticmethod
+    def post(url, data_j=None, headers=None):
+        MockServer.calls.append((url, data_j, headers))
+        raise MockInterrupt()
+
+
 class ColonyPrintNodeTest(unittest.TestCase):
     def setUp(self):
         self.node = colony_print.node.ColonyPrintNode()
@@ -174,6 +240,14 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColony.calls = []
         self._npcolony = sys.modules.get("npcolony")
         sys.modules["npcolony"] = MockNPColony
+        MockPlatform.uname = ("Linux", "6.8.0-45-generic", "#45-Ubuntu SMP", "x86_64")
+        self._platform = colony_print.node.platform
+        colony_print.node.platform = MockPlatform
+        self.os_release_path = os.path.join(self.target_dir, "os-release")
+        self._os_release_paths = colony_print.node.OS_RELEASE_PATHS
+        colony_print.node.OS_RELEASE_PATHS = (self.os_release_path,)
+        MockServer.calls = []
+        self._post = appier.post
         self._font_paths = colony_print.printing.pdf.visitor.FONT_PATHS
         colony_print.printing.pdf.visitor.FONT_PATHS = (os.path.join(FONTS_PATH, ""),)
 
@@ -187,12 +261,19 @@ class ColonyPrintNodeTest(unittest.TestCase):
             sys.modules.pop("npcolony", None)
         else:
             sys.modules["npcolony"] = self._npcolony
+        colony_print.node.platform = self._platform
+        colony_print.node.OS_RELEASE_PATHS = self._os_release_paths
+        appier.post = self._post
         colony_print.printing.pdf.visitor.FONT_PATHS = self._font_paths
 
     def _gravo_payload(self, **kwargs):
         data = dict(text="Hello World")
         data.update(kwargs)
         return base64.b64encode(json.dumps(data).encode("utf-8"))
+
+    def _os_release(self, data, path=None):
+        with open(path or self.os_release_path, "wb") as file:
+            file.write(data)
 
     def _media_box(self, data_b64):
         data = base64.b64decode(data_b64)
@@ -220,6 +301,28 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 continue
             contents.append(content)
         return contents
+
+    def test_loop(self):
+        # the information of the node is posted to the server as JSON,
+        # so the versions of its libraries and the information of its
+        # system must be JSON serializable, note that the invalid sleep
+        # time makes any other problem fail the test, instead of being
+        # retried forever by the loop
+        sys.modules["gravo_pilot"] = MockLibrary
+        self._os_release(b'PRETTY_NAME="Ubuntu 24.04.1 LTS"\n')
+        appier.post = MockServer.post
+        self.node.sleep_time = None
+        self.assertRaises(MockInterrupt, self.node.loop)
+        self.assertEqual(len(MockServer.calls), 1)
+
+        url, data_j, _headers = MockServer.calls[0]
+        self.assertEqual("nodes/" in url, True)
+        self.assertEqual(data_j["version"], colony_print.node.VERSION)
+        self.assertEqual(data_j["libraries"], self.node.libraries)
+        self.assertEqual(data_j["libraries"]["gravo_pilot"], "1.0.0")
+        self.assertEqual(data_j["system"], self.node.system)
+        self.assertEqual(data_j["system"]["distribution"], "Ubuntu 24.04.1 LTS")
+        self.assertEqual(json.loads(json.dumps(data_j)), data_j)
 
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
@@ -273,6 +376,77 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(result)), result)
         self.assertEqual(result["output_data"], None)
 
+    def test_libraries(self):
+        sys.modules["npcolony"] = MockLibrary
+        sys.modules["gravo_pilot"] = MockLibrary
+        self.assertEqual(
+            self.node.libraries,
+            {
+                "npcolony": "1.0.0",
+                "gravo_pilot": "1.0.0",
+                "appier": appier.VERSION,
+                "appier-extras": appier_extras.VERSION,
+                "pillow": PIL.__version__,
+                "reportlab": reportlab.Version,
+            },
+        )
+
+    def test_libraries_not_installed(self):
+        sys.modules["npcolony"] = None
+        sys.modules["gravo_pilot"] = None
+        libraries = self.node.libraries
+        self.assertEqual(
+            sorted(libraries.keys()), ["appier", "appier-extras", "pillow", "reportlab"]
+        )
+        self.assertEqual(libraries["appier"], appier.VERSION)
+
+        sys.modules["gravo_pilot"] = MockLibrary
+        libraries = self.node.libraries
+        self.assertEqual("npcolony" in libraries, False)
+        self.assertEqual(libraries["gravo_pilot"], "1.0.0")
+
+    def test_libraries_no_version(self):
+        libraries = self.node.libraries
+        self.assertEqual("npcolony" in libraries, False)
+        self.assertEqual("gravo_pilot" in libraries, False)
+        self.assertEqual(libraries["pillow"], PIL.__version__)
+
+        sys.modules["npcolony"] = MockNPColonyLegacy
+        sys.modules["gravo_pilot"] = MockLibrary
+        libraries = self.node.libraries
+        self.assertEqual("npcolony" in libraries, False)
+        self.assertEqual(libraries["gravo_pilot"], "1.0.0")
+
+    def test_system(self):
+        self.assertEqual(
+            self.node.system,
+            dict(
+                name="Linux",
+                release="6.8.0-45-generic",
+                version="#45-Ubuntu SMP",
+                machine="x86_64",
+                architecture="%dbit" % (struct.calcsize("P") * 8),
+            ),
+        )
+        self.assertEqual(self.node.system["architecture"] in ("32bit", "64bit"), True)
+
+        MockPlatform.uname = ("Windows", "11", "10.0.22631", "ARM64")
+        system = self.node.system
+        self.assertEqual(system["name"], "Windows")
+        self.assertEqual(system["release"], "11")
+        self.assertEqual(system["version"], "10.0.22631")
+        self.assertEqual(system["machine"], "ARM64")
+        self.assertEqual("distribution" in system, False)
+
+    def test_system_distribution(self):
+        self._os_release(b'NAME="Ubuntu"\nPRETTY_NAME="Ubuntu 24.04.1 LTS"\n')
+        system = self.node.system
+        self.assertEqual(system["name"], "Linux")
+        self.assertEqual(system["distribution"], "Ubuntu 24.04.1 LTS")
+
+        self._os_release(b'NAME="Ubuntu"\nPRETTY_NAME=""\n')
+        self.assertEqual("distribution" in self.node.system, False)
+
     def test_handle_job_title(self):
         data_b64 = base64.b64encode(b"%PDF-1.4 document").decode("utf-8")
         result = self.node._handle_job(
@@ -285,6 +459,33 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(
             MockNPColony.calls, [("office", data_b64, dict(title="invoice"))]
         )
+
+    def test_handle_job_type(self):
+        data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
+        result = self.node._handle_job(
+            dict(data_b64=data_b64, name="hello", type="text")
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["handler"], "text")
+
+        # a job of a type that is not handled by the node is not printed,
+        # so it must fail instead of being reported as a finished job
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node._handle_job(
+                dict(data_b64=data_b64, name="hello", type="Text")
+            ),
+        )
+
+        self.node.node_mode = "normal"
+        self.assertRaises(
+            appier.OperationalError,
+            lambda: self.node.print_job(
+                dict(data_b64=data_b64, name="hello", type="zpl")
+            ),
+        )
+        self.assertEqual(MockNPColony.calls, [])
+        self.assertEqual(MockGravostyleAPI.calls, [])
 
     def test_handle_npcolony_binie(self):
         self.node._handle_npcolony(
@@ -663,6 +864,76 @@ class ColonyPrintNodeTest(unittest.TestCase):
     def test_decode_payload_invalid(self):
         data_b64 = base64.b64encode(b"not a json payload")
         self.assertRaises(ValueError, lambda: self.node._decode_payload(data_b64))
+
+    def test_info_distribution(self):
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(
+            b"# the description of the operating system\n"
+            + b'NAME="Debian GNU/Linux"\n'
+            + b'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\n'
+            + b'VERSION_ID="12"\n'
+        )
+        self.assertEqual(
+            self.node._info_distribution(), "Debian GNU/Linux 12 (bookworm)"
+        )
+
+        self._os_release(b"NAME='Alpine Linux'\r\nPRETTY_NAME='Alpine Linux v3.20'\r\n")
+        self.assertEqual(self.node._info_distribution(), "Alpine Linux v3.20")
+
+        self._os_release(b"PRETTY_NAME=Arch Linux\n")
+        self.assertEqual(self.node._info_distribution(), "Arch Linux")
+
+        self._os_release(b'PRETTY_NAME="Linux a=b"\n')
+        self.assertEqual(self.node._info_distribution(), "Linux a=b")
+
+    def test_info_distribution_invalid(self):
+        self._os_release(b'NAME="Ubuntu"\nVERSION_ID="24.04"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'# PRETTY_NAME="Ubuntu 24.04.1 LTS"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'PRETTY_NAME=""\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b"")
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'PRETTY_NAME="Ubuntu \xff\xfe"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        colony_print.node.OS_RELEASE_PATHS = (self.target_dir,)
+        self.assertEqual(self.node._info_distribution(), None)
+
+        colony_print.node.OS_RELEASE_PATHS = ()
+        self.assertEqual(self.node._info_distribution(), None)
+
+    def test_info_distribution_paths(self):
+        fallback_path = os.path.join(self.target_dir, "os-release-fallback")
+        colony_print.node.OS_RELEASE_PATHS = (self.os_release_path, fallback_path)
+        self._os_release(b'PRETTY_NAME="Fedora Linux 40"\n', path=fallback_path)
+        self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
+
+        self._os_release(b'PRETTY_NAME="Ubuntu 24.04.1 LTS"\n')
+        self.assertEqual(self.node._info_distribution(), "Ubuntu 24.04.1 LTS")
+
+        # the fallback is only used when the first file is missing, so
+        # its description is never used for a first file without one
+        self._os_release(b'NAME="Ubuntu"\nVERSION_ID="24.04"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'PRETTY_NAME=""\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        self._os_release(b'PRETTY_NAME="Ubuntu \xff\xfe"\n')
+        self.assertEqual(self.node._info_distribution(), None)
+
+        os.remove(self.os_release_path)
+        self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
+
+        os.mkdir(self.os_release_path)
+        self.assertEqual(self.node._info_distribution(), "Fedora Linux 40")
 
     def test_ensure_format(self):
         self.node._ensure_format(None)

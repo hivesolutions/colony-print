@@ -19,10 +19,32 @@ export interface NodeInfo {
     printer: string;
     engines: string[];
     engine_info: Record<string, Record<string, string>>;
+    libraries?: Record<string, string>;
     platform: string;
     os: string;
+    system?: {
+        name: string;
+        release: string;
+        version: string;
+        machine: string;
+        architecture: string;
+        distribution?: string;
+    };
     version: string;
     last_ping?: number;
+    stats?: {
+        total: number;
+        finished: number;
+        error: number;
+        in_flight: number;
+        cancelled: number;
+        last?: {
+            id: string;
+            name: string;
+            finish_time: number;
+            result?: string;
+        };
+    };
 }
 
 export interface JobInfo {

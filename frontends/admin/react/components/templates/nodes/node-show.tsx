@@ -3,8 +3,13 @@ import { useParams } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
 import { NodeInfo } from "../../../api/colony-print";
-import { Button, Tag, Title, Text } from "../../atoms";
-import { ContentHeader, DataTable, DetailGrid } from "../../molecules";
+import { Button, Link, Tag, Title, Text } from "../../atoms";
+import {
+    ContentHeader,
+    DataTable,
+    DetailGrid,
+    StatCard
+} from "../../molecules";
 import { formatRelativeTime } from "../../../utils";
 
 import "./node-show.css";
@@ -32,6 +37,43 @@ export const NodeShow: FC = () => {
         fetchNode();
     }, [fetchNode]);
 
+    const system = node?.system;
+
+    const systemFields = system
+        ? [
+              {
+                  label: "System",
+                  value:
+                      [system.name, system.release]
+                          .filter(Boolean)
+                          .join(" ") || "-"
+              },
+              ...(system.distribution
+                  ? [
+                        {
+                            label: "Distribution",
+                            value: system.distribution
+                        }
+                    ]
+                  : []),
+              {
+                  label: "System Version",
+                  value: system.version || "-"
+              },
+              {
+                  label: "Architecture",
+                  value:
+                      [
+                          system.machine,
+                          system.architecture &&
+                              `(${system.architecture})`
+                      ]
+                          .filter(Boolean)
+                          .join(" ") || "-"
+              }
+          ]
+        : [];
+
     const fields = node
         ? [
               { label: "ID", value: id || "-" },
@@ -58,6 +100,7 @@ export const NodeShow: FC = () => {
               },
               { label: "Platform", value: node.platform || "-" },
               { label: "OS", value: node.os || "-" },
+              ...systemFields,
               { label: "Version", value: node.version || "-" },
               {
                   label: "Last Seen",
@@ -69,6 +112,66 @@ export const NodeShow: FC = () => {
     const engineEntries = node?.engine_info
         ? Object.entries(node.engine_info)
         : [];
+
+    const libraryEntries = node?.libraries
+        ? Object.entries(node.libraries)
+        : [];
+
+    const libraryColumns = [
+        {
+            key: "library",
+            header: "Library",
+            render: ([library]: [string, string]) => library
+        },
+        {
+            key: "version",
+            header: "Version",
+            render: ([, version]: [string, string]) =>
+                String(version)
+        }
+    ];
+
+    const stats = node?.stats;
+    const last = stats?.last;
+
+    const lastFields = [
+        {
+            label: "Last print",
+            value: last ? (
+                <span className="node-show-last">
+                    {formatRelativeTime(last.finish_time)}
+                    {last.result && (
+                        <Tag
+                            variant={
+                                (last.result === "success"
+                                    ? "success"
+                                    : last.result === "error"
+                                      ? "error"
+                                      : "default") as
+                                    | "success"
+                                    | "error"
+                                    | "default"
+                            }
+                        >
+                            {last.result}
+                        </Tag>
+                    )}
+                </span>
+            ) : (
+                "-"
+            )
+        },
+        {
+            label: "Last job",
+            value: last ? (
+                <Link to={`/jobs/${last.id}`}>
+                    {last.name || last.id}
+                </Link>
+            ) : (
+                "-"
+            )
+        }
+    ];
 
     return (
         <div className="node-show">
@@ -85,7 +188,38 @@ export const NodeShow: FC = () => {
                     </Button>
                 }
             />
+            {stats && (
+                <div className="node-show-stats">
+                    <StatCard
+                        label="Total jobs"
+                        value={stats.total}
+                    />
+                    <StatCard
+                        label="Finished"
+                        value={stats.finished}
+                    />
+                    <StatCard
+                        label="Errored"
+                        value={stats.error}
+                        style={
+                            stats.error > 0
+                                ? ["node-show-stat-error"]
+                                : []
+                        }
+                    />
+                    <StatCard
+                        label="In flight"
+                        value={stats.in_flight}
+                    />
+                </div>
+            )}
             <DetailGrid fields={fields} loading={loading} />
+            {stats && (
+                <div className="node-show-section">
+                    <Title level={3}>Print Diagnostics</Title>
+                    <DetailGrid fields={lastFields} />
+                </div>
+            )}
             {engineEntries.map(([engine, info]) => {
                 const entries = Object.entries(
                     info as Record<string, unknown>
@@ -187,6 +321,16 @@ export const NodeShow: FC = () => {
                     </div>
                 );
             })}
+            {node?.libraries && (
+                <div className="node-show-section">
+                    <Title level={3}>Libraries</Title>
+                    <DataTable
+                        columns={libraryColumns}
+                        data={libraryEntries}
+                        emptyMessage="No libraries"
+                    />
+                </div>
+            )}
         </div>
     );
 };

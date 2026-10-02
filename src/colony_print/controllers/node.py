@@ -53,7 +53,7 @@ class NodeController(appier.Controller):
     @appier.route("/nodes/<str:id>", "GET", json=True)
     @appier.ensure(token="admin")
     def show(self, id):
-        return self.owner.nodes[id]
+        return self.enrich_node(id, self.owner.nodes[id])
 
     @appier.route("/nodes/<str:id>/jobs", "GET", json=True)
     @appier.ensure(token="admin")
@@ -264,3 +264,12 @@ class NodeController(appier.Controller):
                 continue
             job_info = self.owner.jobs_info[job_id]
             job_info.update(status="printing", printing_time=time.time())
+
+    def enrich_node(self, id, node):
+        # enriches a copy of the provided node with the print statistics
+        # computed on demand from the jobs retained by the server, so that
+        # they are not kept within the (stored) node, the one submitted by
+        # the node itself, which is left untouched
+        node = dict(node)
+        node["stats"] = self.owner.node_stats(id)
+        return node

@@ -10,6 +10,7 @@ import shutil
 import struct
 import logging
 import tempfile
+import platform
 import traceback
 
 import appier
@@ -38,6 +39,23 @@ SIZE_TOLERANCE = 72.0 / 25.4
 the size of a document with the size of the media of a printer and
 with the limits of its custom sizes, as the sizes of the printers
 are rounded (eg: to points) """
+
+LIBRARIES = (
+    ("npcolony", "npcolony", "VERSION"),
+    ("gravo_pilot", "gravo_pilot", "VERSION"),
+    ("appier", "appier", "VERSION"),
+    ("appier-extras", "appier_extras", "VERSION"),
+    ("pillow", "PIL", "__version__"),
+    ("reportlab", "reportlab", "Version"),
+)
+""" The libraries whose versions are reported by the node, as a
+sequence of tuples with the name of the library, the name of the
+module to be imported and the name of its version attribute """
+
+OS_RELEASE_PATHS = ("/etc/os-release", "/usr/lib/os-release")
+""" The paths to the files that describe the distribution of the
+operating system (linux only), only the first one that exists is
+used, the other ones being fallbacks for when it's missing """
 
 EMAIL_TEMPLATE = appier.legacy.u("""
 Hey there!
@@ -97,8 +115,10 @@ class ColonyPrintNode(object):
                         printer=self.node_printer,
                         engines=self.engines,
                         engine_info=self.engine_info,
+                        libraries=self.libraries,
                         platform=appier.PLATFORM,
                         os=os.name,
+                        system=self.system,
                         version=VERSION,
                     ),
                     headers=headers,
@@ -281,6 +301,41 @@ class ColonyPrintNode(object):
             engine_info["text"] = self._info_text()
         return engine_info
 
+    @property
+    def libraries(self):
+        # builds the map of the versions of the libraries of the node, the
+        # libraries that are not installed (or that don't expose a version)
+        # are omitted, as their version is not known
+        libraries = dict()
+        for name, module, attribute in LIBRARIES:
+            try:
+                module = __import__(module)
+            except Exception:
+                continue
+            if not hasattr(module, attribute):
+                continue
+            libraries[name] = getattr(module, attribute)
+        return libraries
+
+    @property
+    def system(self):
+        # builds the map with the information of the operating system of
+        # the node, the distribution is only set for the systems that
+        # describe it (linux), note that the architecture (32bit or 64bit)
+        # is the one of the interpreter running the node, which may be
+        # different from the one of the machine
+        system = dict(
+            name=platform.system(),
+            release=platform.release(),
+            version=platform.version(),
+            machine=platform.machine(),
+            architecture="%dbit" % (struct.calcsize("P") * 8),
+        )
+        distribution = self._info_distribution()
+        if distribution:
+            system["distribution"] = distribution
+        return system
+
     def _handle_job(self, job):
         # unpacks the complete set of job information to
         # be able to print the job in the current system
@@ -310,6 +365,8 @@ class ColonyPrintNode(object):
         elif type in ("text",):
             result = self._handle_text(data_b64)
             return dict(result="success", handler="text", data=result)
+
+        raise appier.OperationalError("Type '%s' not valid" % type)
 
     def _handle_npcolony(self, data_b64, format=None, printer=None, options=dict()):
         if not self._has_npcolony():
@@ -688,6 +745,39 @@ class ColonyPrintNode(object):
         if hasattr(gravo_pilot, "VERSION"):
             info["version"] = gravo_pilot.VERSION
         return info
+
+    def _info_distribution(self):
+        """
+        Retrieves the description of the distribution of the operating
+        system (eg: Ubuntu 24.04.1 LTS) from its os-release file, which
+        only exists in linux systems.
+
+        A file that can't be read is ignored, as this information is
+        submitted by the loop of the node, that must not be stopped by it.
+
+        :rtype: String
+        :return: The description of the distribution, or an invalid
+        value in case it's not available.
+        """
+
+        # uses only the first file that exists (os-release specification),
+        # even if it has no description or can't be read, as the other
+        # files are fallbacks only for when it's missing
+        for path in OS_RELEASE_PATHS:
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "rb") as file:
+                    data = file.read().decode("utf-8")
+            except Exception:
+                return None
+            for line in data.splitlines():
+                key, _separator, value = line.partition("=")
+                if not key.strip() == "PRETTY_NAME":
+                    continue
+                return value.strip().strip("\"'") or None
+            return None
+        return None
 
     def _ensure_format(self, format):
         # tries to make sure that the format is compatible with the current
