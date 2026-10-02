@@ -361,19 +361,21 @@ begin
 end;
 
 { Creates the data directory with its access already restricted to the system
-  account and to the administrators, by restricting it in the (protected)
-  temporary directory of the setup and then moving it into place, which fails
-  in case the data directory exists (eg: created by another user meanwhile),
-  so that no other user ever has access to it (not even for an instant),
-  notice that its access is reset first, as the temporary directory gives
-  (explicit) access to the user running the setup }
+  account and to the administrators, by restricting it in the program files
+  (where the users can't create anything) and then moving it into place, in
+  the same volume, which fails in case the data directory exists (eg: created
+  by another user meanwhile), so that no other user ever has access to it
+  (not even for an instant), notice that its access is reset first, so that
+  only the restricted access is kept }
 function CreateDataDir: Boolean;
 var
   TempDir: String;
 begin
   Result := False;
   Log('Creating the data directory ' + DataDir);
-  TempDir := ExpandConstant('{tmp}\data');
+  TempDir := ExpandConstant('{commonpf}\{#AppName}.data');
+  if DirExists(TempDir) then
+    DelTree(TempDir, True, True, True);
   if not CreateDir(TempDir) then
     Exit;
   if not Icacls('"' + TempDir + '" /reset /C /Q') then
@@ -384,6 +386,11 @@ begin
   if not Icacls('"' + TempDir + '" /setowner *S-1-5-32-544 /C /Q') then
     Exit;
   Result := RenameFile(TempDir, DataDir);
+  if not Result then
+  begin
+    Log('Could not move ' + TempDir + ' to ' + DataDir);
+    DelTree(TempDir, True, True, True);
+  end;
 end;
 
 function ServiceExists: Boolean;

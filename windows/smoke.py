@@ -273,9 +273,10 @@ class Smoke(object):
 
     def test_update(self, version):
         # configures the node to update itself from the local index (instead
-        # of PyPI), which must install the newer version of colony-print
+        # of PyPI), which must install the newer version of colony-print, that
+        # is pinned as PyPI may have a newer version (installed from it)
         last_ping = self.node()["last_ping"]
-        self.configure(NODE_INDEX_URL=INDEX_URL)
+        self.configure(NODE_INDEX_URL=INDEX_URL, NODE_VERSION=version)
         self.restart()
         self.wait_node(version, last_ping=last_ping)
         installed = self.installed_version()

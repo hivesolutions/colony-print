@@ -30,6 +30,23 @@ PIP_COMMAND = [
 """ The command (without the requirements) that is expected to be
 run by the boot for the update of the packages of the node """
 
+INDEX_COMMAND = [
+    sys.executable,
+    "-m",
+    "pip",
+    "index",
+    "versions",
+    "colony-print",
+    "--timeout",
+    "10",
+    "--retries",
+    "1",
+    "--disable-pip-version-check",
+    "--no-input",
+]
+""" The command that is expected to be run by the boot to verify that
+the package index is reachable, before each attempt of the update """
+
 
 class MockSubprocess(object):
     """
@@ -110,7 +127,11 @@ class ColonyPrintBootTest(unittest.TestCase):
             file.write(data)
 
     def _requirements(self):
-        return [command[len(PIP_COMMAND) :] for command in MockSubprocess.calls]
+        return [
+            command[len(PIP_COMMAND) :]
+            for command in MockSubprocess.calls
+            if command[: len(PIP_COMMAND)] == PIP_COMMAND
+        ]
 
     def test_main(self):
         self._write(
@@ -126,7 +147,8 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(environ["BASE_URL"], "https://print.example.com/")
         self.assertEqual(environ["SECRET_KEY"], "secret")
         self.assertEqual(
-            MockSubprocess.calls, [PIP_COMMAND + ["colony-print==0.21.0", "npcolony"]]
+            MockSubprocess.calls,
+            [INDEX_COMMAND, PIP_COMMAND + ["colony-print==0.21.0", "npcolony"]],
         )
         self.assertEqual(MockColonyPrintNode.loops, 1)
 
@@ -211,22 +233,24 @@ class ColonyPrintBootTest(unittest.TestCase):
         requirements = self.boot.update()
         self.assertEqual(requirements, ["colony-print", "npcolony"])
         self.assertEqual(
-            MockSubprocess.calls, [PIP_COMMAND + ["colony-print", "npcolony"]]
+            MockSubprocess.calls,
+            [INDEX_COMMAND, PIP_COMMAND + ["colony-print", "npcolony"]],
         )
 
         # pip runs with the environment of the node (eg: with its PIP_* values)
         # but without any of its configuration files, as its global one may be
         # created by any user, leaving the environment of the node unchanged
-        env = MockSubprocess.envs[0]
-        self.assertEqual(env["PIP_CONFIG_FILE"], os.devnull)
-        self.assertEqual(env["SECRET_KEY"], "key")
+        for env in MockSubprocess.envs:
+            self.assertEqual(env["PIP_CONFIG_FILE"], os.devnull)
+            self.assertEqual(env["SECRET_KEY"], "key")
         self.assertEqual("PIP_CONFIG_FILE" in self.environ, False)
 
         self.environ.update(PIP_CONFIG_FILE="pip.ini", PIP_PROXY="http://proxy:8080")
         MockSubprocess.envs = []
         self.boot.update()
-        self.assertEqual(MockSubprocess.envs[0]["PIP_CONFIG_FILE"], os.devnull)
-        self.assertEqual(MockSubprocess.envs[0]["PIP_PROXY"], "http://proxy:8080")
+        for env in MockSubprocess.envs:
+            self.assertEqual(env["PIP_CONFIG_FILE"], os.devnull)
+            self.assertEqual(env["PIP_PROXY"], "http://proxy:8080")
         del self.environ["PIP_CONFIG_FILE"]
         del self.environ["PIP_PROXY"]
 
@@ -244,25 +268,48 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(
             MockSubprocess.calls,
             [
+                INDEX_COMMAND + ["--index-url", "https://pypi.example.com/simple/"],
                 PIP_COMMAND
                 + ["--index-url", "https://pypi.example.com/simple/"]
-                + ["colony-print==0.20.0", "npcolony<1.5"]
+                + ["colony-print==0.20.0", "npcolony<1.5"],
             ],
         )
 
     def test_update_retry(self):
-        # the update is retried while pip fails, as the network may not be
-        # ready when the node boots, stopping at the first success
-        MockSubprocess.codes = [1, 2, 0]
+        # the update is retried while the package index is not reachable (as
+        # pip would keep the installed packages, exiting with success) or the
+        # install fails, as the network may not be ready when the node boots,
+        # stopping at the first success
+        MockSubprocess.codes = [1, 0, 2, 0, 0]
         self.assertEqual(self.boot.update(), ["colony-print", "npcolony"])
-        self.assertEqual(len(MockSubprocess.calls), 3)
+        self.assertEqual(
+            MockSubprocess.calls,
+            [
+                INDEX_COMMAND,
+                INDEX_COMMAND,
+                PIP_COMMAND + ["colony-print", "npcolony"],
+                INDEX_COMMAND,
+                PIP_COMMAND + ["colony-print", "npcolony"],
+            ],
+        )
 
-        MockSubprocess.codes = [2]
+        # an index that is never reachable fails the update without trying
+        # to install the packages (as pip would succeed without the index)
+        MockSubprocess.codes = [1]
+        MockSubprocess.calls = []
+        with self.assertRaises(RuntimeError) as context:
+            self.boot.update()
+        self.assertEqual(str(context.exception), "Package update failed with code 1")
+        self.assertEqual(
+            MockSubprocess.calls, [INDEX_COMMAND] * colony_print.boot.RETRIES
+        )
+
+        MockSubprocess.codes = [0, 2] * colony_print.boot.RETRIES
         MockSubprocess.calls = []
         with self.assertRaises(RuntimeError) as context:
             self.boot.update()
         self.assertEqual(str(context.exception), "Package update failed with code 2")
-        self.assertEqual(len(MockSubprocess.calls), colony_print.boot.RETRIES)
+        self.assertEqual(len(MockSubprocess.calls), 2 * colony_print.boot.RETRIES)
 
         # there's always (at least) one attempt, even without retries
         boot = colony_print.boot.ColonyPrintBoot(

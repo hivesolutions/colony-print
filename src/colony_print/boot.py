@@ -24,6 +24,10 @@ OPERATORS = ("<", ">", "=", "!", "~")
 """ The first characters of the version specifiers (PEP 440), any
 other version constraint is considered to be an exact version """
 
+TIMEOUT = 10
+""" The timeout (in seconds) of the verification of the package index
+that precedes each attempt to update the packages of the node """
+
 RETRIES = 3
 """ The number of attempts to update the packages of the node, as the
 network may not be ready when the node boots """
@@ -119,29 +123,48 @@ class ColonyPrintBoot(object):
 
         Only the wheels of the packages are installed, so that nothing is
         built (eg: compiled) in the node, and the update is attempted more
-        than once, as the network may not be ready when the node boots.
+        than once, as the network may not be ready when the node boots,
+        verifying that the package index is reachable before each attempt,
+        as pip keeps the installed packages (exiting with success) when it
+        can't reach the index, which would skip the update silently.
 
         :rtype: List
         :return: The requirements that were installed.
         """
 
         requirements = self.requirements
-        command = [
+        index = ["--index-url", self.index_url] if self.index_url else []
+        check = [
             sys.executable,
             "-m",
             "pip",
-            "install",
-            "--upgrade",
-            "--only-binary",
-            ":all:",
-            "--no-cache-dir",
+            "index",
+            "versions",
+            PACKAGES[0][0],
+            "--timeout",
+            str(TIMEOUT),
+            "--retries",
+            "1",
             "--disable-pip-version-check",
-            "--no-warn-script-location",
             "--no-input",
-        ]
-        if self.index_url:
-            command += ["--index-url", self.index_url]
-        command += requirements
+        ] + index
+        command = (
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "--only-binary",
+                ":all:",
+                "--no-cache-dir",
+                "--disable-pip-version-check",
+                "--no-warn-script-location",
+                "--no-input",
+            ]
+            + index
+            + requirements
+        )
 
         logging.info("Updating packages %s" % ", ".join(requirements))
 
@@ -155,7 +178,9 @@ class ColonyPrintBoot(object):
 
         retries = max(self.retries, 1)
         for attempt in range(retries):
-            code = subprocess.call(command, env=env)
+            code = subprocess.call(check, env=env)
+            if code == 0:
+                code = subprocess.call(command, env=env)
             if code == 0:
                 return requirements
             if attempt == retries - 1:
