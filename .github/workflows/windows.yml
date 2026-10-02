@@ -48,6 +48,58 @@ jobs:
           name: colony-print-node-windows
           path: dist/*.exe
           if-no-files-found: ignore
+  build-xp:
+    name: Build Windows XP Node Installer
+    timeout-minutes: 30
+    runs-on: windows-latest
+    env:
+      PYTHON_VERSION: "3.14.8"
+      XP_PYTHON_VERSION: "2.7.18"
+      XP_PYTHON_SHA256: "d901802e90026e9bad76b8a81f8dd7e43c7d7e8269d9281c9e9df7a9c40480a9"
+      INNO_SETUP_VERSION: "5.6.1"
+      INNO_SETUP_SHA256: "27d49e9bc769e9d1b214c153011978db90dc01c2acd1ddcd9ed7b3fe3b96b538"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
+      - name: Install Python 2.7
+        run: |
+          $Version = $env:XP_PYTHON_VERSION
+          $Url = "https://www.python.org/ftp/python/$Version/python-$Version.msi"
+          Invoke-WebRequest -Uri $Url -OutFile python.msi
+          $Hash = (Get-FileHash -Path python.msi -Algorithm SHA256).Hash.ToLower()
+          if ($Hash -ne $env:XP_PYTHON_SHA256) { throw "Invalid Python digest $Hash" }
+          Start-Process -Wait -FilePath msiexec.exe -ArgumentList "/i", "python.msi", "/qn", "/norestart", "ALLUSERS=1", "TARGETDIR=C:\Python27"
+          C:\Python27\python.exe -m pip install --upgrade "pip<21" setuptools wheel
+      - name: Install Inno Setup
+        run: |
+          $Version = $env:INNO_SETUP_VERSION
+          $Url = "https://files.jrsoftware.org/is/5/innosetup-$Version-unicode.exe"
+          Invoke-WebRequest -Uri $Url -OutFile innosetup.exe
+          $Hash = (Get-FileHash -Path innosetup.exe -Algorithm SHA256).Hash.ToLower()
+          if ($Hash -ne $env:INNO_SETUP_SHA256) { throw "Invalid Inno Setup digest $Hash" }
+          Start-Process -Wait -FilePath .\innosetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=C:\InnoSetup"
+          Remove-Item innosetup.exe
+      - name: Build installer
+        run: .\windows\build.ps1 -XP -Python C:\Python27\python.exe -Iscc C:\InnoSetup\ISCC.exe
+      - name: Uninstall Python 2.7 (the node must run without it)
+        run: |
+          Start-Process -Wait -FilePath msiexec.exe -ArgumentList "/x", "python.msi", "/qn", "/norestart"
+          Remove-Item python.msi
+      - name: Smoke test installer
+        run: |
+          python -m pip install . tinydb netius
+          python windows\smoke.py --xp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: colony-print-node-windows-xp
+          path: dist/*.exe
+          if-no-files-found: ignore
   release:
     name: Attach Installer to Release
     needs: build
@@ -66,6 +118,32 @@ jobs:
       - name: Upload installer
         run: |
           installer="dist/colony-print-node-setup-${RELEASE_TAG#v}.exe"
+          if [ ! -f "$installer" ]; then
+            echo "No installer for '$RELEASE_TAG', the tag must match the version in setup.py" >&2
+            ls dist >&2
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "$installer" --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+  release-xp:
+    name: Attach Windows XP Installer to Release
+    needs: build-xp
+    if: github.event_name == 'release' || inputs.release != ''
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: colony-print-node-windows-xp
+          path: dist
+      - name: Upload installer
+        run: |
+          installer="dist/colony-print-node-setup-xp-${RELEASE_TAG#v}.exe"
           if [ ! -f "$installer" ]; then
             echo "No installer for '$RELEASE_TAG', the tag must match the version in setup.py" >&2
             ls dist >&2

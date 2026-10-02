@@ -47,6 +47,33 @@ INDEX_COMMAND = [
 """ The command that is expected to be run by the boot to verify that
 the package index is reachable, before each attempt of the update """
 
+DOWNLOAD_COMMAND = [
+    sys.executable,
+    "-m",
+    "pip",
+    "download",
+    "colony-print",
+    "--no-deps",
+    "--only-binary",
+    ":all:",
+    "--no-cache-dir",
+    "--dest",
+]
+""" The command (without the temporary directory and the options that
+follow it) that is expected to be run by the boot of a legacy interpreter
+to verify that the package index is reachable """
+
+DOWNLOAD_OPTIONS = [
+    "--timeout",
+    "10",
+    "--retries",
+    "1",
+    "--disable-pip-version-check",
+    "--no-input",
+]
+""" The options that are expected to follow the temporary directory in
+the command run by the boot of a legacy interpreter """
+
 
 class MockSubprocess(object):
     """
@@ -55,17 +82,24 @@ class MockSubprocess(object):
     codes (one for each call, the last one being kept) or raises the
     configured error, so that the update of the packages can be exercised
     without pip.
+
+    The existence of the directory of each download (the one of the
+    legacy interpreters) is also recorded, as pip downloads to it.
     """
 
     codes = [0]
     error = None
     calls = []
     envs = []
+    dests = []
 
     @staticmethod
     def call(command, env=None):
         MockSubprocess.calls.append(command)
         MockSubprocess.envs.append(env)
+        if "--dest" in command:
+            dest = command[command.index("--dest") + 1]
+            MockSubprocess.dests.append(os.path.isdir(dest))
         if MockSubprocess.error:
             raise MockSubprocess.error
         if len(MockSubprocess.codes) > 1:
@@ -103,7 +137,7 @@ class ColonyPrintBootTest(unittest.TestCase):
     def setUp(self):
         self.environ = dict(BASE_URL="https://print.example.com/", SECRET_KEY="key")
         self.boot = colony_print.boot.ColonyPrintBoot(
-            environ=self.environ, retry_delay=0.0
+            environ=self.environ, retry_delay=0.0, legacy=False
         )
         self.temp_path = tempfile.mkdtemp(prefix="colony-print-boot-test-")
         self.config_path = os.path.join(self.temp_path, "config.env")
@@ -111,6 +145,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         MockSubprocess.error = None
         MockSubprocess.calls = []
         MockSubprocess.envs = []
+        MockSubprocess.dests = []
         MockColonyPrintNode.loops = 0
         self._subprocess = colony_print.boot.subprocess
         colony_print.boot.subprocess = MockSubprocess
@@ -133,6 +168,9 @@ class ColonyPrintBootTest(unittest.TestCase):
             if command[: len(PIP_COMMAND)] == PIP_COMMAND
         ]
 
+    def _temp_dir(self, command):
+        return command[command.index("--dest") + 1]
+
     def test_main(self):
         self._write(
             self.config_path,
@@ -141,7 +179,9 @@ class ColonyPrintBootTest(unittest.TestCase):
             + b"NODE_VERSION=0.21.0\r\n",
         )
         environ = dict()
-        boot = colony_print.boot.ColonyPrintBoot(environ=environ, retry_delay=0.0)
+        boot = colony_print.boot.ColonyPrintBoot(
+            environ=environ, retry_delay=0.0, legacy=False
+        )
 
         boot.main(["--config", self.config_path])
         self.assertEqual(environ["BASE_URL"], "https://print.example.com/")
@@ -339,6 +379,95 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertRaises(RuntimeError, boot.update)
         self.assertEqual(len(MockSubprocess.calls), 1)
 
+    def test_update_legacy(self):
+        # the interpreters older than the first one that is not a legacy
+        # one are the legacy ones, unless the boot is told otherwise
+        boot = colony_print.boot.ColonyPrintBoot(environ=self.environ)
+        self.assertEqual(
+            boot.legacy, sys.version_info < colony_print.boot.LEGACY_VERSION
+        )
+        self.assertEqual(self.boot.legacy, False)
+
+        # the legacy interpreters verify the package index by downloading the
+        # package of the node (as their pip has no index command) into a
+        # temporary directory, that exists while pip runs and is removed once
+        # the update is done, running pip without its configuration files
+        boot = colony_print.boot.ColonyPrintBoot(
+            environ=self.environ, retry_delay=0.0, legacy=True
+        )
+        self.assertEqual(boot.update(), ["colony-print", "npcolony"])
+        temp_dir = self._temp_dir(MockSubprocess.calls[0])
+        self.assertEqual(
+            MockSubprocess.calls,
+            [
+                DOWNLOAD_COMMAND + [temp_dir] + DOWNLOAD_OPTIONS,
+                PIP_COMMAND + ["colony-print", "npcolony"],
+            ],
+        )
+        self.assertEqual(os.path.isabs(temp_dir), True)
+        self.assertEqual(MockSubprocess.dests, [True])
+        self.assertEqual(os.path.exists(temp_dir), False)
+        for env in MockSubprocess.envs:
+            self.assertEqual(env["PIP_CONFIG_FILE"], os.devnull)
+
+        # the package is downloaded from the custom index, when defined, and
+        # without the constraint of its version, as only the index is verified
+        self.environ.update(
+            NODE_VERSION="0.20.0", NODE_INDEX_URL="https://pypi.example.com/simple/"
+        )
+        MockSubprocess.calls = []
+        self.assertEqual(boot.update(), ["colony-print==0.20.0", "npcolony"])
+        temp_dir = self._temp_dir(MockSubprocess.calls[0])
+        self.assertEqual(
+            MockSubprocess.calls,
+            [
+                DOWNLOAD_COMMAND
+                + [temp_dir]
+                + DOWNLOAD_OPTIONS
+                + ["--index-url", "https://pypi.example.com/simple/"],
+                PIP_COMMAND
+                + ["--index-url", "https://pypi.example.com/simple/"]
+                + ["colony-print==0.20.0", "npcolony"],
+            ],
+        )
+        self.assertEqual(os.path.exists(temp_dir), False)
+        del self.environ["NODE_VERSION"]
+        del self.environ["NODE_INDEX_URL"]
+
+        # every attempt downloads to the same directory, that is also removed
+        # when the update fails, without trying to install the packages when
+        # the index is not reachable
+        MockSubprocess.codes = [1]
+        MockSubprocess.calls = []
+        MockSubprocess.dests = []
+        with self.assertRaises(RuntimeError) as context:
+            boot.update()
+        self.assertEqual(str(context.exception), "Package update failed with code 1")
+        temp_dir = self._temp_dir(MockSubprocess.calls[0])
+        self.assertEqual(
+            MockSubprocess.calls,
+            [DOWNLOAD_COMMAND + [temp_dir] + DOWNLOAD_OPTIONS]
+            * colony_print.boot.RETRIES,
+        )
+        self.assertEqual(MockSubprocess.dests, [True] * colony_print.boot.RETRIES)
+        self.assertEqual(os.path.exists(temp_dir), False)
+
+        # the directory is removed even when pip is not able to run
+        MockSubprocess.calls = []
+        MockSubprocess.error = OSError("No such file or directory")
+        self.assertRaises(OSError, boot.update)
+        self.assertEqual(len(MockSubprocess.calls), 1)
+        self.assertEqual(os.path.exists(self._temp_dir(MockSubprocess.calls[0])), False)
+
+        # no directory is created by the interpreters that are not legacy
+        MockSubprocess.error = None
+        MockSubprocess.codes = [0]
+        MockSubprocess.calls = []
+        MockSubprocess.dests = []
+        self.boot.update()
+        self.assertEqual(MockSubprocess.calls[0], INDEX_COMMAND)
+        self.assertEqual(MockSubprocess.dests, [])
+
     def test_requirement(self):
         requirement = self.boot.requirement
         self.assertEqual(requirement("colony-print", None), "colony-print")
@@ -394,6 +523,26 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(
             environ, dict(BASE_URL="https://other.example.com/", SECRET_KEY="key")
         )
+
+        # the values loaded from the configuration file (unicode strings) are
+        # set as the strings of the environment, which are byte strings (so
+        # encoded as UTF-8) in Python 2, as its environment refuses the unicode
+        # strings that are not ASCII (eg: the name of the node)
+        label = appier.legacy.u("São João")
+        boot.apply_config(
+            {
+                appier.legacy.u("BASE_URL"): appier.legacy.u("https://example.com/"),
+                appier.legacy.u("NODE_LABEL"): label,
+            }
+        )
+        self.assertEqual(environ["BASE_URL"], "https://other.example.com/")
+        self.assertEqual(
+            environ["NODE_LABEL"],
+            label if appier.legacy.PYTHON_3 else label.encode("utf-8"),
+        )
+        for key, value in environ.items():
+            self.assertEqual(type(key), str)
+            self.assertEqual(type(value), str)
 
     def test_requirements(self):
         self.assertEqual(self.boot.requirements, ["colony-print", "npcolony"])

@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Capabilities and installed fonts of the nodes, and fonts of the jobs, in the admin UI - [#29](https://github.com/hivesolutions/colony-print/issues/29)
 * Coverage report of the unit tests in the continuous integration
 * Note on the printer settings used by the Windows node service, the `Printing Defaults` of the printer and not the `Printing Preferences` of a user
+* Windows installer for the Windows XP nodes (`colony-print-node-setup-xp-<version>.exe`, 32 bit), which installs Python 2.7 with NSSM as the service wrapper, built, smoke tested and attached to the GitHub release of each version by the Windows workflow
+* Self-update of the nodes that run Python 2.7 (the Windows XP ones), whose pip is not able to list the versions of a package
 
 ### Changed
 
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * Converted documents sent with the base64 content type even when not encoded in base64 - [#36](https://github.com/hivesolutions/colony-print/issues/36)
+* Boot of the Windows nodes that run Python 2.7 failing with configuration values that are not ASCII (e.g. the name of the node)
 
 ## [0.22.0] - 2026-10-02
 

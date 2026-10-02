@@ -20,11 +20,16 @@ except ImportError:
     import urllib as urllib_parse
     import urllib2 as urllib_error
 
+XP = "--xp" in sys.argv[1:]
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_PATH = os.path.join(ROOT, "dist")
 WHEELS_PATH = os.path.join(ROOT, "build", "windows", "wheels")
 WORK_PATH = os.path.join(ROOT, "build", "smoke")
-APP_PATH = os.path.join(os.environ.get("ProgramFiles", ""), "Colony Print Node")
+SETUP_NAME = (
+    "colony-print-node-setup-xp-*.exe" if XP else "colony-print-node-setup-[0-9]*.exe"
+)
+PROGRAM_FILES = "ProgramFiles(x86)" if XP else "ProgramFiles"
+APP_PATH = os.path.join(os.environ.get(PROGRAM_FILES, ""), "Colony Print Node")
 DATA_PATH = os.path.join(os.environ.get("ProgramData", ""), "Colony Print Node")
 SETUP_LOG_PATH = os.path.join(WORK_PATH, "setup.log")
 SERVER_LOG_PATH = os.path.join(WORK_PATH, "server.log")
@@ -69,6 +74,12 @@ class Smoke(object):
     (with a newer version of colony-print), prints a document, re-installs
     and uninstalls it, installing it once more with the configuration kept
     by the uninstall.
+
+    The installer of the Windows XP nodes (32 bit) is the one tested when
+    run with the --xp argument, on any version of Windows, with the Python
+    of the node (2.7) updating itself with a pip that is not able to list
+    the versions of a package and with a configuration that is not kept by
+    the uninstall, as its installer is not able to verify (and trust) it.
     """
 
     def __init__(self):
@@ -176,9 +187,13 @@ class Smoke(object):
         self.index_log.close()
 
     def build_newer(self):
+        # copies the sources of the package, including the configuration that
+        # makes its wheel an universal one, so that it's installed by both the
+        # Python of the node and the one of the Windows XP nodes (2.7)
         source_path = os.path.join(WORK_PATH, "newer")
         os.makedirs(source_path)
         shutil.copy(os.path.join(ROOT, "setup.py"), source_path)
+        shutil.copy(os.path.join(ROOT, "setup.cfg"), source_path)
         shutil.copy(os.path.join(ROOT, "README.md"), source_path)
         shutil.copytree(
             os.path.join(ROOT, "src", "colony_print"),
@@ -342,10 +357,27 @@ class Smoke(object):
         # the configuration written by the installer are trusted (owned by
         # the administrators), even without the service, uninstalling it
         last_ping = self.node()["last_ping"]
+        if XP:
+            self.test_install_untrusted(last_ping)
+            return
         self.install([])
         assert self.service_state() == "RUNNING", "Service is not running"
         assert "SECRET_KEY=%s" % self.key in read(os.path.join(DATA_PATH, "config.env"))
         self.wait_node(current, last_ping=last_ping)
+        self.uninstall()
+
+    def test_install_untrusted(self, last_ping):
+        # installs the Windows XP node once more, which must not use the
+        # configuration kept by the uninstall (its index and its pinned
+        # version), as its installer is not able to verify (and trust) it,
+        # so that the node is configured by the parameters, uninstalling it
+        self.install(["/URL=" + BASE_URL, "/KEY=" + self.key, "/NAME=CI Node"])
+        assert self.service_state() == "RUNNING", "Service is not running"
+        config = read(os.path.join(DATA_PATH, "config.env"))
+        assert "SECRET_KEY=%s" % self.key in config, "Secret key not in config"
+        assert not "NODE_INDEX_URL" in config, "Untrusted configuration used"
+        assert not "NODE_VERSION" in config, "Untrusted configuration used"
+        self.wait_node(last_ping=last_ping)
         self.uninstall()
 
     def uninstall(self):
@@ -376,7 +408,7 @@ class Smoke(object):
         subprocess.check_call(["net", "start", SERVICE])
 
     def install(self, args):
-        setups = glob.glob(os.path.join(DIST_PATH, "colony-print-node-setup-*.exe"))
+        setups = glob.glob(os.path.join(DIST_PATH, SETUP_NAME))
         assert setups, "No installer found in dist"
         log("Installing %s" % os.path.basename(setups[0]))
         code = subprocess.call(
@@ -418,12 +450,16 @@ class Smoke(object):
         return json.loads(data.decode("utf-8")).get(NODE_ID, None)
 
     def installed_version(self):
+        # the Python of the Windows XP nodes (2.7) has no metadata module,
+        # the resources module bundled with its pip being used instead
+        script = "import importlib.metadata as m; print(m.version('colony-print'))"
+        if XP:
+            script = (
+                "from pip._vendor import pkg_resources as r; "
+                "print(r.get_distribution('colony-print').version)"
+            )
         output = subprocess.check_output(
-            [
-                os.path.join(APP_PATH, "python", "python.exe"),
-                "-c",
-                "import importlib.metadata as m; print(m.version('colony-print'))",
-            ]
+            [os.path.join(APP_PATH, "python", "python.exe"), "-c", script]
         )
         return output.decode("utf-8").strip()
 

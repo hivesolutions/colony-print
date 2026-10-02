@@ -108,7 +108,7 @@ To create a new release follow the following steps:
 - Push the commit.
 - Create a new tag with the value fo the new version number `$VERSION_NUMBER`.
 - Create a new release on the GitHub repo using the Markdown from the corresponding version entry in `CHANGELOG.md` as the description of the release and the version number as the title. Do not include the title of the release (version and date) in the description.
-- Once the release is published, the `Windows Workflow` builds the installer of the Windows nodes (`colony-print-node-setup-$VERSION_NUMBER.exe`) and attaches it to the release, there's no need to build or upload it by hand.
+- Once the release is published, the `Windows Workflow` builds the installers of the Windows nodes (`colony-print-node-setup-$VERSION_NUMBER.exe` and `colony-print-node-setup-xp-$VERSION_NUMBER.exe`, the one of the Windows XP nodes) and attaches them to the release, there's no need to build or upload them by hand.
 
 ## License
 
