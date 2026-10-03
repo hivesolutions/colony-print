@@ -116,10 +116,10 @@ class ColonyPrintBoot(object):
 
         # loads the configuration file of the node into the environment
         # so that it's used by the update and by the node itself, keeping
-        # the names of the values the boot was started with, as a node that
-        # restarts itself must run the boot once more with only those
+        # the values the boot was started with, as a node that restarts
+        # itself must run the boot once more with only those
         config_path = os.path.abspath(args.config)
-        original = set(self.environ)
+        original = dict(self.environ)
         self.apply_config(self.load_config(config_path))
         self.environ["BASE_URL"] = self.base_url
 
@@ -175,7 +175,15 @@ class ColonyPrintBoot(object):
         self.environ.pop("NODE_UPDATE_ERROR", None)
         if error:
             self.environ["NODE_UPDATE_ERROR"] = error
-        keys = set(self.environ) - original
+        # hands the values of the environment the boot was started with
+        # that were replaced by it (eg: the auto-update of the state file)
+        # over to the node as well, so that they're the ones of the node
+        # that restarts itself, as the configuration may change meanwhile
+        for key, value in original.items():
+            if self.environ.get(key, None) == value:
+                continue
+            self.environ["NODE_BOOT_VALUE_" + key] = value
+        keys = set(self.environ) - set(original)
         self.environ["NODE_BOOT_KEYS"] = ",".join(
             sorted(keys | set(["NODE_BOOT_KEYS"]))
         )

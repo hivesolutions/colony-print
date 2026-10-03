@@ -214,10 +214,11 @@ class ColonyPrintBootTest(unittest.TestCase):
             self.assertEqual(type(value), str)
 
     def test_main_boot_keys(self):
-        # only the values set by the boot (the ones of the configuration file,
-        # of the state file and the ones handed over to the node) are named,
-        # so that removing them results in the environment the boot was
-        # started with, even for the values that were changed by the boot
+        # only the values set by the boot (the ones of the configuration file
+        # and the ones handed over to the node) are named, the ones that were
+        # replaced by it (eg: by the state file) being handed over with their
+        # original values, so that removing the first ones and restoring the
+        # other ones results in the environment the boot was started with
         self._write(
             self.config_path,
             b"BASE_URL=https://other.example.com/\r\n"
@@ -244,6 +245,9 @@ class ColonyPrintBootTest(unittest.TestCase):
                 "FONTS_PATH",
                 "NODE_BOOT",
                 "NODE_BOOT_KEYS",
+                "NODE_BOOT_VALUE_BASE_URL",
+                "NODE_BOOT_VALUE_NODE_UPDATE",
+                "NODE_BOOT_VALUE_NODE_UPDATE_ERROR",
                 "NODE_NAME",
                 "NODE_STATE_PATH",
                 "NODE_UPDATE_STATUS",
@@ -255,6 +259,22 @@ class ColonyPrintBootTest(unittest.TestCase):
             sorted(key for key in environ if not key in keys),
             ["BASE_URL", "NODE_UPDATE", "PATH"],
         )
+        self.assertEqual(
+            environ["NODE_BOOT_VALUE_BASE_URL"], "https://print.example.com"
+        )
+        self.assertEqual(environ["NODE_BOOT_VALUE_NODE_UPDATE"], "1")
+        self.assertEqual(
+            environ["NODE_BOOT_VALUE_NODE_UPDATE_ERROR"],
+            "Package update failed with code 1",
+        )
+        self.assertEqual("NODE_BOOT_VALUE_PATH" in environ, False)
+        restarted = dict((key, environ[key]) for key in environ if not key in keys)
+        restarted.update(
+            (key[len("NODE_BOOT_VALUE_") :], environ[key])
+            for key in keys
+            if key.startswith("NODE_BOOT_VALUE_")
+        )
+        self.assertEqual(restarted, original)
 
         # the error of the update of a previous boot is not kept when the
         # update doesn't fail, even if it's part of the environment
@@ -270,6 +290,12 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual("NODE_BOOT_KEYS" in keys, True)
         self.assertEqual(keys.count("NODE_BOOT_KEYS"), 1)
         self.assertEqual(sorted(key for key in environ if not key in keys), ["PATH"])
+
+        # no value is handed over when the boot replaces none, as with a
+        # node whose configuration is only the one of its file
+        self.assertEqual([key for key in keys if "NODE_BOOT_VALUE_" in key], [])
+        for value in environ.values():
+            self.assertEqual(type(value), str)
 
     def test_main_config_default(self):
         self._write(self.config_path, b"NODE_UPDATE=0\r\nNODE_NAME=Shop\r\n")

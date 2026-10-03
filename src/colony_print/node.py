@@ -1180,9 +1180,10 @@ class ColonyPrintNode(object):
         Builds the environment of the process that is run by the restart of
         the node, the one the process of the node was started with, meaning
         without the values set by the boot (the ones of the configuration
-        file and the ones handed over to the node), as named by it, so that
-        the boot applies the (possibly changed) configuration once more, as
-        it does when it's started by the service.
+        file and the ones handed over to the node), as named by it, and with
+        the original values of the ones replaced by the boot, so that the
+        boot applies the (possibly changed) configuration once more, as it
+        does when it's started by the service.
 
         :rtype: Dictionary
         :return: The environment the process of the node was started with.
@@ -1190,8 +1191,14 @@ class ColonyPrintNode(object):
 
         environ = dict(os.environ)
         keys = environ.get("NODE_BOOT_KEYS", "")
+        values = dict(
+            (key[len("NODE_BOOT_VALUE_") :], value)
+            for key, value in environ.items()
+            if key.startswith("NODE_BOOT_VALUE_")
+        )
         for key in keys.split(","):
             environ.pop(key, None)
+        environ.update(values)
         return environ
 
     def _save_state(self, **values):

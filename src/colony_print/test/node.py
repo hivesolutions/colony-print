@@ -2282,7 +2282,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
             PATH="/usr/bin",
             SECRET_KEY="key",
             NODE_BOOT="1",
-            NODE_BOOT_KEYS="NODE_BOOT,NODE_BOOT_KEYS,SECRET_KEY",
+            NODE_UPDATE="0",
+            NODE_BOOT_VALUE_NODE_UPDATE="1",
+            NODE_BOOT_KEYS="NODE_BOOT,NODE_BOOT_KEYS,NODE_BOOT_VALUE_NODE_UPDATE,SECRET_KEY",
         )
         self.node.node_restart = "exec"
         self.assertRaises(MockInterrupt, self.node._restart)
@@ -2299,7 +2301,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
                         "--config",
                         "config.env",
                     ],
-                    dict(PATH="/usr/bin"),
+                    dict(PATH="/usr/bin", NODE_UPDATE="1"),
                 )
             ],
         )
@@ -2376,6 +2378,8 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(MockSubprocess.calls, [])
 
     def test_environ(self):
+        import colony_print.boot
+
         # the node that is not run by the boot restarts with its environment
         colony_print.node.os = MockOS
         MockOS.environ = dict(
@@ -2404,6 +2408,48 @@ class ColonyPrintNodeTest(unittest.TestCase):
         finally:
             appier.conf_r("NODE_BOOT_KEYS")
         self.assertEqual(len(MockOS.environ), 5)
+
+        # the values of the environment that were replaced by the boot (eg:
+        # the auto-update of the state file) are the original ones, as handed
+        # over by the boot, including the ones it removed, so that the restarted
+        # node is not run with the state the configuration may no longer have
+        MockOS.environ = dict(
+            PATH="/usr/bin",
+            BASE_URL="https://print.example.com/",
+            NODE_UPDATE="0",
+            NODE_BOOT_VALUE_BASE_URL="https://print.example.com",
+            NODE_BOOT_VALUE_NODE_UPDATE="1",
+            NODE_BOOT_VALUE_NODE_UPDATE_ERROR="Package update failed with code 1",
+            NODE_BOOT_KEYS="NODE_BOOT_KEYS,NODE_BOOT_VALUE_BASE_URL,"
+            + "NODE_BOOT_VALUE_NODE_UPDATE,NODE_BOOT_VALUE_NODE_UPDATE_ERROR",
+        )
+        self.assertEqual(
+            self.node._environ(),
+            dict(
+                PATH="/usr/bin",
+                BASE_URL="https://print.example.com",
+                NODE_UPDATE="1",
+                NODE_UPDATE_ERROR="Package update failed with code 1",
+            ),
+        )
+        self.assertEqual(MockOS.environ["NODE_UPDATE"], "0")
+
+        # the environment handed over by the boot (its real one) results in
+        # the one the boot was started with, whatever the boot changes in it
+        config_path = os.path.join(self.target_dir, "config.env")
+        with open(config_path, "wb") as file:
+            file.write(b"BASE_URL=https://other.example.com/\r\nSECRET_KEY=key\r\n")
+        with open(self.state_path, "wb") as file:
+            file.write(b"NODE_UPDATE=0\r\n")
+        original = dict(
+            PATH="/usr/bin", BASE_URL="https://print.example.com", NODE_UPDATE="1"
+        )
+        MockOS.environ = dict(original)
+        boot = colony_print.boot.ColonyPrintBoot(environ=MockOS.environ)
+        boot.main(["--config", config_path, "--no-update", "--update-only"])
+        self.assertEqual(MockOS.environ["NODE_UPDATE"], "0")
+        self.assertEqual(MockOS.environ["SECRET_KEY"], "key")
+        self.assertEqual(self.node._environ(), original)
 
     def test_save_state(self):
         # the state file is created with the values, that are loaded back
