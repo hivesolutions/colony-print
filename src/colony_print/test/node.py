@@ -623,6 +623,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
             (dict(NODE_RESTART="0"), None),
             (dict(NODE_RESTART=0), None),
             (dict(NODE_RESTART="reboot"), None),
+            (dict(NODE_SERVICE="nssm"), "exit"),
+            (dict(NODE_SERVICE="nssm", NODE_RESTART="exec"), "exec"),
+            (dict(NODE_SERVICE=""), "exec"),
+            (dict(WINSW_SERVICE_ID="colony-print-node", NODE_SERVICE=""), "exit"),
         ):
             self._loop(**values)
             data_j = MockServer.calls[-1][1]
@@ -634,8 +638,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
         # a process can't be replaced on windows, where the node would run
         # twice under a service wrapper that also starts it again, so the
-        # node only restarts by itself there when run by the windows service
-        # (WinSW) or when the way to restart is configured
+        # node only restarts by itself there when run by a windows service
+        # (WinSW, or the one its installer tells about) or when the way to
+        # restart is configured, which is never replaced by the service
         os.name = "nt"
         try:
             for values, restart in (
@@ -645,6 +650,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 (dict(NODE_RESTART="exit"), "exit"),
                 (dict(NODE_RESTART="exec"), "exec"),
                 (dict(WINSW_SERVICE_ID="colony-print-node", NODE_RESTART="0"), None),
+                (dict(NODE_SERVICE="nssm"), "exit"),
+                (dict(NODE_SERVICE="nssm", NODE_RESTART="0"), None),
+                (dict(NODE_SERVICE="nssm", NODE_RESTART="exec"), "exec"),
             ):
                 self._loop(**values)
                 data_j = MockServer.calls[-1][1]

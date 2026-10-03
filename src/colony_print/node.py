@@ -131,15 +131,18 @@ class ColonyPrintNode(object):
         )
 
         # the node restarts itself (as requested from the admin) by exiting
-        # when it's run by the windows service (WinSW), that starts it again,
-        # and by running its own command line once more otherwise, except on
-        # windows, where a process can't be replaced (the node would run twice
-        # under another service wrapper), unless the way to restart is
-        # configured, any other value refusing the restart
+        # when it's run by a windows service, that starts it again (WinSW, or
+        # the one its installer tells about, as NSSM is not detected), and by
+        # running its own command line once more otherwise, except on windows,
+        # where a process can't be replaced (the node would run twice under
+        # another service wrapper), unless the way to restart is configured,
+        # any other value refusing the restart
         node_restart = appier.conf("NODE_RESTART", None)
         if node_restart in (None, ""):
             node_restart = "" if os.name == "nt" else "exec"
-            if appier.conf("WINSW_SERVICE_ID", None):
+            node_service = appier.conf("WINSW_SERVICE_ID", None)
+            node_service = node_service or appier.conf("NODE_SERVICE", None)
+            if node_service:
                 node_restart = "exit"
         node_restart = str(node_restart).strip().lower()
         self.node_restart = node_restart if node_restart in RESTART_MODES else None

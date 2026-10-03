@@ -432,8 +432,9 @@ end;
   are not removed and that the path of the wrapper is quoted in the service,
   as NSSM registers it without quotes, which would allow another program
   (eg: C:\Program.exe) to be run by the service as the system account, the
-  node is told (through its environment) to restart itself by exiting, as
-  NSSM starts it again and (unlike WinSW) is not detected by the node }
+  node is told about the service (through its environment), for it to restart
+  itself by exiting unless configured otherwise, as NSSM starts it again and
+  (unlike WinSW) is not detected by the node }
 function ConfigureService: Boolean;
 var
   Prefix, Logs: String;
@@ -452,7 +453,7 @@ begin
     Nssm(Prefix + 'AppParameters -E -s -u "\"' + ExpandConstant('{app}\boot.py') +
       '\"" --config "\"' + ConfigPath + '\""') and
     Nssm(Prefix + 'AppDirectory "' + DataDir + '"') and
-    Nssm(Prefix + 'AppEnvironmentExtra NODE_RESTART=exit') and
+    Nssm(Prefix + 'AppEnvironmentExtra NODE_SERVICE=nssm') and
     Nssm(Prefix + 'AppStdout "' + Logs + '.out.log"') and
     Nssm(Prefix + 'AppStderr "' + Logs + '.err.log"') and
     Nssm(Prefix + 'AppRotateFiles 1') and
