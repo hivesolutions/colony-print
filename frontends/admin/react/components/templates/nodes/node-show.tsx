@@ -1,4 +1,10 @@
-import React, { FC, useCallback, useEffect, useState } from "react";
+import React, {
+    FC,
+    useCallback,
+    useEffect,
+    useRef,
+    useState
+} from "react";
 import { useParams } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
@@ -97,6 +103,17 @@ export const NodeShow: FC = () => {
         [api, id, fetchNode]
     );
 
+    // keeps the identifier of the node that is being shown, so that
+    // the wait for a change of the node stops once another node is
+    // shown (or the view is gone)
+    const shownId = useRef<string | undefined>(id);
+    useEffect(() => {
+        shownId.current = id;
+        return () => {
+            shownId.current = undefined;
+        };
+    }, [id]);
+
     const setAutoUpdate = useCallback(
         async (enabled: boolean) => {
             if (!id) return;
@@ -110,7 +127,9 @@ export const NodeShow: FC = () => {
                     await new Promise((resolve) =>
                         setTimeout(resolve, 1000)
                     );
+                    if (shownId.current !== id) break;
                     const data = await api.getNode(id);
+                    if (shownId.current !== id) break;
                     setNode(data);
                     if (data.update?.auto === enabled) break;
                 }
