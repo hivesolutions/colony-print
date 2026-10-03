@@ -138,6 +138,46 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual(self.app.jobs_fonts[clone_info["id"]], None)
         self.assertEqual("fonts" in self.app.jobs["node"][2], False)
 
+    def test_clone_commands(self):
+        # the jobs that are commands for the node (eg: its restart) can't
+        # be cloned, as they're only queued by their own endpoints
+        for type in ("restart", "update", "auto-update"):
+            self.app.jobs_info[type] = dict(
+                id=type,
+                name=type,
+                node_id="node",
+                data_length=0,
+                type=type,
+                status="finished",
+            )
+            self.app.jobs_data[type] = None
+            response = self.app.post("/jobs/%s/clone" % type, headers=self.headers)
+            self.assertEqual(response.code, 409)
+            result = json.loads(response.data.decode("utf-8"))
+            self.assertEqual(
+                result["message"], "Job of type '%s' can not be cloned" % type
+            )
+        self.assertEqual(self.app.jobs.get("node", []), [])
+        self.assertEqual(len(self.app.jobs_info), 3)
+
+        # the jobs of the other types are cloned as before, unless their
+        # payload is no longer available
+        self.app.jobs_info["fonts"] = dict(
+            id="fonts", name="fonts", node_id="node", type="fonts"
+        )
+        response = self.app.post("/jobs/fonts/clone", headers=self.headers)
+        self.assertEqual(response.code, 409)
+        result = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(result["message"], "Job payload is no longer available")
+
+        self.app.jobs_data["fonts"] = "QUJD"
+        response = self.app.post("/jobs/fonts/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(len(self.app.jobs["node"]), 1)
+
+        response = self.app.post("/jobs/unknown/clone", headers=self.headers)
+        self.assertEqual(response.code, 404)
+
     def test_files(self):
         response = self.app.get("/jobs/name/files")
         self.assertEqual(response.code, 403)
@@ -169,6 +209,25 @@ class JobControllerTest(unittest.TestCase):
     def test_payload(self):
         response = self.app.get("/jobs/name/payload")
         self.assertEqual(response.code, 403)
+
+        response = self.app.get("/jobs/name/payload", headers=self.headers)
+        self.assertEqual(response.code, 404)
+
+        self.app.jobs_info["name"] = dict(id="name", name="document", node_id="node")
+        self.app.jobs_data["name"] = "SGVsbG8gV29ybGQ="
+        response = self.app.get("/jobs/name/payload", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.data, b"Hello World")
+
+        # the jobs that are commands for the node have no payload
+        self.app.jobs_info["restart"] = dict(
+            id="restart", name="restart", node_id="node", type="restart"
+        )
+        self.app.jobs_data["restart"] = None
+        response = self.app.get("/jobs/restart/payload", headers=self.headers)
+        self.assertEqual(response.code, 404)
+        result = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(result["message"], "Job payload not found")
 
     def test_payload_o(self):
         response = self.app.options("/jobs/name/payload")
