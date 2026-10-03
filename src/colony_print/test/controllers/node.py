@@ -151,6 +151,16 @@ class NodeControllerTest(unittest.TestCase):
         )
         self.assertEqual(self.app.nodes["node"]["version"], "0.24.0")
 
+        # the job is also finished when the start time of the restarted
+        # node is not newer (the clock of its machine went back)
+        code, job_info = self._print(url="/nodes/node/restart", data_b64=None)
+        job_info = self.app.jobs_info[job_info["id"]]
+        self._deliver()
+        self._register(**dict(node, start_time=180.0))
+        self.assertEqual(job_info["status"], "finished")
+        self.assertEqual(job_info["result"]["before"]["start_time"], 200.0)
+        self.assertEqual(job_info["result"]["after"]["start_time"], 180.0)
+
         # an older node (that doesn't report its start time) registers
         # itself as before, without any job being finished
         code = self._register(id="older", name="Older", version="0.22.0")
@@ -905,15 +915,14 @@ class NodeControllerTest(unittest.TestCase):
                 for id, job_info in self.app.jobs_info.items()
             )
 
-        # the node that was not restarted (first registration, no start
-        # time or a start time that is not newer) has no job finished
+        # the node that was not restarted (first registration, no previous
+        # start time or the same start time) has no job finished
         jobs()
         unchanged = statuses()
         controller._finish_restart("node", None, node)
         controller._finish_restart("node", dict(name="node"), node)
-        controller._finish_restart("node", previous, dict(name="node"))
         controller._finish_restart("node", previous, dict(node, start_time=100.0))
-        controller._finish_restart("node", previous, dict(node, start_time=50.0))
+        controller._finish_restart("node", dict(name="node"), dict(name="node"))
         controller._finish_restart("node", dict(), dict())
         self.assertEqual(statuses(), unchanged)
 
@@ -968,6 +977,34 @@ class NodeControllerTest(unittest.TestCase):
             self.assertEqual(result["result"], "error")
             self.assertEqual(result["error"], "Update not run by the node")
             self.assertEqual(result["update"], update or dict())
+
+        # the start times are not compared, as a restarted node may report
+        # an older one (the clock of its machine going back) or none at all
+        # (rolled back to an older version), its jobs being finished anyway
+        jobs()
+        controller._finish_restart("node", previous, dict(node, start_time=50.0))
+        self.assertEqual(
+            statuses(), dict(unchanged, restart="finished", update="finished")
+        )
+        result = self.app.jobs_info["restart"]["result"]
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["after"]["start_time"], 50.0)
+
+        jobs()
+        older = dict(name="node", version="0.23.0", libraries=dict(appier="1.0.0"))
+        controller._finish_restart("node", previous, older)
+        self.assertEqual(
+            statuses(), dict(unchanged, restart="finished", update="finished")
+        )
+        result = self.app.jobs_info["restart"]["result"]
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(
+            result["after"],
+            dict(version="0.23.0", libraries=dict(appier="1.0.0"), start_time=None),
+        )
+        result = self.app.jobs_info["update"]["result"]
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(result["error"], "Update not run by the node")
 
         # the versions that are not known (eg: not reported by the node)
         # are kept as invalid values

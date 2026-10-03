@@ -132,11 +132,15 @@ class ColonyPrintNode(object):
 
         # the node restarts itself (as requested from the admin) by exiting
         # when it's run by the windows service (WinSW), that starts it again,
-        # and by running its own command line once more otherwise, unless the
-        # way to restart is configured, any other value refusing the restart
+        # and by running its own command line once more otherwise, except on
+        # windows, where a process can't be replaced (the node would run twice
+        # under another service wrapper), unless the way to restart is
+        # configured, any other value refusing the restart
         node_restart = appier.conf("NODE_RESTART", None)
         if node_restart in (None, ""):
-            node_restart = "exit" if appier.conf("WINSW_SERVICE_ID", None) else "exec"
+            node_restart = "" if os.name == "nt" else "exec"
+            if appier.conf("WINSW_SERVICE_ID", None):
+                node_restart = "exit"
         node_restart = str(node_restart).strip().lower()
         self.node_restart = node_restart if node_restart in RESTART_MODES else None
 
@@ -388,6 +392,18 @@ class ColonyPrintNode(object):
                     result="error",
                     error=str(exception),
                     traceback=traceback.format_exc(),
+                )
+
+            # removes the update that was forced for the next start of the
+            # node (if any) from the state file, as the jobs that requested
+            # it fail, so that the packages are not updated by a later (and
+            # unrelated) start of the node
+            try:
+                if self.node_state:
+                    self._save_state(NODE_UPDATE_ONCE=None)
+            except Exception as exception:
+                logging.warning(
+                    "Problem saving state '%s': %s" % (self.node_state, str(exception))
                 )
         return results
 
@@ -1173,7 +1189,7 @@ class ColonyPrintNode(object):
         """
 
         environ = dict(os.environ)
-        keys = appier.conf("NODE_BOOT_KEYS", "")
+        keys = environ.get("NODE_BOOT_KEYS", "")
         for key in keys.split(","):
             environ.pop(key, None)
         return environ
@@ -1184,14 +1200,22 @@ class ColonyPrintNode(object):
         that is applied by the boot over the configuration (that is never
         written by the node, as it holds the secret key), keeping its other
         values and replacing the file atomically.
+
+        The invalid values are removed from the file, that is only saved
+        in case its values change.
         """
 
         import colony_print.boot
 
         boot = colony_print.boot.ColonyPrintBoot()
         state = boot.load_config(self.node_state)
-        state.update(values)
-        boot.save_config(self.node_state, state)
+        values = dict(state, **values)
+        values = dict(
+            (key, value) for key, value in values.items() if not value == None
+        )
+        if values == state:
+            return
+        boot.save_config(self.node_state, values)
 
     def _has_npcolony(self):
         try:

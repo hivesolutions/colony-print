@@ -308,6 +308,19 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(MockSubprocess.calls, [])
         self.assertEqual(MockColonyPrintNode.loops, 1)
 
+        # the node is not told about the boot that skips the update (as told
+        # to), as it would never be updated from the admin, the other values
+        # being handed over to it (eg: for it to restart)
+        self.assertEqual(self.environ["NODE_BOOT"], "0")
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "skipped")
+        self.assertEqual("NODE_BOOT" in self.environ["NODE_BOOT_KEYS"].split(","), True)
+
+        # the same environment is the one of a boot that updates once the
+        # boot is no longer told to skip the update
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_BOOT"], "1")
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "success")
+
     def test_main_update_only(self):
         self.boot.main(["--config", self.config_path, "--update-only"])
         self.assertEqual(self._requirements(), [["colony-print", "npcolony"]])
@@ -521,6 +534,67 @@ class ColonyPrintBootTest(unittest.TestCase):
             del os.environ["COLONY_PRINT_BOOT_TEST"]
             appier.conf_r("COLONY_PRINT_BOOT_TEST")
         self.assertEqual(MockColonyPrintNode.loops, 2)
+
+        # the modules of the package are only unloaded (before the node is
+        # run) when the boot is the program being run, as they're loaded
+        # before the update when it's run as a module of the package, the
+        # ones of the program that imports the boot being kept
+        self.assertEqual(self.boot.clean, False)
+        self.assertEqual(colony_print.boot.ColonyPrintBoot(environ=dict()).clean, False)
+        package = colony_print.boot.PACKAGE
+        colony_print.boot.PACKAGE = "colony_print_boot_test"
+        sys.modules["colony_print_boot_test"] = colony_print
+        sys.modules["colony_print_boot_test.node"] = colony_print.node
+        try:
+            self.boot.run()
+            self.assertEqual("colony_print_boot_test" in sys.modules, True)
+            self.assertEqual("colony_print_boot_test.node" in sys.modules, True)
+
+            boot = colony_print.boot.ColonyPrintBoot(environ=dict(), clean=True)
+            self.assertEqual(boot.clean, True)
+            boot.run()
+            self.assertEqual("colony_print_boot_test" in sys.modules, False)
+            self.assertEqual("colony_print_boot_test.node" in sys.modules, False)
+        finally:
+            colony_print.boot.PACKAGE = package
+            sys.modules.pop("colony_print_boot_test", None)
+            sys.modules.pop("colony_print_boot_test.node", None)
+        self.assertEqual(MockColonyPrintNode.loops, 4)
+        self.assertEqual(sys.modules["colony_print.node"] is colony_print.node, True)
+
+    def test_unload(self):
+        # only the package and its modules are unloaded, the packages that
+        # share its prefix (and every other module) being kept
+        names = (
+            "colony_print_boot_test",
+            "colony_print_boot_test.node",
+            "colony_print_boot_test.printing.pdf",
+            "colony_print_boot_tests",
+            "colony_print_boot_tests.node",
+        )
+        for name in names:
+            sys.modules[name] = colony_print
+        try:
+            self.assertEqual(
+                self.boot.unload("colony_print_boot_test"),
+                [
+                    "colony_print_boot_test",
+                    "colony_print_boot_test.node",
+                    "colony_print_boot_test.printing.pdf",
+                ],
+            )
+            self.assertEqual(
+                sorted(name for name in names if name in sys.modules),
+                ["colony_print_boot_tests", "colony_print_boot_tests.node"],
+            )
+            self.assertEqual("colony_print.boot" in sys.modules, True)
+
+            # a package that is not loaded has nothing to be unloaded
+            self.assertEqual(self.boot.unload("colony_print_boot_test"), [])
+            self.assertEqual(self.boot.unload("colony_print_boot_test.node"), [])
+        finally:
+            for name in names:
+                sys.modules.pop(name, None)
 
     def test_update(self):
         requirements = self.boot.update()

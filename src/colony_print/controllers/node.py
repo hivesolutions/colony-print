@@ -382,8 +382,12 @@ class NodeController(appier.Controller):
         Finishes the jobs that restart the node with the provided identifier
         (restart and update) that are in flight, in case the node has been
         restarted, meaning that it has registered itself with a start time
-        newer than the one of its previous registration, as these jobs are
+        that is not the one of its previous registration, as these jobs are
         not finished by a result of the node (posted while it goes down).
+
+        The start times are not compared, as the one of the new process of
+        the node may not be newer (the clock of its machine going back) or
+        not even be reported (a node rolled back to an older version).
 
         The result of the jobs keeps the version, the libraries and the
         start time of the node before and after the restart, the update
@@ -403,7 +407,7 @@ class NodeController(appier.Controller):
 
         start_time = node.get("start_time", None)
         previous_time = previous.get("start_time", None) if previous else None
-        if not start_time or not previous_time or not start_time > previous_time:
+        if not previous_time or start_time == previous_time:
             return
 
         fields = ("version", "libraries", "start_time")

@@ -444,6 +444,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockSubprocess.error = None
         self._sys = colony_print.node.sys
         self._os = colony_print.node.os
+        self._name = os.name
         self._execve = os.execve
         self._subprocess = colony_print.node.subprocess
         self.state_path = os.path.join(self.target_dir, "state.env")
@@ -467,6 +468,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         appier.post = self._post
         colony_print.node.sys = self._sys
         colony_print.node.os = self._os
+        os.name = self._name
         os.execve = self._execve
         colony_print.node.subprocess = self._subprocess
         colony_print.printing.pdf.visitor.FONT_PATHS = self._font_paths
@@ -630,6 +632,30 @@ class ColonyPrintNodeTest(unittest.TestCase):
             self.assertEqual("auto-update" in data_j["capabilities"], False)
             self.assertEqual(data_j["update"], None)
 
+        # a process can't be replaced on windows, where the node would run
+        # twice under a service wrapper that also starts it again, so the
+        # node only restarts by itself there when run by the windows service
+        # (WinSW) or when the way to restart is configured
+        os.name = "nt"
+        try:
+            for values, restart in (
+                (dict(), None),
+                (dict(NODE_RESTART=""), None),
+                (dict(WINSW_SERVICE_ID="colony-print-node"), "exit"),
+                (dict(NODE_RESTART="exit"), "exit"),
+                (dict(NODE_RESTART="exec"), "exec"),
+                (dict(WINSW_SERVICE_ID="colony-print-node", NODE_RESTART="0"), None),
+            ):
+                self._loop(**values)
+                data_j = MockServer.calls[-1][1]
+                self.assertEqual(data_j["os"], "nt")
+                self.assertEqual(self.node.node_restart, restart)
+                self.assertEqual(
+                    "restart" in data_j["capabilities"], not restart == None
+                )
+        finally:
+            os.name = self._name
+
         # the node run by the boot is told about it, about its state file
         # and about the outcome of the update, that is submitted to the
         # server together with the capabilities that depend on the boot
@@ -664,6 +690,16 @@ class ColonyPrintNodeTest(unittest.TestCase):
             self._loop(NODE_UPDATE=value, **values)
             self.assertEqual(self.node.node_update, auto)
             self.assertEqual(MockServer.calls[-1][1]["update"]["auto"], auto)
+
+        # the node run by a boot that skips the update (as told to) is not
+        # told about it, as it would never be updated from the admin
+        self._loop(**dict(values, NODE_BOOT="0"))
+        data_j = MockServer.calls[-1][1]
+        self.assertEqual(self.node.node_boot, False)
+        self.assertEqual(data_j["capabilities"][-1], "restart")
+        self.assertEqual("update" in data_j["capabilities"], False)
+        self.assertEqual("auto-update" in data_j["capabilities"], False)
+        self.assertEqual(data_j["update"], None)
 
         # the node that can't restart is not updated from the admin, but
         # its auto-update is still set from it
@@ -975,6 +1011,41 @@ class ColonyPrintNodeTest(unittest.TestCase):
         results = self.node.restart()
         self.assertEqual(results["third"]["result"], "error")
         self.assertEqual(results["third"]["error"], "Restart 'None' not valid")
+        self.assertEqual(os.listdir(self.target_dir), [])
+
+        # the update that was forced for the next start of the node (by an
+        # update job) is removed from the state file when the restart fails,
+        # as the job fails, the other values of the state file being kept
+        self.node.node_restart = "exec"
+        self.node.node_boot = True
+        self.node.node_state = self.state_path
+        self.node._handle_restart("fourth", update=True)
+        self.node._save_state(NODE_UPDATE="0")
+        self.assertEqual(self._state(), b"NODE_UPDATE=0\r\nNODE_UPDATE_ONCE=1\r\n")
+        results = self.node.restart()
+        self.assertEqual(results["fourth"]["result"], "error")
+        self.assertEqual(results["fourth"]["error"], "Exec format error")
+        self.assertEqual(self._state(), b"NODE_UPDATE=0\r\n")
+
+        # a restart (without update) that fails keeps the state file as it
+        # is, and creates none for the node that has no state
+        self.node.restart_jobs = ["fifth"]
+        results = self.node.restart()
+        self.assertEqual(results["fifth"]["result"], "error")
+        self.assertEqual(self._state(), b"NODE_UPDATE=0\r\n")
+        os.remove(self.state_path)
+        self.node.restart_jobs = ["sixth"]
+        self.assertEqual(sorted(self.node.restart().keys()), ["sixth"])
+        self.assertEqual(os.listdir(self.target_dir), [])
+
+        # the errors of the jobs are kept when the state file can't be
+        # saved (eg: a directory in its place), which is only logged
+        self.node.node_state = self.target_dir
+        self.node.restart_jobs = ["seventh"]
+        results = self.node.restart()
+        self.assertEqual(results["seventh"]["result"], "error")
+        self.assertEqual(results["seventh"]["error"], "Exec format error")
+        self.assertEqual(self.node.restart_jobs, [])
 
     def test_libraries(self):
         sys.modules["npcolony"] = MockLibrary
@@ -2207,13 +2278,14 @@ class ColonyPrintNodeTest(unittest.TestCase):
         colony_print.node.sys = MockSys
         colony_print.node.os = MockOS
         colony_print.node.subprocess = MockSubprocess
-        MockOS.environ = dict(PATH="/usr/bin", SECRET_KEY="key", NODE_BOOT="1")
-        appier.conf_s("NODE_BOOT_KEYS", "NODE_BOOT,NODE_BOOT_KEYS,SECRET_KEY")
+        MockOS.environ = dict(
+            PATH="/usr/bin",
+            SECRET_KEY="key",
+            NODE_BOOT="1",
+            NODE_BOOT_KEYS="NODE_BOOT,NODE_BOOT_KEYS,SECRET_KEY",
+        )
         self.node.node_restart = "exec"
-        try:
-            self.assertRaises(MockInterrupt, self.node._restart)
-        finally:
-            appier.conf_r("NODE_BOOT_KEYS")
+        self.assertRaises(MockInterrupt, self.node._restart)
         self.assertEqual(
             MockOS.execs,
             [
@@ -2311,16 +2383,20 @@ class ColonyPrintNodeTest(unittest.TestCase):
             BASE_URL="https://print.example.com/",
             SECRET_KEY="key",
             NODE_BOOT="1",
-            NODE_BOOT_KEYS="NODE_BOOT,NODE_BOOT_KEYS,NODE_UPDATE_ERROR,SECRET_KEY",
         )
         self.assertEqual(self.node._environ(), MockOS.environ)
         self.assertEqual(self.node._environ() is MockOS.environ, False)
 
-        # the values set by the boot (as named by it) are not part of the
-        # environment of the restarted node, the ones that are not in the
-        # environment (eg: removed meanwhile) being ignored
-        appier.conf_s("NODE_BOOT_KEYS", MockOS.environ["NODE_BOOT_KEYS"])
+        # the values set by the boot, as named by it in the environment (and
+        # not in the configuration of the node, that may have other sources),
+        # are not part of the environment of the restarted node, the ones
+        # that are not in the environment (eg: removed meanwhile) being ignored
+        appier.conf_s("NODE_BOOT_KEYS", "NODE_BOOT_KEYS,PATH")
         try:
+            self.assertEqual(self.node._environ(), MockOS.environ)
+            MockOS.environ["NODE_BOOT_KEYS"] = (
+                "NODE_BOOT,NODE_BOOT_KEYS,NODE_UPDATE_ERROR,SECRET_KEY"
+            )
             self.assertEqual(
                 self.node._environ(),
                 dict(PATH="/usr/bin", BASE_URL="https://print.example.com/"),
@@ -2348,6 +2424,27 @@ class ColonyPrintNodeTest(unittest.TestCase):
             dict(NODE_UPDATE="1", NODE_UPDATE_ONCE="1"),
         )
         self.assertEqual(sorted(os.listdir(self.target_dir)), ["state.env"])
+
+        # the invalid values are removed from the file, the other ones
+        # being kept, including the ones that are not set by the node
+        with open(self.state_path, "ab") as file:
+            file.write(b"OTHER=value\r\n")
+        self.node._save_state(NODE_UPDATE_ONCE=None)
+        self.assertEqual(self._state(), b"NODE_UPDATE=1\r\nOTHER=value\r\n")
+        self.node._save_state(NODE_UPDATE_ONCE="1", OTHER=None)
+        self.assertEqual(self._state(), b"NODE_UPDATE=1\r\nNODE_UPDATE_ONCE=1\r\n")
+
+        # the file is only saved when its values change, so that it's left
+        # untouched (not even created) when there's nothing to be saved
+        with open(self.state_path, "wb") as file:
+            file.write(b"# state\nNODE_UPDATE=1\nNODE_UPDATE_ONCE=1\n")
+        self.node._save_state(NODE_UPDATE="1")
+        self.node._save_state(MISSING=None)
+        self.assertEqual(self._state(), b"# state\nNODE_UPDATE=1\nNODE_UPDATE_ONCE=1\n")
+        self.node.node_state = os.path.join(self.target_dir, "other.env")
+        self.node._save_state(NODE_UPDATE_ONCE=None)
+        self.assertEqual(os.path.exists(self.node.node_state), False)
+        self.node.node_state = self.state_path
 
         # the state saved by the node is the one applied by the boot
         self.assertEqual(boot.apply_state(self.state_path), True)

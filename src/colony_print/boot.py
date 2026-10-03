@@ -21,6 +21,12 @@ STATE_NAME = "state.env"
 file and with its format, that is written by the node (as requested from
 the admin) and read by the boot, which never writes the configuration """
 
+PACKAGE = "colony_print"
+""" The name of the package of the node, whose modules are loaded before
+the update when the boot is run as a module of the package (and not as a
+script), so they're unloaded before the node is run, as they may be the
+ones of the version that was installed before the update """
+
 PACKAGES = (("colony-print", "NODE_VERSION"), ("npcolony", "NODE_NPCOLONY_VERSION"))
 """ The packages of the node that are updated by the boot, together
 with the name of the configuration that (optionally) constrains the
@@ -67,15 +73,25 @@ class ColonyPrintBoot(object):
     done, so that no package that may be updated is loaded (and locked)
     by it, which allows the update of every package (eg: npcolony),
     including the one that contains this file.
+
+    When it's run as a module of the package (python -m colony_print.boot)
+    the package is loaded before the update, so its modules are unloaded
+    before the node is run, for the node to run only with the updated ones.
     """
 
     def __init__(
-        self, environ=None, retries=RETRIES, retry_delay=RETRY_DELAY, legacy=None
+        self,
+        environ=None,
+        retries=RETRIES,
+        retry_delay=RETRY_DELAY,
+        legacy=None,
+        clean=None,
     ):
         self.environ = os.environ if environ == None else environ
         self.retries = retries
         self.retry_delay = retry_delay
         self.legacy = sys.version_info < LEGACY_VERSION if legacy == None else legacy
+        self.clean = __name__ == "__main__" if clean == None else clean
 
     def main(self, args=None):
         parser = argparse.ArgumentParser(
@@ -148,8 +164,11 @@ class ColonyPrintBoot(object):
         # hands the marker of the boot, the path of the state file and the
         # outcome of the update over to the node (through the environment),
         # together with the names of the values set by the boot, the ones
-        # that are not part of the environment the boot was started with
-        self.environ["NODE_BOOT"] = "1"
+        # that are not part of the environment the boot was started with,
+        # notice that the node is not told about a boot that skips the update
+        # (as told to), as it would not be updated from the admin, being
+        # restarted with the same command line
+        self.environ["NODE_BOOT"] = "0" if args.no_update else "1"
         self.environ["NODE_STATE_PATH"] = state_path
         self.environ["NODE_UPDATE_STATUS"] = status
         self.environ["NODE_UPDATE_TIME"] = str(time.time())
@@ -172,6 +191,13 @@ class ColonyPrintBoot(object):
         if hasattr(importlib, "invalidate_caches"):
             importlib.invalidate_caches()
 
+        # unloads the modules of the package that were loaded before the
+        # update, when the boot is the program being run (as a module of the
+        # package), so that the node doesn't run with the ones of the version
+        # that was installed before the update
+        if self.clean:
+            self.unload(PACKAGE)
+
         import appier
         import colony_print.node
 
@@ -183,6 +209,27 @@ class ColonyPrintBoot(object):
 
         node = colony_print.node.ColonyPrintNode()
         node.loop()
+
+    def unload(self, package):
+        """
+        Unloads the package with the provided name and its modules (the
+        ones that are loaded), so that they're loaded once more, from their
+        (possibly updated) files, the next time they're imported.
+
+        :type package: String
+        :param package: The name of the package to be unloaded.
+        :rtype: List
+        :return: The names of the modules that were unloaded.
+        """
+
+        names = [
+            name
+            for name in sys.modules
+            if name == package or name.startswith(package + ".")
+        ]
+        for name in names:
+            del sys.modules[name]
+        return sorted(names)
 
     def update(self):
         """

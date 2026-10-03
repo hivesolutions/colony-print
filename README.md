@@ -61,7 +61,7 @@ NODE_LOCATION=$NODE_LOCATION \
 python -m colony_print.node
 ```
 
-The node may also be run by its boot, which loads the configuration of the node from a `config.env` file (the values of the environment take precedence), updates colony-print and npcolony from PyPI (see [Self-Update](#self-update)) and then runs the node, as the service of the Windows nodes does. It's the way to run the nodes that are updated from the admin (see [Node Control](#node-control)):
+The node may also be run by its boot, which loads the configuration of the node from a `config.env` file (the values of the environment take precedence), updates colony-print and npcolony from PyPI (see [Self-Update](#self-update)) and then runs the node, as the service of the Windows nodes does. It's the way to run the nodes that are updated from the admin (see [Node Control](#node-control)), unless the boot is told to skip the update (`--no-update`):
 
 ```bash
 pip install colony_print
@@ -204,7 +204,7 @@ The nodes are restarted and updated from the admin UI (the node view) and from t
 * Each endpoint requires the admin token and the capability of the node with the same name (see [Node Capabilities](doc/capabilities.md)), failing with `409` when the node doesn't advertise it, as the older nodes and the ones that never registered.
 * A node with a `restart` or `update` job queued or in flight doesn't get another one, the request returns that job.
 * The node only restarts once the remaining jobs it has received are printed and their results posted, so no print is interrupted. The jobs queued meanwhile stay in the server until the node is back.
-* A `restart` or `update` job is finished by the server when the node registers itself again with a newer start time, with the version and the libraries of the node before and after in its result. Until then the job stays in `printing`, so a node that didn't come back is visible. An `update` job finishes as an error when the packages could not be updated, with the node running the installed ones.
+* A `restart` or `update` job is finished by the server when the node registers itself again with another start time (the one of its new process), with the version and the libraries of the node before and after in its result. Until then the job stays in `printing`, so a node that didn't come back is visible. An `update` job finishes as an error when the packages could not be updated, with the node running the installed ones.
 * The commands carry no packages, versions or package index: what gets installed is the one of the configuration of the node (`NODE_VERSION`, `NODE_NPCOLONY_VERSION` and `NODE_INDEX_URL`, see [Self-Update](#self-update)), so the server only triggers what the node would do by itself.
 * These jobs are left out of the print statistics of the node and can't be duplicated.
 
@@ -217,6 +217,8 @@ What a node supports depends on how it's run, as a running node can't update its
 | Run by the boot in any other way (e.g. `python -m colony_print.boot`, systemd) | Yes (`exec`) | Yes                                            |
 | Run without the boot (`python -m colony_print.node`)                           | Yes (`exec`) | No                                             |
 
+On Windows, the nodes that are not run by the Windows service of the installer only restart with `NODE_RESTART` set, as explained below.
+
 The remote control of a node is configured in its configuration (`config.env` or the environment):
 
 | Configuration  | Notes                                                                                                                                       |
@@ -225,7 +227,7 @@ The remote control of a node is configured in its configuration (`config.env` or
 | `NODE_CONTROL` | `0` disables the three actions: the node advertises none of their capabilities and ignores the state file. The server can't enable it back. |
 
 * `exit` - the process ends with an error exit code (`75`) and its service starts it again. It's the default for the nodes run by the Windows service, whose recovery actions restart it after 10, 30 and then 60 seconds (for the restarts within one hour), Windows logging it as a failure of the service.
-* `exec` - the node runs its own command line again, with the environment it was started with, so that a changed `config.env` applies. It's the default for every other node. On Linux the process is replaced and keeps its PID, so it works for the nodes started by hand and under any supervisor (e.g. systemd or a container). On Windows a new process is started and the current one exits, which runs the node twice when something else also starts it again (e.g. a script loop or another service wrapper), the case `NODE_RESTART=exit` is for.
+* `exec` - the node runs its own command line again, with the environment it was started with, so that a changed `config.env` applies. It's the default for every other node, except on Windows. On Linux the process is replaced and keeps its PID, so it works for the nodes started by hand and under any supervisor (e.g. systemd or a container). On Windows a process can't be replaced, so a new one is started and the current one exits, which runs the node twice when something else also starts it again (e.g. a script loop or another service wrapper, the case `NODE_RESTART=exit` is for). For that reason a Windows node that is not run by the Windows service has no default: it's only restarted from the admin with `NODE_RESTART` set (to `exec` for a node started by hand).
 
 The values set from the admin are kept in a `state.env` file next to `config.env`, written by the node and applied by the boot over the configuration, as the node never writes `config.env` (which holds the secret key): the auto-update (`NODE_UPDATE`, taking precedence over the one of the configuration) and the update forced for the next start (`NODE_UPDATE_ONCE`, removed by the boot once read). The node reports its start time (`start_time`) and the outcome of the update run by its boot (`update`, with `auto`, `status`, `time` and `error`) in its information.
 
@@ -296,7 +298,7 @@ Windows XP (SP3) nodes are installed with a second installer (`colony-print-node
 
 * It installs a 32 bit Python 2.7.18 (the last one that runs on Windows XP), together with the Visual C++ 2008 runtime that it requires (Microsoft's redistributable), and requires npcolony 1.7.0 or newer (the first one with wheels for it). The node only updates itself while colony-print, npcolony and their dependencies keep publishing wheels for Python 2.7.
 * The service is run by [NSSM](https://nssm.cc) instead of WinSW, which requires a .NET Framework that Windows XP lacks. The log files are rotated when they reach 10 MB, but the rotated ones are never removed.
-* NSSM is not detected by the node, so the installer sets `NODE_RESTART=exit` in the environment of the service (where it takes precedence over `config.env`), for the node to be restarted from the admin (see [Node Control](#node-control)). The nodes installed by the 0.23.0 installer must be installed again (or have `NODE_RESTART=exit` in their `config.env`) before being restarted from the admin, as they would otherwise end up running twice.
+* NSSM is not detected by the node, so the installer sets `NODE_RESTART=exit` in the environment of the service (where it takes precedence over `config.env`), for the node to be restarted from the admin (see [Node Control](#node-control)). The nodes installed by the 0.23.0 installer are not restarted from the admin (they don't advertise it) until they're installed again or have `NODE_RESTART=exit` in their `config.env`.
 * The node is installed in the 32 bit program files (`C:\Program Files (x86)\Colony Print Node` on a 64 bit Windows) and, on Windows XP, its configuration and logs are in `C:\Documents and Settings\All Users\Application Data\Colony Print Node`.
 * The access to the configuration is restricted as in the other installer, except on the disks without file security (e.g. FAT32), where it's not possible: the installer warns (and asks to continue) that any user of the machine is able to read the secret key and to change the files of the node, which run as the system account. The access is not verified by the installer, as Windows XP has no PowerShell. So the configuration kept by an uninstall is not used by the next install, which must be given the configuration again, only an install over an installed node keeps its configuration.
 * Python 2.7 always searches for its modules in the application paths of the registry (the subkeys of `Software\Python\PythonCore\2.7\PythonPath`, e.g. added by pywin32) before its own library, which can't be disabled. The installer warns (and asks to continue) when they exist, as any user able to write in those directories is able to run code as the system account.

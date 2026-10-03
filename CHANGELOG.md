@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * Configuration file of the nodes ignored when their boot is run outside of the Windows service - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Updated nodes running with modules of the previous version when their boot is run outside of the Windows service - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 * Error message missing from the jobs refused by a node that lacks the capability they require - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ## [0.23.0] - 2026-10-02
