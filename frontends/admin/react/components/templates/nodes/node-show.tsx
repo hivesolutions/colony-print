@@ -37,17 +37,30 @@ export const NodeShow: FC = () => {
     const [restarting, setRestarting] = useState(false);
     const [toggling, setToggling] = useState(false);
 
+    // keeps the identifier of the node that is being shown, so that
+    // the requests of another node (or of a view that is gone) are
+    // ignored once they're done, instead of being shown as its own
+    const shownId = useRef<string | undefined>(id);
+    useEffect(() => {
+        shownId.current = id;
+        return () => {
+            shownId.current = undefined;
+        };
+    }, [id]);
+
     const fetchNode = useCallback(
         async (silent = false) => {
             if (!id) return;
             if (!silent) setLoading(true);
             try {
                 const data = await api.getNode(id);
+                if (shownId.current !== id) return;
                 setNode(data);
             } catch {
+                if (shownId.current !== id) return;
                 setNode(null);
             } finally {
-                setLoading(false);
+                if (shownId.current === id) setLoading(false);
             }
 
             // retrieves the job (restart or update) that is going to
@@ -55,6 +68,7 @@ export const NodeShow: FC = () => {
             // one while it's queued or in flight
             try {
                 const jobs = await api.listJobs();
+                if (shownId.current !== id) return;
                 setPending(
                     Object.values(jobs).find(
                         (job) =>
@@ -62,6 +76,7 @@ export const NodeShow: FC = () => {
                     ) || null
                 );
             } catch {
+                if (shownId.current !== id) return;
                 setPending(null);
             }
         },
@@ -102,17 +117,6 @@ export const NodeShow: FC = () => {
         },
         [api, id, fetchNode]
     );
-
-    // keeps the identifier of the node that is being shown, so that
-    // the wait for a change of the node stops once another node is
-    // shown (or the view is gone)
-    const shownId = useRef<string | undefined>(id);
-    useEffect(() => {
-        shownId.current = id;
-        return () => {
-            shownId.current = undefined;
-        };
-    }, [id]);
 
     const setAutoUpdate = useCallback(
         async (enabled: boolean) => {
