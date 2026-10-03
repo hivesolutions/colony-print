@@ -210,12 +210,13 @@ The nodes are restarted and updated from the admin UI (the node view) and from t
 
 What a node supports depends on how it's run, as a running node can't update itself (the update is a restart whose boot updates the packages):
 
-| Node                                                                           | `restart`    | `update` and `auto-update`                     |
-| ------------------------------------------------------------------------------ | ------------ | ---------------------------------------------- |
-| Windows service installed by the installer of this version                     | Yes (`exit`) | Yes                                            |
-| Windows service installed by an older installer (once it updates itself)       | Yes (`exit`) | No, until the installer of this version is run |
-| Run by the boot in any other way (e.g. `python -m colony_print.boot`, systemd) | Yes (`exec`) | Yes                                            |
-| Run without the boot (`python -m colony_print.node`)                           | Yes (`exec`) | No                                             |
+| Node                                                                                 | `restart`                                      | `update` and `auto-update`                     |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------- | ---------------------------------------------- |
+| Windows service installed by the installer of this version                           | Yes (`exit`)                                   | Yes                                            |
+| Windows service (WinSW) installed by an older installer (once it updates itself)     | Yes (`exit`)                                   | No, until the installer of this version is run |
+| Windows XP service (NSSM) installed by the 0.23.0 installer (once it updates itself) | No, until the installer of this version is run | No, until the installer of this version is run |
+| Run by the boot in any other way (e.g. `python -m colony_print.boot`, systemd)       | Yes (`exec`)                                   | Yes                                            |
+| Run without the boot (`python -m colony_print.node`)                                 | Yes (`exec`)                                   | No                                             |
 
 On Windows, the nodes that are not run by the Windows service of the installer only restart with `NODE_RESTART` set, as explained below.
 
