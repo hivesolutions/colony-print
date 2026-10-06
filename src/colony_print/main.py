@@ -192,7 +192,7 @@ class ColonyPrintApp(appier.APIApp):
         return not "dynamic-fonts" in node.get("capabilities", [])
 
     def _version(self):
-        return "0.23.0"
+        return "0.24.0"
 
     def _description(self):
         return "Colony Print"

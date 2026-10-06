@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+*
+
+### Changed
+
+*
+
+### Fixed
+
+*
+
+## [0.24.0] - 2026-10-06
+
+### Added
+
 * Restart of the nodes from the admin and the API, done only once their pending jobs are printed - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 * Update of the nodes from the admin and the API, even with their auto-update disabled - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 * Auto-update of the nodes enabled and disabled from the admin and the API - [#34](https://github.com/hivesolutions/colony-print/issues/34)
