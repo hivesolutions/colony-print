@@ -379,7 +379,8 @@ class NodeControllerTest(unittest.TestCase):
 
         # a document declaring fonts (with the ones of the request) is printed
         # by a node that doesn't support the fonts with its own fonts, the
-        # fonts being marked as skipped (none of them sent to the node)
+        # fonts being marked as skipped (none of them sent to the node, the
+        # declared ones being removed from the document sent to the node)
         declared = dict(name="Colonia", url="https://fonts.hive.pt/colonia.ttf")
         font = dict(name="Binaria", data_b64="QUJD")
         data = self._xmpl(fonts=[declared])
@@ -388,7 +389,12 @@ class NodeControllerTest(unittest.TestCase):
         )
         self.assertEqual(code, 200)
         self.assertEqual(job_info["fonts_skipped"], True)
-        self.assertEqual("fonts" in self.app.jobs["node"].pop(), False)
+        job = self.app.jobs["node"].pop()
+        self.assertEqual("fonts" in job, False)
+        self.assertEqual(colony_print.xmpl_fonts(base64.b64decode(job["data_b64"])), [])
+        self.assertEqual(
+            base64.b64decode(self.app.jobs_data[job_info["id"]]), data.encode("utf-8")
+        )
 
         self._node()
         code, job_info = self._print(

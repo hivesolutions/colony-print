@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import time
+import base64
 
 import appier
 import appier_extras
@@ -110,8 +111,9 @@ class ColonyPrintApp(appier.APIApp):
 
         The fonts are not sent to a (known) node that doesn't support them,
         that prints the document with its own fonts, the fonts of the job
-        being marked as skipped, which is decided whenever the job is queued
-        (eg: a clone of the job once the node supports the fonts).
+        being marked as skipped (and removed from its XMPL document), which
+        is decided whenever the job is queued (eg: a clone of the job once
+        the node supports the fonts).
 
         :type job_info: Dictionary
         :param job_info: The information of the job, with its identifier
@@ -123,6 +125,8 @@ class ColonyPrintApp(appier.APIApp):
         :rtype: Dictionary
         :return: The information of the job, that is now queued.
         """
+
+        import colony_print
 
         job_id = job_info["id"]
         node_id = job_info["node_id"]
@@ -153,6 +157,14 @@ class ColonyPrintApp(appier.APIApp):
         job.pop("fonts", None)
         if fonts and not skipped:
             job["fonts"] = fonts
+
+        # removes the fonts declared by the XMPL document of a job whose fonts
+        # are skipped, from the document sent to the node, as the nodes that
+        # don't skip the fonts they don't support (older versions) would fail
+        # the document, the document of the job being kept untouched
+        if skipped and job_info.get("format", None) == "xmpl":
+            data = colony_print.strip_xmpl_fonts(base64.b64decode(data_b64))
+            job["data_b64"] = base64.b64encode(data).decode("utf-8")
         jobs = self.jobs.get(node_id, [])
         jobs.append(job)
         self.jobs[node_id] = jobs

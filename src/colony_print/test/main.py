@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import base64
 import logging
 import unittest
 
@@ -394,3 +395,39 @@ class ColonyPrintAppTest(unittest.TestCase):
         job_info = dict(id="sixth", name="document", node_id="node")
         self.app.queue_job(job_info, data_b64="QUJD")
         self.assertEqual("fonts_skipped" in job_info, False)
+
+        # the fonts declared by the XMPL document of a job whose fonts are
+        # skipped are removed from the document sent to the node (as the
+        # older nodes would fail it), the document of the job being kept
+        data = (
+            '<printing_document name="hello_world">'
+            '<font name="Colonia" url="https://fonts.hive.pt/colonia.ttf"/>'
+            "<paragraph/></printing_document>"
+        )
+        data_b64 = base64.b64encode(data.encode("utf-8")).decode("utf-8")
+        fonts_info = [dict(name="Colonia", url="https://fonts.hive.pt/colonia.ttf")]
+        job_info = dict(
+            id="seventh",
+            name="document",
+            node_id="node",
+            format="xmpl",
+            fonts=fonts_info,
+        )
+        self.app.queue_job(job_info, data_b64=data_b64)
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual(self.app.jobs_data["seventh"], data_b64)
+        sent = base64.b64decode(self.app.jobs["node"][-1]["data_b64"])
+        self.assertEqual(colony_print.xmpl_fonts(sent), [])
+        self.assertEqual(b"<paragraph/>" in sent, True)
+
+        # the document is sent untouched to the nodes that support the fonts
+        self.app.nodes["node"] = dict(name="node", capabilities=["dynamic-fonts"])
+        job_info = dict(
+            id="eighth",
+            name="document",
+            node_id="node",
+            format="xmpl",
+            fonts=fonts_info,
+        )
+        self.app.queue_job(job_info, data_b64=data_b64)
+        self.assertEqual(self.app.jobs["node"][-1]["data_b64"], data_b64)

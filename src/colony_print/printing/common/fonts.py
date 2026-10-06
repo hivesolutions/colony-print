@@ -349,6 +349,36 @@ def xmpl_fonts(data):
     return fonts
 
 
+def strip_xmpl_fonts(data):
+    """
+    Removes the font elements (declarations) of the printing document of
+    the provided XMPL document, so that a node that doesn't support the
+    fonts prints the document with its own fonts, as the nodes that fail
+    the documents declaring fonts they're not able to install do.
+
+    An exception is raised in case the data is not a valid XML document.
+
+    :type data: String
+    :param data: The XMPL document to remove the font elements.
+    :rtype: String
+    :return: The (UTF-8 encoded) XMPL document without the font
+    elements of its printing document.
+    :see: https://github.com/hivesolutions/colony-print/blob/master/doc/xmpl.md
+    """
+
+    import xml.dom.minidom
+
+    # removes the font elements of the printing document (the root element
+    # of the document), the only ones that declare fonts, as the other
+    # elements of the document are kept untouched
+    document = xml.dom.minidom.parseString(data)
+    root = document.documentElement
+    for node in list(root.childNodes):
+        if node.nodeType == node.ELEMENT_NODE and node.tagName == "font":
+            root.removeChild(node)
+    return document.toxml("utf-8")
+
+
 class FontCache(object):
     """
     The cache of the fonts installed on demand, that keeps the font
