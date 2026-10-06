@@ -39,6 +39,12 @@
     gap: 8px;
 }
 
+.node-show-update {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
 @media (max-width: 480px) {
     .node-show-stats {
         grid-template-columns: 1fr;

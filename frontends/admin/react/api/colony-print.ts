@@ -33,6 +33,8 @@ export interface NodeInfo {
         distribution?: string;
     };
     version: string;
+    start_time?: number;
+    update?: NodeUpdateInfo | null;
     last_ping?: number;
     stats?: {
         total: number;
@@ -47,6 +49,13 @@ export interface NodeInfo {
             result?: string;
         };
     };
+}
+
+export interface NodeUpdateInfo {
+    auto: boolean;
+    status?: string | null;
+    time?: number | null;
+    error?: string;
 }
 
 export interface NodeFontInfo {
@@ -168,6 +177,36 @@ export class ColonyPrintAPI {
     async getNode(id: string): Promise<NodeInfo> {
         const response = await this._fetch(`/nodes/${encodeURIComponent(id)}`);
         return (await response.json()) as NodeInfo;
+    }
+
+    async restartNode(id: string): Promise<JobInfo> {
+        const response = await this._fetch(
+            `/nodes/${encodeURIComponent(id)}/restart`,
+            { method: "POST" }
+        );
+        return (await response.json()) as JobInfo;
+    }
+
+    async updateNode(id: string): Promise<JobInfo> {
+        const response = await this._fetch(
+            `/nodes/${encodeURIComponent(id)}/update`,
+            { method: "POST" }
+        );
+        return (await response.json()) as JobInfo;
+    }
+
+    async setNodeAutoUpdate(id: string, enabled: boolean): Promise<JobInfo> {
+        const response = await this._fetch(
+            `/nodes/${encodeURIComponent(id)}/auto_update`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({ enabled: enabled ? "1" : "0" })
+            }
+        );
+        return (await response.json()) as JobInfo;
     }
 
     async listJobs(): Promise<Record<string, JobInfo>> {

@@ -58,12 +58,116 @@ class NodeControllerTest(unittest.TestCase):
         )
         return response.code, json.loads(response.data.decode("utf-8"))
 
+    def _register(self, id="node", **kwargs):
+        # registers the node with the provided information, as the node
+        # does on every iteration of its loop
+        response = self.app.post(
+            "/nodes/%s" % id,
+            data=json.dumps(kwargs).encode("utf-8"),
+            headers=self.headers + [("Content-Type", "application/json")],
+        )
+        return response.code
+
+    def _deliver(self, id="node"):
+        # retrieves the queued jobs of the node, as the node does, which
+        # makes them the ones that are in flight (printing)
+        controller = colony_print.controllers.NodeController(self.app)
+        return json.loads(list(controller.wait_jobs(id))[0])
+
     def _xmpl(self, fonts=[]):
         elements = "".join(
             "<font %s/>" % " ".join('%s="%s"' % item for item in sorted(font.items()))
             for font in fonts
         )
         return XMPL % elements
+
+    def test_create(self):
+        response = self.app.post("/nodes/node")
+        self.assertEqual(response.code, 403)
+
+        code = self._register(name="Node", version="0.23.0")
+        self.assertEqual(code, 200)
+        self.assertEqual(self.app.nodes["node"]["name"], "Node")
+        self.assertEqual(type(self.app.nodes["node"]["last_ping"]), float)
+
+        # the job that restarts the node is not finished by a result of the
+        # node, but by the server once the node registers itself with a newer
+        # start time, with the versions of the node before and after it
+        node = dict(
+            name="Node",
+            capabilities=["text", "restart"],
+            version="0.23.0",
+            libraries=dict(appier="1.0.0", npcolony="1.7.0"),
+            start_time=100.0,
+        )
+        self._register(**node)
+        code, job_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        job_info = self.app.jobs_info[job_info["id"]]
+
+        # the node that restarts by itself before receiving the job (still
+        # queued) receives it afterwards, the job is not finished by it
+        self._register(**dict(node, start_time=150.0))
+        self.assertEqual(job_info["status"], "queued")
+
+        jobs = self._deliver()
+        self.assertEqual([job["id"] for job in jobs], [job_info["id"]])
+        self.assertEqual("data_b64" in jobs[0], False)
+        self.assertEqual(job_info["status"], "printing")
+
+        # the node that registers itself with the same start time was not
+        # restarted (eg: its restart failed), so the job stays in flight
+        self._register(**dict(node, start_time=150.0))
+        self.assertEqual(job_info["status"], "printing")
+        self.assertEqual("result" in job_info, False)
+
+        code = self._register(
+            **dict(
+                node,
+                version="0.24.0",
+                libraries=dict(appier="1.1.0", npcolony="1.7.0"),
+                start_time=200.0,
+            )
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["status"], "finished")
+        self.assertEqual(type(job_info["finish_time"]), float)
+        self.assertEqual(
+            job_info["result"],
+            dict(
+                result="success",
+                handler="restart",
+                before=dict(
+                    version="0.23.0",
+                    libraries=dict(appier="1.0.0", npcolony="1.7.0"),
+                    start_time=150.0,
+                ),
+                after=dict(
+                    version="0.24.0",
+                    libraries=dict(appier="1.1.0", npcolony="1.7.0"),
+                    start_time=200.0,
+                ),
+            ),
+        )
+        self.assertEqual(self.app.nodes["node"]["version"], "0.24.0")
+
+        # the job is also finished when the start time of the restarted
+        # node is not newer (the clock of its machine went back)
+        code, job_info = self._print(url="/nodes/node/restart", data_b64=None)
+        job_info = self.app.jobs_info[job_info["id"]]
+        self._deliver()
+        self._register(**dict(node, start_time=180.0))
+        self.assertEqual(job_info["status"], "finished")
+        self.assertEqual(job_info["result"]["before"]["start_time"], 200.0)
+        self.assertEqual(job_info["result"]["after"]["start_time"], 180.0)
+
+        # an older node (that doesn't report its start time) registers
+        # itself as before, without any job being finished
+        code = self._register(id="older", name="Older", version="0.22.0")
+        self.assertEqual(code, 200)
+        code = self._register(id="older", name="Older", version="0.22.0")
+        self.assertEqual(code, 200)
+        self.assertEqual("start_time" in self.app.nodes["older"], False)
 
     def test_show(self):
         response = self.app.get("/nodes/name")
@@ -312,6 +416,22 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual(code, 400)
         self.assertEqual(self.app.jobs.get("node", []), [])
 
+    def test_print_default_commands(self):
+        # the commands for the node (eg: its restart) are only queued by
+        # their own endpoints (that verify the node), so they're refused
+        # as the type of a print request, even for a node that supports them
+        self._node(capabilities=["npcolony", "restart", "update", "auto-update"])
+        for type in ("restart", "update", "auto-update"):
+            for url in ("/nodes/node/print", "/nodes/node/printers/receipt/print"):
+                code, result = self._print(url=url, type=type)
+                self.assertEqual(code, 400)
+                self.assertEqual(
+                    result["message"],
+                    "Type '%s' is not valid for print requests" % type,
+                )
+        self.assertEqual(self.app.jobs.get("node", []), [])
+        self.assertEqual(len(self.app.jobs_info), 0)
+
     def test_print_default_o(self):
         response = self.app.options("/nodes/name/print")
         self.assertEqual(response.code, 200)
@@ -444,6 +564,211 @@ class NodeControllerTest(unittest.TestCase):
             response.headers["Access-Control-Allow-Headers"].startswith("*"), True
         )
 
+    def test_restart(self):
+        response = self.app.post("/nodes/node/restart")
+        self.assertEqual(response.code, 403)
+
+        # the restart requires the capability of the node, which the nodes
+        # that never registered and the older ones don't advertise
+        code, result = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 409)
+        self.assertEqual(result["message"], "Node 'node' doesn't support 'restart'")
+        self._node(capabilities=["npcolony", "update", "auto-update"])
+        code, result = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 409)
+        self.app.nodes["node"] = dict(name="node")
+        code, result = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 409)
+        self.assertEqual(self.app.jobs.get("node", []), [])
+
+        # the restart is queued as a job without data, for the node only
+        self._node(capabilities=["npcolony", "restart", "update"])
+        code, job_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["name"], "restart")
+        self.assertEqual(job_info["type"], "restart")
+        self.assertEqual(job_info["node_id"], "node")
+        self.assertEqual(job_info["status"], "queued")
+        self.assertEqual(job_info["data_length"], 0)
+        self.assertEqual("options" in job_info, False)
+        self.assertEqual(self.app.jobs_data[job_info["id"]], None)
+        job = self.app.jobs["node"][0]
+        self.assertEqual(job["id"], job_info["id"])
+        self.assertEqual(job["type"], "restart")
+        self.assertEqual("data_b64" in job, False)
+
+        # a node with a restart (or an update) queued or in flight doesn't
+        # get another one, the request returns that job
+        code, other_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(other_info["id"], job_info["id"])
+        code, other_info = self._print(url="/nodes/node/update", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(other_info["id"], job_info["id"])
+        self.assertEqual(other_info["type"], "restart")
+        self.assertEqual(len(self.app.jobs["node"]), 1)
+
+        self._deliver()
+        code, other_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(other_info["id"], job_info["id"])
+        self.assertEqual(other_info["status"], "printing")
+        self.assertEqual(self.app.jobs.get("node", []), [])
+        self.assertEqual(len(self.app.jobs_info), 1)
+
+        # the restart of another node is not the one of the node
+        self._node(id="other", capabilities=["restart"])
+        code, other_info = self._print(url="/nodes/other/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(other_info["node_id"], "other")
+        self.assertEqual(other_info["id"] == job_info["id"], False)
+
+        # the node is restarted again once the restart is finished (by the
+        # server or by an error result of the node), and a queued restart
+        # may be cancelled, as any other job
+        self.app.jobs_info[job_info["id"]].update(status="finished")
+        code, job_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["status"], "queued")
+        self.assertEqual(len(self.app.jobs["node"]), 1)
+        response = self.app.post(
+            "/jobs/%s/cancel" % job_info["id"], headers=self.headers
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(self.app.jobs["node"], [])
+        code, other_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(other_info["id"] == job_info["id"], False)
+
+    def test_restart_o(self):
+        response = self.app.options("/nodes/node/restart")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Origin"].startswith("*"), True
+        )
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Headers"].startswith("*"), True
+        )
+
+    def test_update(self):
+        response = self.app.post("/nodes/node/update")
+        self.assertEqual(response.code, 403)
+
+        code, result = self._print(url="/nodes/node/update", data_b64=None)
+        self.assertEqual(code, 409)
+        self.assertEqual(result["message"], "Node 'node' doesn't support 'update'")
+
+        # the node that is restarted from the admin is not updated from it
+        # unless it's run by the boot (and advertises it)
+        self._node(capabilities=["npcolony", "restart", "auto-update"])
+        code, result = self._print(url="/nodes/node/update", data_b64=None)
+        self.assertEqual(code, 409)
+        self.assertEqual(self.app.jobs.get("node", []), [])
+
+        self._node(capabilities=["npcolony", "restart", "update", "auto-update"])
+        code, job_info = self._print(url="/nodes/node/update", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["name"], "update")
+        self.assertEqual(job_info["type"], "update")
+        self.assertEqual(job_info["status"], "queued")
+        self.assertEqual(job_info["data_length"], 0)
+        self.assertEqual("data_b64" in self.app.jobs["node"][0], False)
+
+        # the update restarts the node, so the node doesn't get a restart
+        # (nor another update) while it's queued or in flight
+        for url in ("/nodes/node/update", "/nodes/node/restart"):
+            code, other_info = self._print(url=url, data_b64=None)
+            self.assertEqual(code, 200)
+            self.assertEqual(other_info["id"], job_info["id"])
+            self.assertEqual(other_info["type"], "update")
+        self.assertEqual(len(self.app.jobs["node"]), 1)
+
+    def test_update_o(self):
+        response = self.app.options("/nodes/node/update")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Origin"].startswith("*"), True
+        )
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Headers"].startswith("*"), True
+        )
+
+    def test_auto_update(self):
+        response = self.app.post("/nodes/node/auto_update")
+        self.assertEqual(response.code, 403)
+
+        code, result = self._print(
+            url="/nodes/node/auto_update", data_b64=None, enabled="0"
+        )
+        self.assertEqual(code, 409)
+        self.assertEqual(result["message"], "Node 'node' doesn't support 'auto-update'")
+        self._node(capabilities=["npcolony", "restart"])
+        code, result = self._print(
+            url="/nodes/node/auto_update", data_b64=None, enabled="0"
+        )
+        self.assertEqual(code, 409)
+
+        # the auto-update must be explicitly enabled or disabled
+        self._node(capabilities=["npcolony", "restart", "update", "auto-update"])
+        for params in (dict(), dict(enabled="")):
+            code, result = self._print(
+                url="/nodes/node/auto_update", data_b64=None, **params
+            )
+            self.assertEqual(code, 400)
+        self.assertEqual(self.app.jobs.get("node", []), [])
+
+        code, job_info = self._print(
+            url="/nodes/node/auto_update", data_b64=None, enabled="0"
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["name"], "auto-update")
+        self.assertEqual(job_info["type"], "auto-update")
+        self.assertEqual(job_info["status"], "queued")
+        self.assertEqual(job_info["data_length"], 0)
+        self.assertEqual(job_info["options"], dict(enabled=False))
+        job = self.app.jobs["node"][0]
+        self.assertEqual(job["options"], dict(enabled=False))
+        self.assertEqual("data_b64" in job, False)
+
+        # the value is sent to the node as a boolean one, each request being
+        # queued as a job of its own (the last one is the one that is kept)
+        for value, enabled in (
+            ("false", False),
+            ("False", False),
+            ("1", True),
+            ("true", True),
+            ("True", True),
+        ):
+            code, other_info = self._print(
+                url="/nodes/node/auto_update", data_b64=None, enabled=value
+            )
+            self.assertEqual(code, 200)
+            self.assertEqual(other_info["id"] == job_info["id"], False)
+            self.assertEqual(other_info["options"], dict(enabled=enabled))
+            self.assertEqual(self.app.jobs["node"][-1]["options"]["enabled"], enabled)
+        self.assertEqual(len(self.app.jobs["node"]), 6)
+
+        # the auto-update doesn't restart the node, so it's queued even
+        # with a restart of the node pending (and doesn't prevent one)
+        code, restart_info = self._print(url="/nodes/node/restart", data_b64=None)
+        self.assertEqual(code, 200)
+        self.assertEqual(restart_info["type"], "restart")
+        code, other_info = self._print(
+            url="/nodes/node/auto_update", data_b64=None, enabled="1"
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(other_info["type"], "auto-update")
+        self.assertEqual(len(self.app.jobs["node"]), 8)
+
+    def test_auto_update_o(self):
+        response = self.app.options("/nodes/node/auto_update")
+        self.assertEqual(response.code, 200)
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Origin"].startswith("*"), True
+        )
+        self.assertEqual(
+            response.headers["Access-Control-Allow-Headers"].startswith("*"), True
+        )
+
     def test_valid_options(self):
         valid_options = colony_print.controllers.node.VALID_OPTIONS
         self.assertEqual("media" in valid_options, True)
@@ -491,6 +816,209 @@ class NodeControllerTest(unittest.TestCase):
             dict(
                 name="Node",
                 stats=dict(total=0, finished=0, error=0, in_flight=0, cancelled=0),
+            ),
+        )
+
+    def test_command(self):
+        controller = colony_print.controllers.NodeController(self.app)
+        for type in ("restart", "update", "auto-update"):
+            self.assertRaises(
+                appier.OperationalError, lambda: controller._command("node", type)
+            )
+        self.assertEqual(len(self.app.jobs_info), 0)
+
+        self._node(capabilities=["restart", "update", "auto-update"])
+        job_info = controller._command("node", "restart")
+        self.assertEqual(self.app.jobs_info[job_info["id"]] is job_info, True)
+        self.assertEqual(
+            dict((key, value) for key, value in job_info.items() if not "time" in key),
+            dict(
+                id=job_info["id"],
+                name="restart",
+                node_id="node",
+                data_length=0,
+                type="restart",
+                status="queued",
+            ),
+        )
+        self.assertEqual(controller._command("node", "restart") is job_info, True)
+        self.assertEqual(controller._command("node", "update") is job_info, True)
+
+        # only the jobs that restart the node (queued or in flight) prevent
+        # another one, the other jobs of the node don't
+        job_info.update(status="cancelled")
+        self.app.jobs_info["print"] = dict(
+            id="print", name="document", node_id="node", status="queued"
+        )
+        self.app.jobs_info["auto-update"] = dict(
+            id="auto-update", node_id="node", type="auto-update", status="printing"
+        )
+        self.app.jobs_info["other"] = dict(
+            id="other", node_id="other", type="restart", status="queued"
+        )
+        self.app.jobs_info["invalid"] = dict(id="invalid", node_id="node")
+        other_info = controller._command("node", "update")
+        self.assertEqual(other_info["type"], "update")
+        self.assertEqual(other_info["id"] == job_info["id"], False)
+
+        # the options of the command are part of its job
+        options = dict(enabled=False)
+        job_info = controller._command("node", "auto-update", options=options)
+        self.assertEqual(job_info["options"], options)
+        self.assertEqual(self.app.jobs["node"][-1]["options"], options)
+
+    def test_finish_restart(self):
+        controller = colony_print.controllers.NodeController(self.app)
+        previous = dict(
+            name="node",
+            version="0.23.0",
+            libraries=dict(appier="1.0.0"),
+            start_time=100.0,
+        )
+        node = dict(
+            name="node",
+            version="0.24.0",
+            libraries=dict(appier="1.1.0"),
+            start_time=200.0,
+            update=dict(auto=False, status="success", time=190.0),
+        )
+
+        def jobs():
+            # builds the jobs of the node, one of each type that restarts
+            # it in flight, and the ones that must never be finished
+            self.app.jobs_info["restart"] = dict(
+                id="restart", node_id="node", type="restart", status="printing"
+            )
+            self.app.jobs_info["update"] = dict(
+                id="update", node_id="node", type="update", status="printing"
+            )
+            self.app.jobs_info["queued"] = dict(
+                id="queued", node_id="node", type="restart", status="queued"
+            )
+            self.app.jobs_info["cancelled"] = dict(
+                id="cancelled", node_id="node", type="update", status="cancelled"
+            )
+            self.app.jobs_info["auto-update"] = dict(
+                id="auto-update", node_id="node", type="auto-update", status="printing"
+            )
+            self.app.jobs_info["print"] = dict(
+                id="print", node_id="node", status="printing"
+            )
+            self.app.jobs_info["other"] = dict(
+                id="other", node_id="other", type="restart", status="printing"
+            )
+            self.app.jobs_info["invalid"] = dict(id="invalid")
+
+        def statuses():
+            return dict(
+                (id, job_info.get("status", None))
+                for id, job_info in self.app.jobs_info.items()
+            )
+
+        # the node that was not restarted (first registration, no previous
+        # start time or the same start time) has no job finished
+        jobs()
+        unchanged = statuses()
+        controller._finish_restart("node", None, node)
+        controller._finish_restart("node", dict(name="node"), node)
+        controller._finish_restart("node", previous, dict(node, start_time=100.0))
+        controller._finish_restart("node", dict(name="node"), dict(name="node"))
+        controller._finish_restart("node", dict(), dict())
+        self.assertEqual(statuses(), unchanged)
+
+        # only the jobs in flight that restart the (restarted) node are
+        # finished, with the versions of the node before and after and, for
+        # the update, with the outcome of the update run by its boot
+        controller._finish_restart("node", previous, node)
+        self.assertEqual(
+            statuses(), dict(unchanged, restart="finished", update="finished")
+        )
+        before = dict(
+            version="0.23.0", libraries=dict(appier="1.0.0"), start_time=100.0
+        )
+        after = dict(version="0.24.0", libraries=dict(appier="1.1.0"), start_time=200.0)
+        job_info = self.app.jobs_info["restart"]
+        self.assertEqual(type(job_info["finish_time"]), float)
+        self.assertEqual(
+            job_info["result"],
+            dict(result="success", handler="restart", before=before, after=after),
+        )
+        self.assertEqual(
+            self.app.jobs_info["update"]["result"],
+            dict(
+                result="success",
+                handler="update",
+                before=before,
+                after=after,
+                update=dict(auto=False, status="success", time=190.0),
+            ),
+        )
+        self.assertEqual("result" in self.app.jobs_info["queued"], False)
+
+        # the update that fails finishes its job as an error (with the
+        # error of the update), the node being restarted anyway
+        update = dict(auto=True, status="failure", time=190.0, error="No index")
+        jobs()
+        controller._finish_restart("node", previous, dict(node, update=update))
+        result = self.app.jobs_info["update"]["result"]
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(result["error"], "No index")
+        self.assertEqual(result["update"], update)
+        self.assertEqual(result["after"], after)
+        self.assertEqual(self.app.jobs_info["restart"]["result"]["result"], "success")
+        self.assertEqual("error" in self.app.jobs_info["restart"]["result"], False)
+
+        # the same happens when the update was not run by the boot (eg:
+        # told to skip it) or its outcome is not known
+        for update in (dict(auto=False, status="skipped", time=190.0), dict(), None):
+            jobs()
+            controller._finish_restart("node", previous, dict(node, update=update))
+            result = self.app.jobs_info["update"]["result"]
+            self.assertEqual(result["result"], "error")
+            self.assertEqual(result["error"], "Update not run by the node")
+            self.assertEqual(result["update"], update or dict())
+
+        # the start times are not compared, as a restarted node may report
+        # an older one (the clock of its machine going back) or none at all
+        # (rolled back to an older version), its jobs being finished anyway
+        jobs()
+        controller._finish_restart("node", previous, dict(node, start_time=50.0))
+        self.assertEqual(
+            statuses(), dict(unchanged, restart="finished", update="finished")
+        )
+        result = self.app.jobs_info["restart"]["result"]
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["after"]["start_time"], 50.0)
+
+        jobs()
+        older = dict(name="node", version="0.23.0", libraries=dict(appier="1.0.0"))
+        controller._finish_restart("node", previous, older)
+        self.assertEqual(
+            statuses(), dict(unchanged, restart="finished", update="finished")
+        )
+        result = self.app.jobs_info["restart"]["result"]
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(
+            result["after"],
+            dict(version="0.23.0", libraries=dict(appier="1.0.0"), start_time=None),
+        )
+        result = self.app.jobs_info["update"]["result"]
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(result["error"], "Update not run by the node")
+
+        # the versions that are not known (eg: not reported by the node)
+        # are kept as invalid values
+        jobs()
+        controller._finish_restart(
+            "node", dict(start_time=100.0), dict(start_time=200.0)
+        )
+        self.assertEqual(
+            self.app.jobs_info["restart"]["result"],
+            dict(
+                result="success",
+                handler="restart",
+                before=dict(version=None, libraries=None, start_time=100.0),
+                after=dict(version=None, libraries=None, start_time=200.0),
             ),
         )
 

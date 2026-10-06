@@ -5,7 +5,12 @@ import { useAPI } from "../../../hooks";
 import { JobInfo, JobFileInfo, JobFontInfo } from "../../../api/colony-print";
 import { Button, Link, Tag, Title, Text } from "../../atoms";
 import { ContentHeader, DataTable, DetailGrid } from "../../molecules";
-import { formatTimestamp } from "../../../utils";
+import {
+    formatLibraries,
+    formatTimestamp,
+    formatVersions,
+    isCommandJob
+} from "../../../utils";
 
 import "./job-show.css";
 
@@ -179,6 +184,9 @@ export const JobShow: FC = () => {
     const tracebackData = job?.result?.traceback as string | undefined;
     const resultData = job?.result?.data as Record<string, unknown> | undefined;
     const durationData = resultData?.duration as number | undefined;
+    const updateData = job?.result?.update as
+        | Record<string, unknown>
+        | undefined;
     const logsData = resultData?.logs as string[][] | undefined;
 
     const formatDurationSeconds = (seconds: number): string => {
@@ -207,8 +215,20 @@ export const JobShow: FC = () => {
                       key !== "output_data" &&
                       key !== "output_encoding" &&
                       key !== "output_mime_type" &&
-                      key !== "traceback"
+                      key !== "traceback" &&
+                      key !== "before" &&
+                      key !== "after" &&
+                      key !== "update"
               ),
+              ...(job.result.before !== undefined
+                  ? [
+                        ["version", formatVersions(job)],
+                        ["libraries", formatLibraries(job)]
+                    ]
+                  : []),
+              ...(updateData?.status
+                  ? [["update", String(updateData.status)]]
+                  : []),
               ...(durationData !== undefined
                   ? [["duration", formatDurationSeconds(durationData)]]
                   : []),
@@ -231,7 +251,7 @@ export const JobShow: FC = () => {
                 }
                 actions={
                     <>
-                        {job && (
+                        {job && !isCommandJob(job) && (
                             <Button
                                 variant="primary"
                                 size="sm"

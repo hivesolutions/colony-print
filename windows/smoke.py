@@ -75,9 +75,10 @@ class Smoke(object):
     Runs a local Colony Print server, silently installs the node with the
     server and verifies that the node updates itself from PyPI and registers
     itself, then updates and rolls back the node from a local package index
-    (with a newer version of colony-print), prints a document, re-installs
-    and uninstalls it, installing it once more with the configuration kept
-    by the uninstall and then over the service of another installer.
+    (with a newer version of colony-print), prints a document, restarts and
+    updates the node through the server, re-installs and uninstalls it,
+    installing it once more with the configuration kept by the uninstall
+    and then over the service of another installer.
 
     The installer of the Windows XP nodes (32 bit) is the one tested when
     run with the --xp argument, on any version of Windows, with the Python
@@ -110,6 +111,7 @@ class Smoke(object):
             self.test_update(version)
             self.test_print()
             self.test_rollback(current)
+            self.test_control(current, version)
             self.test_reinstall(current)
             self.test_uninstall()
             self.test_install_kept(current)
@@ -361,6 +363,61 @@ class Smoke(object):
         self.restart()
         self.wait_node(current, last_ping=last_ping)
 
+    def test_control(self, current, version):
+        # restarts the node through the server, which must finish the job
+        # once the service is running again and the node has registered
+        # itself with a newer start time, with the same (pinned) version
+        node = self.node()
+        for capability in ("restart", "update", "auto-update"):
+            assert capability in node["capabilities"], node["capabilities"]
+        result = self.command("restart")["result"]
+        assert result["result"] == "success", "Restart failed: %s" % result
+        assert result["before"]["version"] == current, result["before"]
+        assert result["after"]["version"] == current, result["after"]
+        assert result["after"]["start_time"] > node["start_time"], "Not restarted"
+        assert self.node()["start_time"] == result["after"]["start_time"]
+        assert self.service_state() == "RUNNING", "Service is not running"
+        errors = read(os.path.join(DATA_PATH, "logs", "colony-print-node.err.log"))
+        assert "Restarting node using 'exit'" in errors, "Node not restarted by exit"
+
+        def auto_update():
+            node = self.node() or dict()
+            return (node.get("update", None) or dict()).get("auto", None)
+
+        # disables the auto-update of the node through the server, which
+        # must be kept in the state file of the node (and not in its
+        # configuration) and reported by the node
+        result = self.command("auto_update", enabled="0")["result"]
+        assert result["result"] == "success", "Auto-update failed: %s" % result
+        wait_for(lambda: auto_update() == False, "auto-update to be disabled")
+        state_path = os.path.join(DATA_PATH, "state.env")
+        assert "NODE_UPDATE=0" in read(state_path), "Auto-update not in state"
+        assert not "NODE_UPDATE" in read(os.path.join(DATA_PATH, "config.env"))
+
+        # updates the node through the server, which must install the newer
+        # version of colony-print (now the pinned one) even with the
+        # auto-update disabled, only once (the state file must not keep it)
+        self.configure(NODE_VERSION=version)
+        result = self.command("update")["result"]
+        assert result["result"] == "success", "Update failed: %s" % result
+        assert result["before"]["version"] == current, result["before"]
+        assert result["after"]["version"] == version, result["after"]
+        assert result["update"]["status"] == "success", result["update"]
+        assert result["update"]["auto"] == False, result["update"]
+        node = self.node()
+        assert node["version"] == version, node["version"]
+        installed = self.installed_version()
+        assert installed == version, "Installed %s, expected %s" % (installed, version)
+        assert not "NODE_UPDATE_ONCE" in read(state_path), "Update not consumed"
+        assert self.service_state() == "RUNNING", "Service is not running"
+
+        # enables the auto-update once more and pins the version of the
+        # installer, as expected by the tests that follow
+        result = self.command("auto_update", enabled="1")["result"]
+        assert result["result"] == "success", "Auto-update failed: %s" % result
+        wait_for(lambda: auto_update() == True, "auto-update to be enabled")
+        self.configure(NODE_VERSION=current)
+
     def test_reinstall(self, current):
         # runs the installer once more without any parameter, which must
         # keep the configuration (including the pinned version and the
@@ -490,6 +547,27 @@ class Smoke(object):
     def restart(self):
         subprocess.check_call(["net", "stop", SERVICE])
         subprocess.check_call(["net", "start", SERVICE])
+
+    def command(self, name, **values):
+        # queues the command for the node (through its endpoint of the
+        # server) and waits for its job to finish, returning the job
+        code, data = self.request(
+            "POST",
+            "nodes/%s/%s" % (NODE_ID, name),
+            data=urllib_parse.urlencode(values).encode("utf-8"),
+            content_type="application/x-www-form-urlencoded",
+        )
+        assert code == 200, "Command %s failed (%d): %s" % (name, code, data)
+        job_id = json.loads(data.decode("utf-8"))["id"]
+
+        def finished():
+            code, data = self.request("GET", "jobs/%s" % job_id)
+            job = json.loads(data.decode("utf-8"))
+            return job if job.get("status", None) == "finished" else None
+
+        job = wait_for(finished, "command %s to finish" % name, timeout=300)
+        log("Command %s finished: %s" % (name, json.dumps(job, indent=4)))
+        return job
 
     def install(self, args, name=SETUP_NAME):
         setups = glob.glob(os.path.join(DIST_PATH, name))

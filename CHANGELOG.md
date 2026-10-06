@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Restart of the nodes from the admin and the API, done only once their pending jobs are printed - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Update of the nodes from the admin and the API, even with their auto-update disabled - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Auto-update of the nodes enabled and disabled from the admin and the API - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Start time, auto-update and last update of the nodes in the admin node view - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Versions of the nodes before and after their restart in the admin job views - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Option to disable the remote control of a node in its configuration - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ### Changed
 
@@ -17,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Configuration file of the nodes ignored when their boot is run outside of the Windows service - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Updated nodes running with modules of the previous version when their boot is run outside of the Windows service - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Error message missing from the jobs refused by a node that lacks the capability they require - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 
 ## [0.23.0] - 2026-10-02
 

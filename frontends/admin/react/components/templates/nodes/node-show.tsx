@@ -1,8 +1,18 @@
-import React, { FC, useCallback, useEffect, useState } from "react";
+import React, {
+    FC,
+    useCallback,
+    useEffect,
+    useRef,
+    useState
+} from "react";
 import { useParams } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
-import { NodeInfo, NodeFontInfo } from "../../../api/colony-print";
+import {
+    JobInfo,
+    NodeInfo,
+    NodeFontInfo
+} from "../../../api/colony-print";
 import { Button, Link, Tag, Title, Text } from "../../atoms";
 import {
     ContentHeader,
@@ -10,7 +20,11 @@ import {
     DetailGrid,
     StatCard
 } from "../../molecules";
-import { formatRelativeTime } from "../../../utils";
+import {
+    formatRelativeTime,
+    formatTimestamp,
+    isRestartPending
+} from "../../../utils";
 
 import "./node-show.css";
 
@@ -18,24 +32,124 @@ export const NodeShow: FC = () => {
     const api = useAPI();
     const { id } = useParams<{ id: string }>();
     const [node, setNode] = useState<NodeInfo | null>(null);
+    const [pending, setPending] = useState<JobInfo | null>(null);
     const [loading, setLoading] = useState(true);
+    const [restarting, setRestarting] = useState(false);
+    const [toggling, setToggling] = useState(false);
 
-    const fetchNode = useCallback(async () => {
-        if (!id) return;
-        setLoading(true);
-        try {
-            const data = await api.getNode(id);
-            setNode(data);
-        } catch {
-            setNode(null);
-        } finally {
-            setLoading(false);
-        }
-    }, [api, id]);
+    // keeps the identifier of the node that is being shown, so that
+    // the requests of another node (or of a view that is gone) are
+    // ignored once they're done, instead of being shown as its own
+    const shownId = useRef<string | undefined>(id);
+    useEffect(() => {
+        shownId.current = id;
+        return () => {
+            shownId.current = undefined;
+        };
+    }, [id]);
+
+    const fetchNode = useCallback(
+        async (silent = false) => {
+            if (!id) return;
+            if (!silent) setLoading(true);
+            try {
+                const data = await api.getNode(id);
+                if (shownId.current !== id) return;
+                setNode(data);
+            } catch {
+                if (shownId.current !== id) return;
+                setNode(null);
+            } finally {
+                if (shownId.current === id) setLoading(false);
+            }
+
+            // retrieves the job (restart or update) that is going to
+            // restart the node, if any, as the node doesn't get another
+            // one while it's queued or in flight
+            try {
+                const jobs = await api.listJobs();
+                if (shownId.current !== id) return;
+                setPending(
+                    Object.values(jobs).find(
+                        (job) =>
+                            job.node_id === id && isRestartPending(job)
+                    ) || null
+                );
+            } catch {
+                if (shownId.current !== id) return;
+                setPending(null);
+            }
+        },
+        [api, id]
+    );
 
     useEffect(() => {
         fetchNode();
     }, [fetchNode]);
+
+    // refreshes the node while its restart is pending, so that its
+    // new start time and versions show up without a reload
+    const pendingId = pending?.id;
+    useEffect(() => {
+        if (!pendingId) return;
+        const interval = setInterval(() => fetchNode(true), 3000);
+        return () => clearInterval(interval);
+    }, [pendingId, fetchNode]);
+
+    const restartNode = useCallback(
+        async (update = false) => {
+            if (!id) return;
+            const message = update
+                ? `Update the node ${id}? The node is restarted and updates its packages on the way up.`
+                : `Restart the node ${id}? The node is restarted once its pending jobs are printed.`;
+            if (!window.confirm(message)) return;
+            setRestarting(true);
+            try {
+                if (update) await api.updateNode(id);
+                else await api.restartNode(id);
+            } catch {
+                // ignores the error as the node refresh below will
+                // reflect the actual (server-side) node state
+            } finally {
+                await fetchNode(true);
+                setRestarting(false);
+            }
+        },
+        [api, id, fetchNode]
+    );
+
+    const setAutoUpdate = useCallback(
+        async (enabled: boolean) => {
+            if (!id) return;
+            setToggling(true);
+            try {
+                await api.setNodeAutoUpdate(id, enabled);
+
+                // waits for the node to apply the change and to report
+                // it, as it's sent to the node as any other job
+                for (let index = 0; index < 10; index++) {
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, 1000)
+                    );
+                    if (shownId.current !== id) break;
+                    const data = await api.getNode(id);
+                    if (shownId.current !== id) break;
+                    setNode(data);
+                    if (data.update?.auto === enabled) break;
+                }
+            } catch {
+                // ignores the error as the node keeps showing its
+                // actual (reported) auto-update state
+            } finally {
+                setToggling(false);
+            }
+        },
+        [api, id]
+    );
+
+    const canRestart = node?.capabilities?.includes("restart");
+    const canUpdate = node?.capabilities?.includes("update");
+    const canAutoUpdate = node?.capabilities?.includes("auto-update");
 
     const system = node?.system;
 
@@ -115,6 +229,10 @@ export const NodeShow: FC = () => {
               ...systemFields,
               { label: "Version", value: node.version || "-" },
               {
+                  label: "Started",
+                  value: formatTimestamp(node.start_time)
+              },
+              {
                   label: "Last Seen",
                   value: formatRelativeTime(node.last_ping)
               }
@@ -185,19 +303,109 @@ export const NodeShow: FC = () => {
         }
     ];
 
+    const update = node?.update;
+
+    const updateFields = update
+        ? [
+              {
+                  label: "Auto-update",
+                  value: (
+                      <span className="node-show-update">
+                          <Tag
+                              variant={update.auto ? "success" : "default"}
+                          >
+                              {update.auto ? "Enabled" : "Disabled"}
+                          </Tag>
+                          {canAutoUpdate && (
+                              <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  loading={toggling}
+                                  onClick={() =>
+                                      setAutoUpdate(!update.auto)
+                                  }
+                              >
+                                  {update.auto ? "Disable" : "Enable"}
+                              </Button>
+                          )}
+                      </span>
+                  )
+              },
+              {
+                  label: "Last update",
+                  value: (
+                      <span className="node-show-update">
+                          {formatRelativeTime(update.time ?? undefined)}
+                          {update.status && (
+                              <Tag
+                                  variant={
+                                      (update.status === "success"
+                                          ? "success"
+                                          : update.status === "failure"
+                                            ? "error"
+                                            : "default") as
+                                          | "success"
+                                          | "error"
+                                          | "default"
+                                  }
+                              >
+                                  {update.status}
+                              </Tag>
+                          )}
+                      </span>
+                  )
+              },
+              ...(update.error
+                  ? [{ label: "Update error", value: update.error }]
+                  : [])
+          ]
+        : [];
+
     return (
         <div className="node-show">
             <ContentHeader
                 title={node?.name || "Node"}
                 description={id ? `Node ${id}` : undefined}
                 actions={
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => window.history.back()}
-                    >
-                        Back to Nodes
-                    </Button>
+                    <>
+                        {pending ? (
+                            <Button variant="primary" size="sm" disabled>
+                                {pending.type === "update"
+                                    ? "Updating..."
+                                    : "Restarting..."}
+                            </Button>
+                        ) : (
+                            <>
+                                {canRestart && (
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        loading={restarting}
+                                        onClick={() => restartNode()}
+                                    >
+                                        Restart
+                                    </Button>
+                                )}
+                                {canUpdate && (
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        loading={restarting}
+                                        onClick={() => restartNode(true)}
+                                    >
+                                        Update
+                                    </Button>
+                                )}
+                            </>
+                        )}
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => window.history.back()}
+                        >
+                            Back to Nodes
+                        </Button>
+                    </>
                 }
             />
             {stats && (
@@ -230,6 +438,12 @@ export const NodeShow: FC = () => {
                 <div className="node-show-section">
                     <Title level={3}>Print Diagnostics</Title>
                     <DetailGrid fields={lastFields} />
+                </div>
+            )}
+            {update && (
+                <div className="node-show-section">
+                    <Title level={3}>Update</Title>
+                    <DetailGrid fields={updateFields} />
                 </div>
             )}
             {(node?.fonts?.length ||
