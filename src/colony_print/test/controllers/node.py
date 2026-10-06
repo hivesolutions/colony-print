@@ -3,7 +3,9 @@
 
 import json
 import base64
+import shutil
 import logging
+import tempfile
 import unittest
 
 import appier
@@ -63,6 +65,16 @@ class NodeControllerTest(unittest.TestCase):
         # does on every iteration of its loop
         response = self.app.post(
             "/nodes/%s" % id,
+            data=json.dumps(kwargs).encode("utf-8"),
+            headers=self.headers + [("Content-Type", "application/json")],
+        )
+        return response.code
+
+    def _result(self, job_id, id="node", **kwargs):
+        # posts the result of the job, as the node does once it handles the
+        # job (eg: after printing its document)
+        response = self.app.post(
+            "/nodes/%s/jobs/%s/result" % (id, job_id),
             data=json.dumps(kwargs).encode("utf-8"),
             headers=self.headers + [("Content-Type", "application/json")],
         )
@@ -172,6 +184,36 @@ class NodeControllerTest(unittest.TestCase):
     def test_show(self):
         response = self.app.get("/nodes/name")
         self.assertEqual(response.code, 403)
+
+    def test_job_result(self):
+        data_path = tempfile.mkdtemp(prefix="colony-print-result-test-")
+        appier.conf_s("DATA_PATH", data_path)
+        try:
+            self._node()
+            font = dict(name="Colonia", data_b64="QUJD")
+            code, job_info = self._print(format="binie", fonts=[font])
+            code = self._result(job_info["id"], result="success", data=dict())
+            self.assertEqual(code, 200)
+            job_info = self.app.jobs_info[job_info["id"]]
+            self.assertEqual(job_info["status"], "finished")
+            self.assertEqual(job_info["result"]["result"], "success")
+            self.assertEqual("fonts_skipped" in job_info, False)
+
+            # the fonts skipped by the node (eg: an older npcolony after the
+            # job was queued) are marked as skipped in the information of the
+            # job, as the server sent them to the node
+            code, job_info = self._print(format="binie", fonts=[font])
+            self.assertEqual("fonts_skipped" in job_info, False)
+            code = self._result(
+                job_info["id"], result="success", data=dict(fonts_skipped=True)
+            )
+            self.assertEqual(code, 200)
+            job_info = self.app.jobs_info[job_info["id"]]
+            self.assertEqual(job_info["fonts_skipped"], True)
+            self.assertEqual(job_info["result"]["data"], dict(fonts_skipped=True))
+        finally:
+            appier.conf_r("DATA_PATH")
+            shutil.rmtree(data_path, ignore_errors=True)
 
     def test_print_default(self):
         response = self.app.get("/nodes/name/print")

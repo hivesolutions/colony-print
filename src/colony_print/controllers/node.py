@@ -94,6 +94,12 @@ class NodeController(appier.Controller):
         if not id == job_info["node_id"]:
             raise appier.OperationalError("Node ID mismatch")
 
+        # marks the fonts of the job as skipped in case the node skipped them,
+        # as the node may not support the fonts when it prints the job (eg:
+        # it restarted with an older npcolony after the job was queued)
+        if data.get("fonts_skipped", False):
+            job_info["fonts_skipped"] = True
+
         if (payload or files) and not os.path.exists(job_path):
             os.makedirs(job_path)
 
