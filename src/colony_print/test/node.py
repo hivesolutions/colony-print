@@ -906,10 +906,30 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(output_data[:5], b"%PDF-")
         self.assertEqual(b"Colonia" in output_data, True)
 
+        self.assertEqual(result["data"], dict())
+
         printer, _data_b64, options = MockNPColony.calls[0]
         self.assertEqual(printer, "Receipt")
         self.assertEqual(options["media"], "RP80x297")
         self.assertEqual(len(self.node.font_cache.installed()), 1)
+
+        # the npcolony of the system is not able to load the fonts, so the
+        # document is generated with the fonts of the system, the fonts being
+        # reported as skipped in the result of the job (as in the normal mode)
+        MockNPColony.format = "binie"
+        installed = self.node.font_cache.installed()
+        result = self.node.print_job_email(
+            dict(
+                data_b64=self._xmpl(fonts=[self._font(name="Binaria")]),
+                name="hello_world",
+                format="xmpl",
+                options=dict(save_output=True, send_email=False),
+            )
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["data"], dict(fonts_skipped=True))
+        self.assertEqual(self._hello_world(result["output_data"]), True)
+        self.assertEqual(self.node.font_cache.installed(), installed)
 
     def test_print_job_email_fonts(self):
         # the installation of fonts is not a document to be printed and

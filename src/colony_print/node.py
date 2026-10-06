@@ -289,7 +289,7 @@ class ColonyPrintNode(object):
 
             # sends the print job for handling using npcolony, this will make
             # sure that the job is printed in the current system
-            self._handle_npcolony(
+            result = self._handle_npcolony(
                 data_b64, format=format, printer=printer_s, options=options, fonts=fonts
             )
 
@@ -367,6 +367,7 @@ class ColonyPrintNode(object):
             output_data=output_data_b64.decode() if save_output else None,
             output_encoding="base64" if save_output else None,
             output_mime_type="application/pdf" if save_output else None,
+            data=result,
         )
 
     def restart(self):
