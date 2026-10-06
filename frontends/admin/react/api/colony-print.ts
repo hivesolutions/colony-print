@@ -85,6 +85,7 @@ export interface JobInfo {
     format?: string;
     options?: Record<string, unknown>;
     fonts?: JobFontInfo[];
+    fonts_skipped?: boolean;
     status: string;
     queued_time: number;
     printing_time?: number;

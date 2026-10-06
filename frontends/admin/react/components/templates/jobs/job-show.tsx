@@ -302,6 +302,12 @@ export const JobShow: FC = () => {
             {job?.fonts && job.fonts.length > 0 && (
                 <div className="job-show-section">
                     <Title level={3}>Fonts</Title>
+                    {job.fonts_skipped && (
+                        <Text variant="secondary">
+                            Skipped, the node doesn't support the fonts and
+                            prints the document with its own fonts
+                        </Text>
+                    )}
                     <DataTable
                         columns={[
                             {
