@@ -78,7 +78,7 @@ The image is either inline, with its base64 encoded data in the `source` attribu
 
 #### Font Element: `font`
 
-Declares a font used by the document, to be installed on demand by the node that prints the document (with the `dynamic-fonts` capability). Font elements are direct children of the `printing_document` element (they are ignored elsewhere) and are never printed.
+Declares a font used by the document, to be installed on demand by the node that prints the document (with the `dynamic-fonts` capability). Font elements are direct children of the `printing_document` element (they are ignored elsewhere) and are never printed. The nodes without the capability print the document with their own fonts, the declared fonts being skipped.
 
 ```xml
 <font name="2 of 5" url="https://fonts.example.com/2of5.ttf" />
