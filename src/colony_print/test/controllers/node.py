@@ -211,6 +211,29 @@ class NodeControllerTest(unittest.TestCase):
             job_info = self.app.jobs_info[job_info["id"]]
             self.assertEqual(job_info["fonts_skipped"], True)
             self.assertEqual(job_info["result"]["data"], dict(fonts_skipped=True))
+
+            # an older node (that doesn't read the fonts of the job) that was
+            # unknown when the job was queued, and so received the fonts, is
+            # known when it posts the result, marking the fonts as skipped
+            code, job_info = self._print(
+                url="/nodes/older/print", format="binie", fonts=[font]
+            )
+            self.assertEqual("fonts_skipped" in job_info, False)
+            self._register(id="older", name="Older", version="0.22.0")
+            code = self._result(job_info["id"], id="older", result="success")
+            self.assertEqual(code, 200)
+            self.assertEqual(self.app.jobs_info[job_info["id"]]["fonts_skipped"], True)
+
+            # a node that supports the fonts doesn't mark them as skipped
+            code, job_info = self._print(
+                url="/nodes/newer/print", format="binie", fonts=[font]
+            )
+            self._register(id="newer", name="Newer", capabilities=["dynamic-fonts"])
+            code = self._result(job_info["id"], id="newer", result="success")
+            self.assertEqual(code, 200)
+            self.assertEqual(
+                "fonts_skipped" in self.app.jobs_info[job_info["id"]], False
+            )
         finally:
             appier.conf_r("DATA_PATH")
             shutil.rmtree(data_path, ignore_errors=True)

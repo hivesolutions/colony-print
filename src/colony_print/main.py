@@ -134,17 +134,9 @@ class ColonyPrintApp(appier.APIApp):
         # in case the node is known not to support the fonts (eg: an older
         # node) the fonts of the job are skipped, the unknown nodes (eg: not
         # registered since the server restarted) receiving them, as they're
-        # skipped by the nodes that don't support them, and the jobs of the
-        # fonts type (installations) requiring the support of the fonts
-        node = self.nodes.get(node_id, None)
-        skipped = False
-        if (
-            node
-            and job_info.get("fonts", None)
-            and not job_info.get("type", None) == "fonts"
-            and not "dynamic-fonts" in node.get("capabilities", [])
-        ):
-            skipped = True
+        # skipped by the nodes that don't support them
+        skipped = self.fonts_skipped(job_info)
+        if skipped:
             job_info["fonts_skipped"] = True
 
         self.jobs_info[job_id] = job_info
@@ -165,6 +157,7 @@ class ColonyPrintApp(appier.APIApp):
         if skipped and job_info.get("format", None) == "xmpl":
             data = colony_print.strip_xmpl_fonts(base64.b64decode(data_b64))
             job["data_b64"] = base64.b64encode(data).decode("utf-8")
+
         jobs = self.jobs.get(node_id, [])
         jobs.append(job)
         self.jobs[node_id] = jobs
@@ -172,6 +165,31 @@ class ColonyPrintApp(appier.APIApp):
 
         job_info.update(status="queued", queued_time=time.time())
         return job_info
+
+    def fonts_skipped(self, job_info):
+        """
+        Verifies if the fonts of the job with the provided information are
+        skipped for its node, as the node is known not to support the fonts
+        (eg: an older node), the unknown nodes being considered to support
+        them, as the nodes that don't support them skip them.
+
+        The jobs of the fonts type (installations) and the jobs without fonts
+        have no fonts to be skipped.
+
+        :type job_info: Dictionary
+        :param job_info: The information of the job, with the (light)
+        information of its fonts and the identifier of its node.
+        :rtype: bool
+        :return: If the fonts of the job are skipped for its node, that
+        prints its document with its own fonts.
+        """
+
+        node = self.nodes.get(job_info["node_id"], None)
+        if not node or not job_info.get("fonts", None):
+            return False
+        if job_info.get("type", None) == "fonts":
+            return False
+        return not "dynamic-fonts" in node.get("capabilities", [])
 
     def _version(self):
         return "0.23.0"

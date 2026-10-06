@@ -431,3 +431,29 @@ class ColonyPrintAppTest(unittest.TestCase):
         )
         self.app.queue_job(job_info, data_b64=data_b64)
         self.assertEqual(self.app.jobs["node"][-1]["data_b64"], data_b64)
+
+    def test_fonts_skipped(self):
+        # the fonts of a job are skipped for the known nodes that don't
+        # support the fonts, the ones without the capability and the older
+        # nodes (that advertise no capabilities)
+        fonts_info = [dict(name="Colonia", data_length=4)]
+        job_info = dict(id="first", node_id="node", fonts=fonts_info)
+        self.app.nodes["node"] = dict(name="node", capabilities=["npcolony", "binie"])
+        self.assertEqual(self.app.fonts_skipped(job_info), True)
+        self.app.nodes["node"] = dict(name="node")
+        self.assertEqual(self.app.fonts_skipped(job_info), True)
+
+        # the fonts are not skipped for the nodes that support them and for
+        # the unknown nodes (eg: not registered since the server restarted)
+        self.app.nodes["node"] = dict(name="node", capabilities=["dynamic-fonts"])
+        self.assertEqual(self.app.fonts_skipped(job_info), False)
+        self.assertEqual(self.app.fonts_skipped(dict(job_info, node_id="other")), False)
+
+        # the jobs without fonts and the jobs of the fonts type (installations)
+        # have no fonts to be skipped, whatever the node
+        self.app.nodes["node"] = dict(name="node")
+        self.assertEqual(
+            self.app.fonts_skipped(dict(id="second", node_id="node")), False
+        )
+        self.assertEqual(self.app.fonts_skipped(dict(job_info, fonts=[])), False)
+        self.assertEqual(self.app.fonts_skipped(dict(job_info, type="fonts")), False)
