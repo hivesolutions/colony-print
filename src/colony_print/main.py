@@ -108,6 +108,11 @@ class ColonyPrintApp(appier.APIApp):
         of the request replacing their (light) information, as the node
         installs them, the jobs that are commands having no data.
 
+        The fonts are not sent to a (known) node that doesn't support them,
+        that prints the document with its own fonts, the fonts of the job
+        being marked as skipped, which is decided whenever the job is queued
+        (eg: a clone of the job once the node supports the fonts).
+
         :type job_info: Dictionary
         :param job_info: The information of the job, with its identifier
         and the one of its node.
@@ -121,6 +126,23 @@ class ColonyPrintApp(appier.APIApp):
 
         job_id = job_info["id"]
         node_id = job_info["node_id"]
+
+        # in case the node is known not to support the fonts (eg: an older
+        # node) the fonts of the job are skipped, the unknown nodes (eg: not
+        # registered since the server restarted) receiving them, as they're
+        # skipped by the nodes that don't support them, and the jobs of the
+        # fonts type (installations) requiring the support of the fonts
+        node = self.nodes.get(node_id, None)
+        skipped = False
+        if (
+            node
+            and job_info.get("fonts", None)
+            and not job_info.get("type", None) == "fonts"
+            and not "dynamic-fonts" in node.get("capabilities", [])
+        ):
+            skipped = True
+            job_info["fonts_skipped"] = True
+
         self.jobs_info[job_id] = job_info
         self.jobs_data[job_id] = data_b64
         self.jobs_fonts[job_id] = fonts
@@ -129,7 +151,7 @@ class ColonyPrintApp(appier.APIApp):
         if not data_b64 == None:
             job["data_b64"] = data_b64
         job.pop("fonts", None)
-        if fonts:
+        if fonts and not skipped:
             job["fonts"] = fonts
         jobs = self.jobs.get(node_id, [])
         jobs.append(job)

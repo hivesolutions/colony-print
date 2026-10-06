@@ -138,6 +138,36 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual(self.app.jobs_fonts[clone_info["id"]], None)
         self.assertEqual("fonts" in self.app.jobs["node"][2], False)
 
+    def test_clone_fonts_skipped(self):
+        # a job whose fonts were skipped (node without the support of the
+        # fonts) keeps its fonts, so that its clone decides it again, still
+        # skipping them for the node or sending them once it supports them
+        self.app.nodes["node"] = dict(name="node", capabilities=["npcolony", "binie"])
+        fonts = [dict(name="Colonia", data_b64="QUJD")]
+        self.app.jobs_info["name"] = dict(
+            id="name",
+            name="document",
+            node_id="node",
+            format="binie",
+            fonts=[dict(name="Colonia", data_length=4)],
+            fonts_skipped=True,
+        )
+        self.app.jobs_data["name"] = "QUJD"
+        self.app.jobs_fonts["name"] = fonts
+        response = self.app.post("/jobs/name/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        clone_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(clone_info["fonts_skipped"], True)
+        self.assertEqual(self.app.jobs_fonts[clone_info["id"]], fonts)
+        self.assertEqual("fonts" in self.app.jobs["node"][0], False)
+
+        self.app.nodes["node"]["capabilities"].append("dynamic-fonts")
+        response = self.app.post("/jobs/name/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        clone_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual("fonts_skipped" in clone_info, False)
+        self.assertEqual(self.app.jobs["node"][1]["fonts"], fonts)
+
     def test_clone_commands(self):
         # the jobs that are commands for the node (eg: its restart) can't
         # be cloned, as they're only queued by their own endpoints

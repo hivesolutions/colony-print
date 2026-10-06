@@ -332,3 +332,65 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.assertEqual(len(self.app.jobs["node"]), 3)
         self.assertEqual(self.notifications[-1], "jobs:other")
         self.assertEqual(len(self.notifications), 4)
+
+    def test_queue_job_fonts(self):
+        # the fonts of a job for a node that doesn't support the fonts are
+        # kept (for the clones of the job) but not sent to the node, that
+        # prints the document with its own fonts, marking them as skipped
+        self.app.nodes["node"] = dict(name="node", capabilities=["npcolony", "binie"])
+        fonts = [dict(name="Colonia", data_b64="QUJD")]
+        fonts_info = [dict(name="Colonia", data_length=4)]
+        job_info = dict(
+            id="first",
+            name="document",
+            node_id="node",
+            format="binie",
+            fonts=fonts_info,
+        )
+        self.app.queue_job(job_info, data_b64="QUJD", fonts=fonts)
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual(self.app.jobs_fonts["first"], fonts)
+        self.assertEqual(
+            self.app.jobs["node"][0],
+            dict(
+                id="first",
+                name="document",
+                node_id="node",
+                format="binie",
+                fonts_skipped=True,
+                data_b64="QUJD",
+            ),
+        )
+
+        # the fonts are skipped for the older nodes (that advertise no
+        # capabilities) but sent to the nodes that support them
+        self.app.nodes["node"] = dict(name="node")
+        job_info = dict(id="second", name="document", node_id="node", fonts=fonts_info)
+        self.app.queue_job(job_info, data_b64="QUJD", fonts=fonts)
+        self.assertEqual(job_info["fonts_skipped"], True)
+        self.assertEqual("fonts" in self.app.jobs["node"][1], False)
+
+        self.app.nodes["node"] = dict(name="node", capabilities=["dynamic-fonts"])
+        job_info = dict(id="third", name="document", node_id="node", fonts=fonts_info)
+        self.app.queue_job(job_info, data_b64="QUJD", fonts=fonts)
+        self.assertEqual("fonts_skipped" in job_info, False)
+        self.assertEqual(self.app.jobs["node"][2]["fonts"], fonts)
+
+        # an unknown node (eg: not registered since the server restarted)
+        # receives the fonts, as the nodes that don't support them skip them
+        job_info = dict(id="fourth", name="document", node_id="other", fonts=fonts_info)
+        self.app.queue_job(job_info, data_b64="QUJD", fonts=fonts)
+        self.assertEqual("fonts_skipped" in job_info, False)
+        self.assertEqual(self.app.jobs["other"][0]["fonts"], fonts)
+
+        # the jobs of the fonts type (installations) and the jobs without
+        # fonts are never skipped, whatever the node
+        self.app.nodes["node"] = dict(name="node")
+        job_info = dict(
+            id="fifth", name="fonts", node_id="node", type="fonts", fonts=fonts_info
+        )
+        self.app.queue_job(job_info, data_b64="e30=")
+        self.assertEqual("fonts_skipped" in job_info, False)
+        job_info = dict(id="sixth", name="document", node_id="node")
+        self.app.queue_job(job_info, data_b64="QUJD")
+        self.assertEqual("fonts_skipped" in job_info, False)

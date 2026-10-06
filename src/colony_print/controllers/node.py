@@ -147,15 +147,6 @@ class NodeController(appier.Controller):
             id, data_b64, type=type, format=format, fonts=fonts
         )
 
-        # in case the node doesn't support the fonts (eg: an older node) the
-        # fonts of the request are not sent to it, as the node prints the
-        # document with its own fonts, the fonts being marked as skipped in
-        # the information of the job
-        skipped = False
-        if fonts_info and not self._has_capability(id, "dynamic-fonts"):
-            skipped = True
-            fonts = None
-
         job_info = dict(id=job_id, name=name, node_id=id, data_length=len(data_b64))
         if type:
             job_info["type"] = type
@@ -167,8 +158,6 @@ class NodeController(appier.Controller):
             )
         if fonts_info:
             job_info["fonts"] = fonts_info
-        if skipped:
-            job_info["fonts_skipped"] = True
         return self.owner.queue_job(job_info, data_b64=data_b64, fonts=fonts)
 
     @appier.route("/nodes/<str:id>/print", "OPTIONS")
@@ -240,15 +229,6 @@ class NodeController(appier.Controller):
             id, data_b64, type=type, format=format, fonts=fonts
         )
 
-        # in case the node doesn't support the fonts (eg: an older node) the
-        # fonts of the request are not sent to it, as the node prints the
-        # document with its own fonts, the fonts being marked as skipped in
-        # the information of the job
-        skipped = False
-        if fonts_info and not self._has_capability(id, "dynamic-fonts"):
-            skipped = True
-            fonts = None
-
         job_info = dict(
             id=job_id, name=name, node_id=id, printer=printer, data_length=len(data_b64)
         )
@@ -262,8 +242,6 @@ class NodeController(appier.Controller):
             )
         if fonts_info:
             job_info["fonts"] = fonts_info
-        if skipped:
-            job_info["fonts_skipped"] = True
         return self.owner.queue_job(job_info, data_b64=data_b64, fonts=fonts)
 
     @appier.route("/nodes/<str:id>/printers/<str:printer>/print", "OPTIONS")
@@ -599,26 +577,9 @@ class NodeController(appier.Controller):
         :see: https://github.com/hivesolutions/colony-print/blob/master/doc/capabilities.md
         """
 
+        node = self.owner.nodes.get(id, dict())
         appier.verify(
-            self._has_capability(id, capability),
+            capability in node.get("capabilities", []),
             message="Node '%s' doesn't support '%s'" % (id, capability),
             code=409,
         )
-
-    def _has_capability(self, id, capability):
-        """
-        Verifies if the node with the provided identifier supports the
-        provided capability, as advertised by the node, an unknown node
-        (or a node released before the capabilities) supporting none.
-
-        :type id: String
-        :param id: The identifier of the node.
-        :type capability: String
-        :param capability: The name of the capability (eg: dynamic-fonts).
-        :rtype: bool
-        :return: If the node advertises the capability.
-        :see: https://github.com/hivesolutions/colony-print/blob/master/doc/capabilities.md
-        """
-
-        node = self.owner.nodes.get(id, dict())
-        return capability in node.get("capabilities", [])
