@@ -236,12 +236,15 @@ class MockNPColonyWindows(object):
 class MockNPColonyLegacy(object):
     """
     Stand-in for a legacy version of the npcolony module that is not
-    able to report the format of the documents it prints.
+    able to report the format of the documents it prints, recording
+    the documents sent for printing.
     """
+
+    calls = []
 
     @staticmethod
     def print_base64(data_b64):
-        pass
+        MockNPColonyLegacy.calls.append(data_b64)
 
 
 class MockLibrary(object):
@@ -421,6 +424,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColony.format = "pdf"
         MockNPColony.devices = [RECEIPT_DEVICE, OFFICE_DEVICE]
         MockNPColony.calls = []
+        MockNPColonyLegacy.calls = []
         self._npcolony = sys.modules.get("npcolony")
         sys.modules["npcolony"] = MockNPColony
         MockPlatform.uname = ("Linux", "6.8.0-45-generic", "#45-Ubuntu SMP", "x86_64")
@@ -902,10 +906,30 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(output_data[:5], b"%PDF-")
         self.assertEqual(b"Colonia" in output_data, True)
 
+        self.assertEqual(result["data"], dict())
+
         printer, _data_b64, options = MockNPColony.calls[0]
         self.assertEqual(printer, "Receipt")
         self.assertEqual(options["media"], "RP80x297")
         self.assertEqual(len(self.node.font_cache.installed()), 1)
+
+        # the npcolony of the system is not able to load the fonts, so the
+        # document is generated with the fonts of the system, the fonts being
+        # reported as skipped in the result of the job (as in the normal mode)
+        MockNPColony.format = "binie"
+        installed = self.node.font_cache.installed()
+        result = self.node.print_job_email(
+            dict(
+                data_b64=self._xmpl(fonts=[self._font(name="Binaria")]),
+                name="hello_world",
+                format="xmpl",
+                options=dict(save_output=True, send_email=False),
+            )
+        )
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["data"], dict(fonts_skipped=True))
+        self.assertEqual(self._hello_world(result["output_data"]), True)
+        self.assertEqual(self.node.font_cache.installed(), installed)
 
     def test_print_job_email_fonts(self):
         # the installation of fonts is not a document to be printed and
@@ -1575,14 +1599,38 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(MockNPColony.calls, [])
 
-        # the npcolony of the system is not able to load the fonts
+    def test_handle_npcolony_fonts_unsupported(self):
+        # the npcolony of the system is not able to load the fonts, so the
+        # document is printed with the fonts of the system, none of the fonts
+        # of the job being installed and the fonts being reported as skipped
         sys.modules["npcolony"] = MockNPColonyLegacy
-        self.assertRaises(
-            appier.OperationalError,
-            lambda: self.node._handle_npcolony(
-                COLONIA_B64, format="binie", fonts=[self._font()]
+        installed = self.node.font_cache.installed()
+        self.assertEqual(
+            self.node._handle_npcolony(
+                COLONIA_B64, format="binie", fonts=[self._font("Binaria")]
             ),
+            dict(fonts_skipped=True),
         )
+        self.assertEqual(MockNPColonyLegacy.calls, [COLONIA_B64])
+        self.assertEqual(self.node.font_cache.installed(), installed)
+
+        # the fonts declared by an XMPL document are skipped as well, the
+        # document being converted into the binie document that is printed
+        self.assertEqual(
+            self.node._handle_npcolony(
+                self._xmpl(fonts=[self._font(name="Binaria")]), format="xmpl"
+            ),
+            dict(fonts_skipped=True),
+        )
+        self.assertEqual(len(MockNPColonyLegacy.calls), 2)
+        self.assertEqual(self._hello_world(MockNPColonyLegacy.calls[1]), True)
+        self.assertEqual(self.node.font_cache.installed(), installed)
+
+        # a job without fonts has no fonts to be skipped
+        self.assertEqual(
+            self.node._handle_npcolony(COLONIA_B64, format="binie"), dict()
+        )
+        self.assertEqual(len(MockNPColonyLegacy.calls), 3)
 
     def test_handle_npcolony_xmpl(self):
         self.node._handle_npcolony(

@@ -409,6 +409,43 @@ class FontsTest(unittest.TestCase):
         self.assertRaises(Exception, lambda: colony_print.xmpl_fonts("not xml"))
         self.assertRaises(Exception, lambda: colony_print.xmpl_fonts(""))
 
+    def test_strip_xmpl_fonts(self):
+        # the font elements of the printing document (declarations) are
+        # removed, the other elements (including the font elements that are
+        # not declarations) being kept, so that the printed document is the
+        # same (the fonts are not used in the conversion into binie)
+        data = colony_print.strip_xmpl_fonts(EXAMPLE)
+        self.assertEqual(colony_print.xmpl_fonts(data), [])
+        self.assertEqual(data.count(b"<font "), 1)
+        self.assertEqual(b"https://fonts.hive.pt/ignored.ttf" in data, True)
+        self.assertEqual(
+            colony_print.strip_xmpl_fonts(
+                appier.legacy.bytes(EXAMPLE, encoding="utf-8")
+            ),
+            data,
+        )
+        manager = colony_print.PrintingManager()
+        manager.load()
+        files = [appier.legacy.BytesIO(), appier.legacy.BytesIO()]
+        manager.print_language(EXAMPLE, dict(name="binie", file=files[0]))
+        manager.print_language(data, dict(name="binie", file=files[1]))
+        self.assertEqual(files[1].getvalue(), files[0].getvalue())
+
+        self.assertEqual(
+            colony_print.strip_xmpl_fonts(
+                '<printing_document name="hello_world"><paragraph/></printing_document>'
+            ),
+            b'<?xml version="1.0" encoding="utf-8"?>'
+            b'<printing_document name="hello_world"><paragraph/></printing_document>',
+        )
+
+    def test_strip_xmpl_fonts_invalid(self):
+        self.assertRaises(
+            Exception, lambda: colony_print.strip_xmpl_fonts("<printing_document>")
+        )
+        self.assertRaises(Exception, lambda: colony_print.strip_xmpl_fonts("not xml"))
+        self.assertRaises(Exception, lambda: colony_print.strip_xmpl_fonts(""))
+
 
 class FontCacheTest(unittest.TestCase):
     def setUp(self):

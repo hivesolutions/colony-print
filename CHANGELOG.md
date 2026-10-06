@@ -15,10 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Start time, auto-update and last update of the nodes in the admin node view - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 * Versions of the nodes before and after their restart in the admin job views - [#34](https://github.com/hivesolutions/colony-print/issues/34)
 * Option to disable the remote control of a node in its configuration - [#34](https://github.com/hivesolutions/colony-print/issues/34)
+* Fonts skipped by the nodes that don't support them in the information of the jobs and in the admin job view - [#38](https://github.com/hivesolutions/colony-print/issues/38)
 
 ### Changed
 
-*
+* Fonts of the print jobs skipped for the nodes that don't support them, that print the documents with their own fonts, instead of refusing the jobs - [#38](https://github.com/hivesolutions/colony-print/issues/38)
 
 ### Fixed
 

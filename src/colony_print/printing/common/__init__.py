@@ -14,5 +14,6 @@ from .fonts import (
     register_font,
     verify_xmpl,
     xmpl_fonts,
+    strip_xmpl_fonts,
     FontCache,
 )

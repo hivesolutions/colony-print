@@ -94,6 +94,14 @@ class NodeController(appier.Controller):
         if not id == job_info["node_id"]:
             raise appier.OperationalError("Node ID mismatch")
 
+        # marks the fonts of the job as skipped in case the node skipped them,
+        # as the node may not support the fonts when it prints the job (eg:
+        # it restarted with an older npcolony after the job was queued) or
+        # may be an older node (that doesn't read the fonts of the job) that
+        # was unknown when the job was queued, as it's known by now
+        if data.get("fonts_skipped", False) or self.owner.fonts_skipped(job_info):
+            job_info["fonts_skipped"] = True
+
         if (payload or files) and not os.path.exists(job_path):
             os.makedirs(job_path)
 
@@ -439,7 +447,11 @@ class NodeController(appier.Controller):
         Verifies the fonts of a print job, the ones of the print request
         and the ones declared by its document (for XMPL documents) or by
         its payload (for the jobs of the fonts type), and that the node
-        supports them, raising an exception otherwise.
+        supports the fonts of the jobs of the fonts type, raising an
+        exception otherwise.
+
+        The other jobs are accepted for the nodes that don't support the
+        fonts, that print their documents with the fonts of the node.
 
         XMPL documents are verified (converted as the node does) so that
         invalid documents are refused before being sent to the node.
@@ -525,14 +537,17 @@ class NodeController(appier.Controller):
                 colony_print.verify_font(font, reference=False)
 
         # builds the information of the fonts without their (heavy) data
-        # and verifies that the node supports the fonts (if any)
+        # and verifies that the node supports the fonts of the jobs of the
+        # fonts type, that only install them, the other jobs being printed
+        # by the nodes that don't support the fonts with the fonts of the
+        # node (eg: an older node), so that a client may always send them
         fonts_info = []
         for font in declared + (fonts or []):
             font_info = dict((k, v) for k, v in font.items() if k in FONT_INFO_FIELDS)
             if "data_b64" in font:
                 font_info["data_length"] = len(font["data_b64"])
             fonts_info.append(font_info)
-        if fonts_info:
+        if fonts_info and type == "fonts":
             self._ensure_capability(id, "dynamic-fonts")
         return fonts_info
 
