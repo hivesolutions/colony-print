@@ -532,6 +532,8 @@ class ColonyPrintNode(object):
             capabilities.extend(
                 ["gravo-extra-fonts", "gravo-record", "gravo-check-path"]
             )
+            if self._has_gravo_feature("depth"):
+                capabilities.append("gravo-depth")
         if self.node_mode == "email":
             capabilities.append("email")
         if self.node_control:
@@ -887,6 +889,7 @@ class ColonyPrintNode(object):
         dry_run = data_j.get("dry_run", False)
         record = data_j.get("record", False)
         check_path = data_j.get("check_path", False)
+        depth = data_j.get("depth", None)
         debug = data_j.get("debug", False)
         extra_fonts = data_j.get("extra_fonts", None)
 
@@ -895,6 +898,30 @@ class ColonyPrintNode(object):
                 isinstance(margins, (list, tuple)) and len(margins) == 4,
                 message="Margins must be a 4-element array [left, right, top, bottom]",
             )
+
+        if not depth == None:
+            appier.verify(
+                isinstance(depth, appier.legacy.INTEGERS + (float,))
+                and not isinstance(depth, bool)
+                and depth >= 0,
+                message="Depth must be a non negative number",
+            )
+
+        # forwards the depth of the tool (if any) only to the versions of
+        # gravo pilot that support it, as the older ones don't accept it, a
+        # node that doesn't support the depth engraving with the one of the
+        # engraving software and reporting the depth as skipped in the
+        # result of the job
+        result = dict()
+        kwargs = dict()
+        if not depth == None and "gravo-depth" in self.capabilities:
+            kwargs["depth"] = depth
+        elif not depth == None:
+            logging.warning(
+                "Depth %s not supported by node, engraving with the software depth"
+                % depth
+            )
+            result["depth_skipped"] = True
 
         # stages every extra font payload onto a per job temporary
         # directory so that gravo pilot can find the requested fonts
@@ -922,6 +949,7 @@ class ColonyPrintNode(object):
                     record=record,
                     check_path=check_path,
                     extra_fonts=extra_fonts_paths,
+                    **kwargs
                 )
             duration = time.time() - start
         finally:
@@ -942,11 +970,12 @@ class ColonyPrintNode(object):
             _data_b64 = base64.b64encode(data)
             files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
 
-        return (
+        result.update(
             dict(duration=duration, logs=logs, files=files)
             if debug
             else dict(duration=duration, files=files)
         )
+        return result
 
     def _stage_extra_fonts(self, extra_fonts, target_dir):
         """
@@ -1269,6 +1298,25 @@ class ColonyPrintNode(object):
         if not hasattr(self.npcolony, "get_features"):
             return False
         return feature in self.npcolony.get_features()
+
+    def _has_gravo_feature(self, feature):
+        """
+        Verifies if the provided (optional) feature of gravo pilot is
+        supported by the version installed in the current system, as
+        reported by gravo pilot itself, the versions of gravo pilot that
+        don't report their features support none of them.
+
+        :type feature: String
+        :param feature: The name of the feature of gravo pilot (eg: depth).
+        :rtype: bool
+        :return: If the feature is supported by gravo pilot in the system.
+        """
+
+        import gravo_pilot
+
+        if not hasattr(gravo_pilot, "FEATURES"):
+            return False
+        return feature in gravo_pilot.FEATURES
 
     def _is_enabled(self, name, default="1"):
         """

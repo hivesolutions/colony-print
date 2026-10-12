@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Depth of the tool in the gravo print jobs, set by the nodes whose gravo pilot supports it and skipped by the other ones - [hivesolutions/signatur#81](https://github.com/hivesolutions/signatur/issues/81)
 
 ### Changed
 
