@@ -338,6 +338,15 @@ begin
       Result := False;
 end;
 
+{ Retrieves the command line (image path) of the existing service, as it's
+  registered, empty in case there's no service }
+function ServiceImagePath: String;
+begin
+  Result := '';
+  RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'ImagePath', Result);
+end;
+
 #ifdef XP
 function ConvertStringSecurityDescriptorToSecurityDescriptor(Descriptor: String;
   Revision: Cardinal; var SecurityDescriptor: Longint; Size: Longint): BOOL;
@@ -435,20 +444,32 @@ end;
   are not removed and that the path of the wrapper is quoted in the service,
   as NSSM registers it without quotes, which would allow another program
   (eg: C:\Program.exe) to be run by the service as the system account, the
-  node is told about the service (through its environment), for it to restart
-  itself by exiting unless configured otherwise, as NSSM starts it again and
-  (unlike WinSW) is not detected by the node }
+  quoted path being verified in the registry, as the exit code of sc.exe
+  can't be relied on (eg: its query exits with success in Windows XP even
+  for a service that doesn't exist), the node is told about the service
+  (through its environment), for it to restart itself by exiting unless
+  configured otherwise, as NSSM starts it again and (unlike WinSW) is not
+  detected by the node }
 function ConfigureService: Boolean;
 var
-  Prefix, Logs: String;
+  Prefix, Logs, Wrapper: String;
   ResultCode: Integer;
 begin
+  Result := False;
   Prefix := 'set ' + ServiceName + ' ';
   Logs := DataDir + '\logs\' + ServiceName;
-  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'config ' + ServiceName + ' binPath= "\"' +
+  Wrapper := '"' + ExpandConstant('{app}\nssm.exe') + '"';
+  Exec(ExpandConstant('{sys}\sc.exe'), 'config ' + ServiceName + ' binPath= "\"' +
     ExpandConstant('{app}\nssm.exe') + '\""', '', SW_HIDE, ewWaitUntilTerminated,
-    ResultCode) and (ResultCode = 0) and
-    Nssm(Prefix + 'DisplayName {#AppName}') and
+    ResultCode);
+  Log('Configuration of the ' + ServiceName + ' service returned code ' + IntToStr(ResultCode));
+  if CompareText(ServiceImagePath, Wrapper) <> 0 then
+  begin
+    Log('The ' + ServiceName + ' service has the image path ' + ServiceImagePath +
+      ' instead of ' + Wrapper);
+    Exit;
+  end;
+  Result := Nssm(Prefix + 'DisplayName {#AppName}') and
     Nssm(Prefix + 'Description Receives the print jobs of the Colony Print server ' +
       'and prints them on the printers of this machine, updating itself from PyPI ' +
       'whenever it starts.') and
@@ -600,15 +621,6 @@ begin
   if Service <> 0 then
     CloseServiceHandle(Service);
   CloseServiceHandle(Manager);
-end;
-
-{ Retrieves the command line (image path) of the existing service, as it's
-  registered, empty in case there's no service }
-function ServiceImagePath: String;
-begin
-  Result := '';
-  RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
-    'ImagePath', Result);
 end;
 
 { Retrieves the path to the wrapper (image) of the existing service, without

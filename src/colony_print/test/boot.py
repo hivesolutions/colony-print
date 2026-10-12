@@ -74,6 +74,10 @@ DOWNLOAD_OPTIONS = [
 """ The options that are expected to follow the temporary directory in
 the command run by the boot of a legacy interpreter """
 
+VERIFY_COMMAND = [sys.executable, "-c", "import colony_print.node, npcolony"]
+""" The command that is expected to be run by the boot to verify that
+the updated packages of the node are loaded by the system """
+
 
 class MockSubprocess(object):
     """
@@ -105,6 +109,55 @@ class MockSubprocess(object):
         if len(MockSubprocess.codes) > 1:
             return MockSubprocess.codes.pop(0)
         return MockSubprocess.codes[0]
+
+
+class MockFlags(object):
+    """
+    Stand-in for the flags of the interpreter (sys.flags) with configurable
+    options, the isolated mode being missing (as in Python 2) unless it's
+    provided, so that the options of the interpreters run by the boot can be
+    exercised regardless of the ones of the interpreter of the tests.
+    """
+
+    def __init__(self, ignore_environment=0, no_user_site=0, isolated=None):
+        self.ignore_environment = ignore_environment
+        self.no_user_site = no_user_site
+        if not isolated == None:
+            self.isolated = isolated
+
+
+class MockKernel32(object):
+    """
+    Stand-in for the kernel32 library of windows (as exposed by ctypes)
+    that records the moves of the files (MoveFileEx) and replaces the files
+    as windows does, or fails them with the configured error code, so that
+    the replacement of the files on windows can be exercised in any system.
+    """
+
+    moves = []
+    error = 0
+
+    @staticmethod
+    def MoveFileExW(source, target, flags):
+        MockKernel32.moves.append((source, target, flags))
+        if MockKernel32.error:
+            return 0
+        os.rename(source, target)
+        return 1
+
+
+class MockCtypes(object):
+    """
+    Stand-in for the ctypes module of windows, that exposes the stand-in
+    of its kernel32 library and builds the errors of its failed calls.
+    """
+
+    class windll(object):
+        kernel32 = MockKernel32
+
+    @staticmethod
+    def WinError():
+        return OSError(MockKernel32.error, "Access is denied")
 
 
 class MockLoggingHandler(logging.Handler):
@@ -147,14 +200,19 @@ class ColonyPrintBootTest(unittest.TestCase):
         MockSubprocess.envs = []
         MockSubprocess.dests = []
         MockColonyPrintNode.loops = 0
+        MockKernel32.moves = []
+        MockKernel32.error = 0
         self._subprocess = colony_print.boot.subprocess
         colony_print.boot.subprocess = MockSubprocess
+        self._ctypes = colony_print.boot.ctypes
+        colony_print.boot.ctypes = MockCtypes
         self._node = colony_print.node.ColonyPrintNode
         colony_print.node.ColonyPrintNode = MockColonyPrintNode
 
     def tearDown(self):
         shutil.rmtree(self.temp_path, ignore_errors=True)
         colony_print.boot.subprocess = self._subprocess
+        colony_print.boot.ctypes = self._ctypes
         colony_print.node.ColonyPrintNode = self._node
 
     def _write(self, path, data):
@@ -192,7 +250,11 @@ class ColonyPrintBootTest(unittest.TestCase):
         )
         self.assertEqual(
             MockSubprocess.calls,
-            [INDEX_COMMAND, PIP_COMMAND + ["colony-print==0.21.0", "npcolony"]],
+            [
+                INDEX_COMMAND,
+                PIP_COMMAND + ["colony-print==0.21.0", "npcolony"],
+                VERIFY_COMMAND,
+            ],
         )
         self.assertEqual(MockColonyPrintNode.loops, 1)
 
@@ -627,7 +689,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(requirements, ["colony-print", "npcolony"])
         self.assertEqual(
             MockSubprocess.calls,
-            [INDEX_COMMAND, PIP_COMMAND + ["colony-print", "npcolony"]],
+            [INDEX_COMMAND, PIP_COMMAND + ["colony-print", "npcolony"], VERIFY_COMMAND],
         )
 
         # pip runs with the environment of the node (eg: with its PIP_* values)
@@ -665,8 +727,38 @@ class ColonyPrintBootTest(unittest.TestCase):
                 PIP_COMMAND
                 + ["--index-url", "https://pypi.example.com/simple/"]
                 + ["colony-print==0.20.0", "npcolony<1.5"],
+                VERIFY_COMMAND,
             ],
         )
+        del self.environ["NODE_VERSION"]
+        del self.environ["NODE_NPCOLONY_VERSION"]
+        del self.environ["NODE_INDEX_URL"]
+
+        # the interpreters run by the boot (pip and the one that verifies the
+        # packages) are isolated from the system as the one of the boot (eg:
+        # the one of the service of the Windows XP nodes, run with -E and -s)
+        for flags, options in (
+            (MockFlags(), []),
+            (MockFlags(ignore_environment=1), ["-E"]),
+            (MockFlags(ignore_environment=1, no_user_site=1), ["-E", "-s"]),
+            (MockFlags(ignore_environment=1, no_user_site=1, isolated=1), ["-I"]),
+        ):
+            boot = colony_print.boot.ColonyPrintBoot(
+                environ=self.environ, retry_delay=0.0, legacy=False, flags=flags
+            )
+            MockSubprocess.calls = []
+            boot.update()
+            self.assertEqual(
+                MockSubprocess.calls,
+                [
+                    [sys.executable] + options + INDEX_COMMAND[1:],
+                    [sys.executable]
+                    + options
+                    + PIP_COMMAND[1:]
+                    + ["colony-print", "npcolony"],
+                    [sys.executable] + options + VERIFY_COMMAND[1:],
+                ],
+            )
 
     def test_update_retry(self):
         # the update is retried while the package index is not reachable (as
@@ -683,6 +775,7 @@ class ColonyPrintBootTest(unittest.TestCase):
                 PIP_COMMAND + ["colony-print", "npcolony"],
                 INDEX_COMMAND,
                 PIP_COMMAND + ["colony-print", "npcolony"],
+                VERIFY_COMMAND,
             ],
         )
 
@@ -735,6 +828,7 @@ class ColonyPrintBootTest(unittest.TestCase):
             [
                 DOWNLOAD_COMMAND + [temp_dir] + DOWNLOAD_OPTIONS,
                 PIP_COMMAND + ["colony-print", "npcolony"],
+                VERIFY_COMMAND,
             ],
         )
         self.assertEqual(os.path.isabs(temp_dir), True)
@@ -761,6 +855,7 @@ class ColonyPrintBootTest(unittest.TestCase):
                 PIP_COMMAND
                 + ["--index-url", "https://pypi.example.com/simple/"]
                 + ["colony-print==0.20.0", "npcolony"],
+                VERIFY_COMMAND,
             ],
         )
         self.assertEqual(os.path.exists(temp_dir), False)
@@ -800,6 +895,49 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.boot.update()
         self.assertEqual(MockSubprocess.calls[0], INDEX_COMMAND)
         self.assertEqual(MockSubprocess.dests, [])
+
+    def test_verify(self):
+        # the modules of the packages of the node are imported by another
+        # interpreter, with the environment of the node by default
+        self.boot.verify()
+        self.assertEqual(MockSubprocess.calls, [VERIFY_COMMAND])
+        self.assertEqual(MockSubprocess.envs, [self.environ])
+        self.boot.verify(env=dict(PIP_CONFIG_FILE=os.devnull))
+        self.assertEqual(MockSubprocess.envs[-1], dict(PIP_CONFIG_FILE=os.devnull))
+
+        # the packages that can't be loaded by the system (eg: their native
+        # modules are not supported by Windows XP) fail the verification
+        MockSubprocess.codes = [1]
+        with self.assertRaises(RuntimeError) as context:
+            self.boot.verify()
+        self.assertEqual(
+            str(context.exception), "Package verification failed with code 1"
+        )
+
+        # and the update that installs them, that is not retried (as the
+        # packages are installed) and still removes its temporary directory,
+        # the failure being handed over to the node, that is run anyway
+        MockSubprocess.codes = [0, 0, 1]
+        MockSubprocess.calls = []
+        boot = colony_print.boot.ColonyPrintBoot(
+            environ=self.environ, retry_delay=0.0, legacy=True
+        )
+        with self.assertRaises(RuntimeError) as context:
+            boot.update()
+        self.assertEqual(
+            str(context.exception), "Package verification failed with code 1"
+        )
+        self.assertEqual(len(MockSubprocess.calls), 3)
+        self.assertEqual(MockSubprocess.calls[-1], VERIFY_COMMAND)
+        self.assertEqual(os.path.exists(self._temp_dir(MockSubprocess.calls[0])), False)
+
+        MockSubprocess.codes = [0, 0, 1]
+        self.boot.main(["--config", self.config_path])
+        self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "failure")
+        self.assertEqual(
+            self.environ["NODE_UPDATE_ERROR"], "Package verification failed with code 1"
+        )
+        self.assertEqual(MockColonyPrintNode.loops, 1)
 
     def test_requirement(self):
         requirement = self.boot.requirement
@@ -887,6 +1025,68 @@ class ColonyPrintBootTest(unittest.TestCase):
         path = os.path.join(self.temp_path, "missing", "state.env")
         self.assertRaises(IOError, lambda: self.boot.save_config(path, config))
         self.assertEqual(os.path.exists(os.path.dirname(path)), False)
+
+        # simulates a legacy interpreter (Python 2) on windows, where the file
+        # is replaced by windows itself, so that a replacement that fails (eg:
+        # the file is open by an antivirus) keeps the file as it was, instead
+        # of losing it, leaving no temporary file behind
+        replace = os.replace if hasattr(os, "replace") else None
+        name = os.name
+        if replace:
+            del os.replace
+        os.name = "nt"
+        try:
+            self.boot.save_config(self.config_path, dict(NODE_UPDATE="1"))
+            MockKernel32.error = 5
+            self.assertRaises(
+                OSError,
+                lambda: self.boot.save_config(self.config_path, dict(NODE_UPDATE="0")),
+            )
+        finally:
+            os.name = name
+            if replace:
+                os.replace = replace
+        self.assertEqual(self.boot.load_config(self.config_path), dict(NODE_UPDATE="1"))
+        self.assertEqual(len(MockKernel32.moves), 2)
+        self.assertEqual(
+            sorted(os.listdir(self.temp_path)), ["config.env", "state.env"]
+        )
+
+    def test_replace(self):
+        # the file is replaced by windows (MoveFileEx) with the unicode paths
+        # of the files, as the paths of Python 2 are byte strings, in the
+        # encoding of the file system (the ANSI code page of windows)
+        source = os.path.join(self.temp_path, "state.env.tmp")
+        self._write(source, b"NODE_UPDATE=0\r\n")
+        self._write(self.config_path, b"NODE_UPDATE=1\r\n")
+        encoding = sys.getfilesystemencoding()
+        self.boot.replace(source.encode(encoding), self.config_path.encode(encoding))
+        self.assertEqual(self.boot.load_config(self.config_path), dict(NODE_UPDATE="0"))
+        self.assertEqual(os.listdir(self.temp_path), ["config.env"])
+        self.assertEqual(
+            MockKernel32.moves,
+            [
+                (
+                    appier.legacy.u(source, encoding=encoding, force=True),
+                    appier.legacy.u(self.config_path, encoding=encoding, force=True),
+                    0x01 | 0x08,
+                )
+            ],
+        )
+        for path in MockKernel32.moves[0][:2]:
+            self.assertEqual(appier.legacy.is_unicode(path), True)
+
+        # a replacement that fails (eg: the file is open without sharing its
+        # deletion) raises the error of windows, keeping both files
+        self._write(source, b"NODE_UPDATE=2\r\n")
+        MockKernel32.error = 32
+        with self.assertRaises(OSError) as context:
+            self.boot.replace(source, self.config_path)
+        self.assertEqual(context.exception.errno, 32)
+        self.assertEqual(
+            sorted(os.listdir(self.temp_path)), ["config.env", "state.env.tmp"]
+        )
+        self.assertEqual(self.boot.load_config(self.config_path), dict(NODE_UPDATE="0"))
 
     def test_apply_config(self):
         environ = dict(BASE_URL="https://other.example.com/")
@@ -1040,3 +1240,23 @@ class ColonyPrintBootTest(unittest.TestCase):
         for value in ("1", "true", "yes", ""):
             boot = colony_print.boot.ColonyPrintBoot(environ=dict(NODE_CONTROL=value))
             self.assertEqual(boot.control_enabled, True)
+
+    def test_options(self):
+        # the options are the ones of the flags of the interpreter of the
+        # boot, unless the boot is told otherwise
+        boot = colony_print.boot.ColonyPrintBoot(environ=dict())
+        self.assertEqual(boot.flags, sys.flags)
+
+        # the options that isolate the interpreter from the system, the ones
+        # of the flags of the interpreter, the isolated mode (Python 3.4+)
+        # implying the other ones, which are the only ones of Python 2
+        for flags, options in (
+            (MockFlags(), []),
+            (MockFlags(ignore_environment=1), ["-E"]),
+            (MockFlags(no_user_site=1), ["-s"]),
+            (MockFlags(ignore_environment=1, no_user_site=1), ["-E", "-s"]),
+            (MockFlags(ignore_environment=1, no_user_site=1, isolated=0), ["-E", "-s"]),
+            (MockFlags(ignore_environment=1, no_user_site=1, isolated=1), ["-I"]),
+        ):
+            boot = colony_print.boot.ColonyPrintBoot(environ=dict(), flags=flags)
+            self.assertEqual(boot.options, options)

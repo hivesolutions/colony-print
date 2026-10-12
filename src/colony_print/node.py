@@ -218,12 +218,14 @@ class ColonyPrintNode(object):
                     except Exception as exception:
                         logging.exception(
                             "Exception while printing job '%s': %s"
-                            % (job["id"], str(exception))
+                            % (job["id"], self._message(exception))
                         )
                         result = dict(
                             result="error",
-                            error=str(exception),
-                            traceback=traceback.format_exc(),
+                            error=self._message(exception),
+                            traceback=appier.legacy.u(
+                                traceback.format_exc(), errors="replace"
+                            ),
                         )
 
                     # the jobs that restart the node have no result, as they
@@ -240,13 +242,17 @@ class ColonyPrintNode(object):
                         headers=headers,
                     )
             except Exception as exception:
-                logging.exception("Exception while looping '%s'" % str(exception))
+                logging.exception(
+                    "Exception while looping '%s'" % self._message(exception)
+                )
                 logging.info("Sleeping for %.2f seconds" % self.sleep_time)
                 time.sleep(self.sleep_time)
 
     def print_job(self, job):
         if not self.node_mode in NODE_MODES:
-            raise appier.OperationalError("Mode '%s' not valid" % self.node_mode)
+            raise appier.OperationalError(
+                message="Mode '%s' not valid" % self.node_mode
+            )
         return getattr(self, "print_job_" + self.node_mode)(job)
 
     def print_job_normal(self, job):
@@ -390,12 +396,14 @@ class ColonyPrintNode(object):
         try:
             self._restart()
         except Exception as exception:
-            logging.exception("Exception while restarting node: %s" % str(exception))
+            logging.exception(
+                "Exception while restarting node: %s" % self._message(exception)
+            )
             for job_id in job_ids:
                 results[job_id] = dict(
                     result="error",
-                    error=str(exception),
-                    traceback=traceback.format_exc(),
+                    error=self._message(exception),
+                    traceback=appier.legacy.u(traceback.format_exc(), errors="replace"),
                 )
 
             # removes the update that was forced for the next start of the
@@ -590,13 +598,13 @@ class ColonyPrintNode(object):
             result = self._handle_auto_update(options)
             return dict(result="success", handler="auto-update", data=result)
 
-        raise appier.OperationalError("Type '%s' not valid" % type)
+        raise appier.OperationalError(message="Type '%s' not valid" % type)
 
     def _handle_npcolony(
         self, data_b64, format=None, printer=None, options=dict(), fonts=None
     ):
         if not self._has_npcolony():
-            raise appier.OperationalError("npcolony engine is not available")
+            raise appier.OperationalError(message="npcolony engine is not available")
 
         # in case the data is an XMPL document converts it into a binie
         # document (printed by every system), together with the fonts
@@ -874,7 +882,7 @@ class ColonyPrintNode(object):
 
     def _handle_gravo(self, data_b64):
         if not self._has_gravo():
-            raise appier.OperationalError("gravo engine is not available")
+            raise appier.OperationalError(message="gravo engine is not available")
 
         import gravo_pilot
 
@@ -1030,7 +1038,7 @@ class ColonyPrintNode(object):
 
     def _handle_text(self, data_b64):
         if not self._has_text():
-            raise appier.OperationalError("text engine is not available")
+            raise appier.OperationalError(message="text engine is not available")
 
         return dict(
             files=[appier.File(dict(name="document.txt", data=data_b64)).json_v()]
@@ -1196,8 +1204,10 @@ class ColonyPrintNode(object):
 
         The command line is the original one of the interpreter (with its
         options) where it's available (Python 3.10+), the one of the script
-        being used otherwise, and it's run with the environment the process
-        was started with, so that a changed configuration applies.
+        being used otherwise, with the options of the interpreter that isolate
+        it from the system (eg: -E and -s), as the boot runs pip, and it's run
+        with the environment the process was started with, so that a changed
+        configuration applies.
         """
 
         if not self.node_restart in RESTART_MODES:
@@ -1209,7 +1219,13 @@ class ColonyPrintNode(object):
         if self.node_restart == "exit":
             sys.exit(RESTART_CODE)
 
-        args = sys.orig_argv[1:] if hasattr(sys, "orig_argv") else sys.argv
+        if hasattr(sys, "orig_argv"):
+            args = sys.orig_argv[1:]
+        else:
+            import colony_print.boot
+
+            boot = colony_print.boot.ColonyPrintBoot(flags=sys.flags)
+            args = boot.options + sys.argv
         args = [sys.executable] + list(args)
         environ = self._environ()
         if os.name == "nt":
@@ -1265,6 +1281,26 @@ class ColonyPrintNode(object):
         if values == state:
             return
         boot.save_config(self.node_state, values)
+
+    def _message(self, exception):
+        """
+        Retrieves the message of the provided exception as an unicode string,
+        so that it can be mixed with the unicode strings of the jobs (as
+        decoded from the JSON of the server) and serialized as JSON, as in
+        Python 2 the message may be a byte string that is not ASCII, in any
+        encoding (eg: the one of windows, for its errors), whose bytes that
+        are not valid (UTF-8) are replaced.
+
+        :type exception: Exception
+        :param exception: The exception whose message is retrieved.
+        :rtype: String
+        :return: The message of the exception, as an unicode string.
+        """
+
+        try:
+            return appier.legacy.UNICODE(exception)
+        except UnicodeError:
+            return appier.legacy.u(str(exception), errors="replace")
 
     def _has_npcolony(self):
         try:
@@ -1398,7 +1434,7 @@ class ColonyPrintNode(object):
             and not format == "xmpl"
         ):
             raise appier.OperationalError(
-                "Format '%s' not compatible with system" % format
+                message="Format '%s' not compatible with system" % format
             )
 
     def _ensure_capability(self, capability):

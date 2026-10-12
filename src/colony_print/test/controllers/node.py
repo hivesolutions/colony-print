@@ -295,6 +295,21 @@ class NodeControllerTest(unittest.TestCase):
             self.assertEqual(
                 "depth_skipped" in self.app.jobs_info[job_info["id"]], False
             )
+
+            # the result posted by another node (the job was not sent to it)
+            # is refused with the mismatch, the job being kept as it was
+            code, job_info = self._print(format="binie")
+            response = self.app.post(
+                "/nodes/engraver/jobs/%s/result" % job_info["id"],
+                data=json.dumps(dict(result="success")).encode("utf-8"),
+                headers=self.headers + [("Content-Type", "application/json")],
+            )
+            self.assertEqual(response.code, 500)
+            self.assertEqual(
+                json.loads(response.data.decode("utf-8"))["message"],
+                "Node ID mismatch",
+            )
+            self.assertEqual(self.app.jobs_info[job_info["id"]]["status"], "queued")
         finally:
             appier.conf_r("DATA_PATH")
             shutil.rmtree(data_path, ignore_errors=True)

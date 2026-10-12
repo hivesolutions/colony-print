@@ -6,6 +6,7 @@ import sys
 import time
 import codecs
 import shutil
+import ctypes
 import logging
 import argparse
 import tempfile
@@ -33,6 +34,12 @@ with the name of the configuration that (optionally) constrains the
 version of each of them, every other package is only updated in case
 it's required by an updated package """
 
+MODULES = ("colony_print.node", "npcolony")
+""" The modules of the packages of the node that are imported (by another
+interpreter) once the packages are updated, verifying that they're loaded
+by the system, as pip installs the packages whose native modules are not
+supported by it (eg: by Windows XP) """
+
 OPERATORS = ("<", ">", "=", "!", "~")
 """ The first characters of the version specifiers (PEP 440), any
 other version constraint is considered to be an exact version """
@@ -55,6 +62,11 @@ LEGACY_VERSION = (3, 6)
 """ The first version of the interpreter that is not a legacy one, as
 the versions of pip that run on the older ones (eg: Python 2.7, the one
 of the Windows XP nodes) are not able to list the versions of a package """
+
+MOVE_FLAGS = 0x01 | 0x08
+""" The flags of the move of windows (MoveFileEx) that replaces a file,
+replacing the existing one (MOVEFILE_REPLACE_EXISTING) and returning only
+once it's written to the disk (MOVEFILE_WRITE_THROUGH) """
 
 
 class ColonyPrintBoot(object):
@@ -86,12 +98,14 @@ class ColonyPrintBoot(object):
         retry_delay=RETRY_DELAY,
         legacy=None,
         clean=None,
+        flags=None,
     ):
         self.environ = os.environ if environ == None else environ
         self.retries = retries
         self.retry_delay = retry_delay
         self.legacy = sys.version_info < LEGACY_VERSION if legacy == None else legacy
         self.clean = __name__ == "__main__" if clean == None else clean
+        self.flags = sys.flags if flags == None else flags
 
     def main(self, args=None):
         parser = argparse.ArgumentParser(
@@ -258,29 +272,37 @@ class ColonyPrintBoot(object):
         by downloading the package of the node, as their versions of pip
         are not able to list the versions of a package (index command).
 
+        The updated packages are verified (by importing their modules) once
+        they're installed, as pip installs the packages whose native modules
+        are not supported by the system, failing the update otherwise.
+
         :rtype: List
         :return: The requirements that were installed.
         """
 
         requirements = self.requirements
         index = ["--index-url", self.index_url] if self.index_url else []
-        check = [
-            sys.executable,
-            "-m",
-            "pip",
-            "index",
-            "versions",
-            PACKAGES[0][0],
-            "--timeout",
-            str(TIMEOUT),
-            "--retries",
-            "1",
-            "--disable-pip-version-check",
-            "--no-input",
-        ] + index
+        python = [sys.executable] + self.options
+        check = (
+            python
+            + [
+                "-m",
+                "pip",
+                "index",
+                "versions",
+                PACKAGES[0][0],
+                "--timeout",
+                str(TIMEOUT),
+                "--retries",
+                "1",
+                "--disable-pip-version-check",
+                "--no-input",
+            ]
+            + index
+        )
         command = (
-            [
-                sys.executable,
+            python
+            + [
                 "-m",
                 "pip",
                 "install",
@@ -312,25 +334,28 @@ class ColonyPrintBoot(object):
         # regardless of whether the update succeeds or raises
         temp_dir = tempfile.mkdtemp() if self.legacy else None
         if temp_dir:
-            check = [
-                sys.executable,
-                "-m",
-                "pip",
-                "download",
-                PACKAGES[0][0],
-                "--no-deps",
-                "--only-binary",
-                ":all:",
-                "--no-cache-dir",
-                "--dest",
-                temp_dir,
-                "--timeout",
-                str(TIMEOUT),
-                "--retries",
-                "1",
-                "--disable-pip-version-check",
-                "--no-input",
-            ] + index
+            check = (
+                python
+                + [
+                    "-m",
+                    "pip",
+                    "download",
+                    PACKAGES[0][0],
+                    "--no-deps",
+                    "--only-binary",
+                    ":all:",
+                    "--no-cache-dir",
+                    "--dest",
+                    temp_dir,
+                    "--timeout",
+                    str(TIMEOUT),
+                    "--retries",
+                    "1",
+                    "--disable-pip-version-check",
+                    "--no-input",
+                ]
+                + index
+            )
 
         try:
             retries = max(self.retries, 1)
@@ -339,6 +364,7 @@ class ColonyPrintBoot(object):
                 if code == 0:
                     code = subprocess.call(command, env=env)
                 if code == 0:
+                    self.verify(env=env)
                     return requirements
                 if attempt == retries - 1:
                     break
@@ -351,6 +377,26 @@ class ColonyPrintBoot(object):
         finally:
             if temp_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def verify(self, env=None):
+        """
+        Verifies that the packages of the node are loaded by the system, by
+        importing their modules in another interpreter (as the boot never
+        loads them), so that the packages whose native modules are not
+        supported by the system (eg: by Windows XP), that pip installs, are
+        noticed instead of being silently ignored by the node.
+
+        :type env: Dictionary
+        :param env: The environment of the interpreter that imports the
+        modules, the one of the node by default.
+        """
+
+        command = (
+            [sys.executable] + self.options + ["-c", "import " + ", ".join(MODULES)]
+        )
+        code = subprocess.call(command, env=self.environ if env == None else env)
+        if not code == 0:
+            raise RuntimeError("Package verification failed with code %d" % code)
 
     def requirement(self, name, constraint):
         """
@@ -433,17 +479,45 @@ class ColonyPrintBoot(object):
         # replaces the file with the temporary one, with a try and finally
         # block guaranteeing that the temporary file is removed when the save
         # fails, notice that the legacy interpreters (Python 2) are not able
-        # to replace a file on windows, where the file is removed first
+        # to replace a file on windows, where it's replaced by windows itself
         temp_path = path + ".tmp"
         try:
             with open(temp_path, "wb") as file:
                 file.write(data)
-            if os.name == "nt" and not hasattr(os, "replace") and os.path.exists(path):
-                os.remove(path)
-            getattr(os, "replace", os.rename)(temp_path, path)
+            if os.name == "nt" and not hasattr(os, "replace"):
+                self.replace(temp_path, path)
+            else:
+                getattr(os, "replace", os.rename)(temp_path, path)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+
+    def replace(self, source, target):
+        """
+        Replaces the file in the target path with the one in the source path
+        (that is moved into its place) using the move of windows (MoveFileEx),
+        as the legacy interpreters (Python 2) are not able to replace a file
+        on windows, where removing the file before the move would lose it in
+        case the move fails, as in Windows XP the name of a removed file that
+        is still open by another process (eg: an antivirus) is kept until it's
+        closed, failing the move.
+
+        :type source: String
+        :param source: The path to the file that replaces the target one.
+        :type target: String
+        :param target: The path to the file to be replaced.
+        """
+
+        source, target = [
+            (
+                path.decode(sys.getfilesystemencoding())
+                if isinstance(path, bytes)
+                else path
+            )
+            for path in (source, target)
+        ]
+        if not ctypes.windll.kernel32.MoveFileExW(source, target, MOVE_FLAGS):
+            raise ctypes.WinError()
 
     def apply_config(self, config, override=False):
         # sets the configuration values in the environment, notice that
@@ -514,6 +588,23 @@ class ColonyPrintBoot(object):
     def control_enabled(self):
         value = self.environ.get("NODE_CONTROL", "1")
         return not value.strip().lower() in FALSE_VALUES
+
+    @property
+    def options(self):
+        # the options of the interpreter that isolate it from the system (eg:
+        # from the environment and from the site of the user), the ones of
+        # the flags of the interpreter of the boot, so that the interpreters
+        # run by the boot (eg: pip) and by the node (that restarts itself)
+        # are isolated as it is, notice that the isolated mode (Python 3.4+)
+        # implies the other ones
+        if getattr(self.flags, "isolated", 0):
+            return ["-I"]
+        options = []
+        if self.flags.ignore_environment:
+            options.append("-E")
+        if self.flags.no_user_site:
+            options.append("-s")
+        return options
 
 
 if __name__ == "__main__":
