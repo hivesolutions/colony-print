@@ -388,20 +388,25 @@ class MockSys(object):
     """
     Stand-in for the sys module that exposes a configurable command line
     (the original one of the interpreter and the one of its script) and
-    records the exit codes of the node, interrupting it (as the exit of
-    the process does), so that the restart of the node can be exercised
-    without exiting.
+    encoding of the file system, and records the exit codes of the node,
+    interrupting it (as the exit of the process does), so that the restart
+    of the node can be exercised without exiting.
     """
 
     executable = "/usr/bin/python"
     argv = ["boot.py", "--config", "config.env"]
     orig_argv = ["python", "-I", "-u", "boot.py", "--config", "config.env"]
+    encoding = "utf-8"
     exits = []
 
     @staticmethod
     def exit(code=0):
         MockSys.exits.append(code)
         raise MockInterrupt()
+
+    @staticmethod
+    def getfilesystemencoding():
+        return MockSys.encoding
 
 
 class MockFlags(object):
@@ -504,6 +509,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self._get = appier.get
         self._post = appier.post
         MockSys.exits = []
+        MockSys.encoding = "utf-8"
         MockOS.name = "posix"
         MockOS.environ = dict()
         MockOS.execs = []
@@ -2890,20 +2896,43 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(message, appier.legacy.u("Font 'Fonte Ação'"))
         self.assertEqual(appier.legacy.is_unicode(message), True)
 
-        # the byte strings that are not valid UTF-8 (eg: the errors of a
-        # windows that is not in english) have their invalid bytes replaced
-        # in Python 2, where they're the messages of the exceptions
+        # the byte strings of the exceptions in Python 2 are decoded as UTF-8
+        # (eg: the messages of the other libraries) or, when they're not valid
+        # UTF-8, in the encoding of the file system (eg: the errors of a windows
+        # that is not in english, in its ANSI code page), keeping their accents
+        colony_print.node.sys = MockSys
+        MockSys.encoding = "cp1252"
+        message = self.node._message(ValueError(name.encode("utf-8")))
+        self.assertEqual(
+            message,
+            "b'Fonte A\\xc3\\xa7\\xc3\\xa3o'" if appier.legacy.PYTHON_3 else name,
+        )
         message = self.node._message(OSError(b"O sistema n\xe3o encontra"))
         self.assertEqual(
             message,
             (
                 "b'O sistema n\\xe3o encontra'"
                 if appier.legacy.PYTHON_3
-                else appier.legacy.u("O sistema n�o encontra")
+                else appier.legacy.u("O sistema não encontra")
             ),
         )
         self.assertEqual(appier.legacy.is_unicode(message), True)
         self.assertEqual(json.loads(json.dumps(message)), message)
+
+        # the bytes that are not valid in the encoding of the file system
+        # either (or with no encoding of the file system) are replaced
+        for encoding in ("ascii", None):
+            MockSys.encoding = encoding
+            message = self.node._message(OSError(b"O sistema n\xe3o encontra"))
+            self.assertEqual(
+                message,
+                (
+                    "b'O sistema n\\xe3o encontra'"
+                    if appier.legacy.PYTHON_3
+                    else appier.legacy.u("O sistema n�o encontra")
+                ),
+            )
+            self.assertEqual(appier.legacy.is_unicode(message), True)
 
     def test_has_feature(self):
         self.assertEqual(self.node._has_feature("load-fonts"), False)

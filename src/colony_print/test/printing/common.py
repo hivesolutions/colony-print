@@ -1055,6 +1055,15 @@ class FontCacheTest(unittest.TestCase):
         self.assertEqual(len(self.options), 1)
 
     def test_context(self):
+        # the bundle of netius (when installed) is the one exposed at the top
+        # of its package, the one loaded into the context of the downloads
+        try:
+            import netius
+        except ImportError:
+            netius = None
+        if netius:
+            self.assertEqual(os.path.isfile(netius.SSL_CA_PATH), True)
+
         # the certificates of the servers (and their names) are verified,
         # against the authorities of the system and the ones of the bundle
         # of netius, that the ones of older systems (eg: Windows XP, no longer

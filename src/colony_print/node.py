@@ -1299,9 +1299,10 @@ class ColonyPrintNode(object):
         Retrieves the message of the provided exception as an unicode string,
         so that it can be mixed with the unicode strings of the jobs (as
         decoded from the JSON of the server) and serialized as JSON, as in
-        Python 2 the message may be a byte string that is not ASCII, in any
-        encoding (eg: the one of windows, for its errors), whose bytes that
-        are not valid (UTF-8) are replaced.
+        Python 2 the message may be a byte string that is not ASCII, either
+        in UTF-8 (eg: the messages of appier) or in the encoding of the file
+        system (eg: the errors of windows, in its ANSI code page), whose bytes
+        that are not valid in it are replaced.
 
         :type exception: Exception
         :param exception: The exception whose message is retrieved.
@@ -1312,7 +1313,12 @@ class ColonyPrintNode(object):
         try:
             return appier.legacy.UNICODE(exception)
         except UnicodeError:
-            return appier.legacy.u(str(exception), errors="replace")
+            message = str(exception)
+        try:
+            return appier.legacy.u(message)
+        except UnicodeError:
+            encoding = sys.getfilesystemencoding() or "utf-8"
+            return appier.legacy.u(message, encoding=encoding, errors="replace")
 
     def _has_npcolony(self):
         try:

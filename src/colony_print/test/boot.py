@@ -192,7 +192,7 @@ class ColonyPrintBootTest(unittest.TestCase):
     def setUp(self):
         self.environ = dict(BASE_URL="https://print.example.com/", SECRET_KEY="key")
         self.boot = colony_print.boot.ColonyPrintBoot(
-            environ=self.environ, retry_delay=0.0, legacy=False
+            environ=self.environ, retry_delay=0.0, legacy=False, flags=MockFlags()
         )
         self.temp_path = tempfile.mkdtemp(prefix="colony-print-boot-test-")
         self.config_path = os.path.join(self.temp_path, "config.env")
@@ -240,7 +240,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         )
         environ = dict()
         boot = colony_print.boot.ColonyPrintBoot(
-            environ=environ, retry_delay=0.0, legacy=False
+            environ=environ, retry_delay=0.0, legacy=False, flags=MockFlags()
         )
 
         boot.main(["--config", self.config_path])
@@ -821,7 +821,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         # temporary directory, that exists while pip runs and is removed once
         # the update is done, running pip without its configuration files
         boot = colony_print.boot.ColonyPrintBoot(
-            environ=self.environ, retry_delay=0.0, legacy=True
+            environ=self.environ, retry_delay=0.0, legacy=True, flags=MockFlags()
         )
         self.assertEqual(boot.update(), ["colony-print", "npcolony"])
         temp_dir = self._temp_dir(MockSubprocess.calls[0])
@@ -922,7 +922,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         MockSubprocess.codes = [0, 0, 1]
         MockSubprocess.calls = []
         boot = colony_print.boot.ColonyPrintBoot(
-            environ=self.environ, retry_delay=0.0, legacy=True
+            environ=self.environ, retry_delay=0.0, legacy=True, flags=MockFlags()
         )
         with self.assertRaises(RuntimeError) as context:
             boot.update()
