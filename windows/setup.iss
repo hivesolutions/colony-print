@@ -574,17 +574,22 @@ begin
     ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
+{ Retrieves the command line (image path) of the existing service, as it's
+  registered, empty in case there's no service }
+function ServiceImagePath: String;
+begin
+  Result := '';
+  RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'ImagePath', Result);
+end;
+
 { Retrieves the path to the wrapper (image) of the existing service, without
   its quotes and arguments, empty in case there's no service }
 function ServiceImage: String;
 var
   Index: Integer;
 begin
-  Result := '';
-  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
-    'ImagePath', Result) then
-    Exit;
-  Result := Trim(Result);
+  Result := Trim(ServiceImagePath);
   if (Result <> '') and (Result[1] = '"') then
   begin
     Result := Copy(Result, 2, Length(Result));
@@ -600,11 +605,29 @@ end;
   whose wrapper is in its directory, as the installer of the Windows XP nodes
   and the one of the other nodes use the same service name with different
   wrappers in different directories, the short names of the directories are
-  compared, so that the same directory is never taken as another one }
+  compared, so that the same directory is never taken as another one, the
+  paths compared being logged, as they're the ones explaining why a service
+  is taken as the one of another installer }
 function OwnService: Boolean;
+var
+  ImageDir, AppDir: String;
 begin
-  Result := CompareText(GetShortName(ExtractFilePath(ServiceImage)),
-    GetShortName(AddBackslash(ExpandConstant('{app}')))) = 0;
+  ImageDir := GetShortName(ExtractFilePath(ServiceImage));
+  AppDir := GetShortName(AddBackslash(ExpandConstant('{app}')));
+  Result := CompareText(ImageDir, AppDir) = 0;
+  Log('The ' + ServiceName + ' service has the image path ' + ServiceImagePath +
+    ' (' + ImageDir + ' compared with ' + AppDir + ')');
+end;
+
+{ Verifies if the existing service is marked for deletion, as one deleted
+  while any handle to it is open (eg: the services console) is only removed
+  once they're all closed (or Windows is restarted) }
+function ServiceMarkedForDeletion: Boolean;
+var
+  DeleteFlag: Cardinal;
+begin
+  Result := RegQueryDWordValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'DeleteFlag', DeleteFlag) and (DeleteFlag <> 0);
 end;
 
 { Retrieves the directory where the other installer (the one of the Windows
@@ -639,8 +662,10 @@ begin
   if (OtherDir <> '') and (CompareText(GetShortName(ExtractFilePath(ServiceImage)),
     GetShortName(AddBackslash(OtherDir))) = 0) and FileExists(Uninstaller) then
   begin
+    Log('Running the uninstaller ' + Uninstaller);
     Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+    Log('Uninstaller returned code ' + IntToStr(ResultCode));
     for I := 1 to 60 do
     begin
       if not ServiceExists then
@@ -649,9 +674,15 @@ begin
     end;
   end;
   if ServiceExists then
+  begin
     Exec(ExpandConstant('{sys}\sc.exe'), 'delete ' + ServiceName, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+    Log('Deletion of the ' + ServiceName + ' service returned code ' + IntToStr(ResultCode));
+  end;
   Result := not ServiceExists;
+  if not Result and ServiceMarkedForDeletion then
+    Log('The ' + ServiceName + ' service is marked for deletion, being only removed ' +
+      'once every handle to it is closed (eg: the services console) or Windows is restarted');
 end;
 
 { Retrieves the default printer of the user running the installer, as the
@@ -1032,6 +1063,7 @@ begin
     Log('Stopping the ' + ServiceName + ' service');
     Exec(ExpandConstant('{sys}\net.exe'), 'stop ' + ServiceName, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+    Log('Stop of the ' + ServiceName + ' service returned code ' + IntToStr(ResultCode));
   end;
 
   { removes the node of the other installer (the one of the Windows XP

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-*
+* Logging of the existing service by the Windows installers, with its image path, the exit codes of its stop and deletion and whether it's marked for deletion, explaining why the service of another installer is not removed
 
 ### Fixed
 
