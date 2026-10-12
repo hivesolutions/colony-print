@@ -114,6 +114,9 @@ const
   ServiceName = '{#ServiceName}';
   DefaultUrl = 'https://print.bemisc.com/';
   PdfPrinter = 'Microsoft Print to PDF';
+  ScManagerConnect = $0001;
+  ServiceQueryStatus = $0004;
+  ErrorServiceDoesNotExist = 1060;
 
 var
   ServerPage: TInputQueryWizardPage;
@@ -566,12 +569,37 @@ begin
   end;
 end;
 
+function OpenSCManager(MachineName, DatabaseName: String; DesiredAccess: Cardinal): Longint;
+  external 'OpenSCManagerW@advapi32.dll stdcall';
+
+function OpenService(Manager: Longint; Name: String; DesiredAccess: Cardinal): Longint;
+  external 'OpenServiceW@advapi32.dll stdcall';
+
+function CloseServiceHandle(Handle: Longint): BOOL;
+  external 'CloseServiceHandle@advapi32.dll stdcall';
+
+{ Verifies if the service exists by opening it through the service control
+  manager, as the exit code of sc.exe (query) can't be relied on, being zero
+  in Windows XP even for a service that doesn't exist, a service that can't
+  be opened for any other reason is taken as an existing one, and its key in
+  the registry is verified in case the manager itself can't be opened }
 function ServiceExists: Boolean;
 var
-  ResultCode: Integer;
+  Manager, Service: Longint;
 begin
-  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'query ' + ServiceName, '', SW_HIDE,
-    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  Manager := OpenSCManager('', 'ServicesActive', ScManagerConnect);
+  if Manager = 0 then
+  begin
+    Log('Could not open the service control manager (code ' +
+      IntToStr(DLLGetLastError) + ')');
+    Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName);
+    Exit;
+  end;
+  Service := OpenService(Manager, ServiceName, ServiceQueryStatus);
+  Result := (Service <> 0) or (DLLGetLastError <> ErrorServiceDoesNotExist);
+  if Service <> 0 then
+    CloseServiceHandle(Service);
+  CloseServiceHandle(Manager);
 end;
 
 { Retrieves the command line (image path) of the existing service, as it's

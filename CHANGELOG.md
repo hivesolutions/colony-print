@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Service of the node taken as existing by the installer of the Windows XP nodes even when not installed, as the exit code of `sc query` is zero in Windows XP, failing the install with the service of another installer not removed, the service being now verified through the service control manager
 
 ## [0.25.0] - 2026-10-12
 
