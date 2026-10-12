@@ -104,8 +104,9 @@ class NodeController(appier.Controller):
 
         # marks the depth of the job as skipped in case the node skipped it,
         # as its gravo pilot doesn't support the depth (eg: an older version),
-        # the job having been engraved with the depth of the engraving software
-        if data.get("depth_skipped", False):
+        # or is an older node (that doesn't read the depth of the job), the
+        # job having been engraved with the depth of the engraving software
+        if data.get("depth_skipped", False) or self.owner.depth_skipped(job_info):
             job_info["depth_skipped"] = True
 
         if (payload or files) and not os.path.exists(job_path):

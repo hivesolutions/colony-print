@@ -120,7 +120,7 @@ The `options` map is filtered to the following keys:
 
 The `save_output` and `email_*` options only take effect on nodes running in `email` mode (`NODE_MODE=email`).
 
-The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format) fail with `409`, except the fonts of the print jobs, that are skipped for the nodes that don't support them (see [Print Fonts](#print-fonts)), see [Node Capabilities](doc/capabilities.md).
+The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format) fail with `409`, except the fonts of the print jobs, that are skipped for the nodes that don't support them (see [Print Fonts](#print-fonts)), and the depth of the gravo print jobs, that is skipped by the nodes without the `gravo-depth` capability (see [Gravo Print Payload](#gravo-print-payload)), see [Node Capabilities](doc/capabilities.md).
 
 ### npcolony Print Payload
 

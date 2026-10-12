@@ -457,3 +457,53 @@ class ColonyPrintAppTest(unittest.TestCase):
         )
         self.assertEqual(self.app.fonts_skipped(dict(job_info, fonts=[])), False)
         self.assertEqual(self.app.fonts_skipped(dict(job_info, type="fonts")), False)
+
+    def test_depth_skipped(self):
+        # the depth of a gravo job is skipped for the known nodes that don't
+        # support the depth, the ones without the capability and the older
+        # nodes (that advertise no capabilities), that don't read the depth
+        data = b'{"text": "Hello World", "depth": 0.5}'
+        job_info = dict(id="first", node_id="node", type="gravo")
+        self.app.jobs_data["first"] = base64.b64encode(data).decode("utf-8")
+        self.app.nodes["node"] = dict(name="node", capabilities=["gravo"])
+        self.assertEqual(self.app.depth_skipped(job_info), True)
+        self.app.nodes["node"] = dict(name="node")
+        self.assertEqual(self.app.depth_skipped(job_info), True)
+
+        # the depth is not skipped for the nodes that support it and for
+        # the unknown nodes (eg: not registered since the server restarted)
+        capabilities = ["gravo", "gravo-depth"]
+        self.app.nodes["node"] = dict(name="node", capabilities=capabilities)
+        self.assertEqual(self.app.depth_skipped(job_info), False)
+        self.assertEqual(self.app.depth_skipped(dict(job_info, node_id="other")), False)
+
+        # a depth of zero is still a depth that the node doesn't set, while
+        # the gravo jobs without a depth have none to be skipped
+        self.app.nodes["node"] = dict(name="node")
+        for data, skipped in (
+            (b'{"text": "Hello World", "depth": 0}', True),
+            (b'{"text": "Hello World", "depth": null}', False),
+            (b'{"text": "Hello World"}', False),
+        ):
+            self.app.jobs_data["first"] = base64.b64encode(data).decode("utf-8")
+            self.assertEqual(self.app.depth_skipped(job_info), skipped)
+
+        # the payloads that are not the ones of a gravo job, as they're not
+        # verified by the server, have no depth to be skipped either
+        for data in (b"[0.5]", b'"depth"', b"0.5", b"Hello World", b"\xff\xfe"):
+            self.app.jobs_data["first"] = base64.b64encode(data).decode("utf-8")
+            self.assertEqual(self.app.depth_skipped(job_info), False)
+        for data_b64 in ("depth", None):
+            self.app.jobs_data["first"] = data_b64
+            self.assertEqual(self.app.depth_skipped(job_info), False)
+        del self.app.jobs_data["first"]
+        self.assertEqual(self.app.depth_skipped(job_info), False)
+
+        # the jobs of the other types have no depth, whatever their payload
+        data = b'{"text": "Hello World", "depth": 0.5}'
+        self.app.jobs_data["first"] = base64.b64encode(data).decode("utf-8")
+        self.assertEqual(self.app.depth_skipped(job_info), True)
+        self.assertEqual(self.app.depth_skipped(dict(job_info, type="text")), False)
+        self.assertEqual(
+            self.app.depth_skipped(dict(id="first", node_id="node")), False
+        )

@@ -236,8 +236,8 @@ class NodeControllerTest(unittest.TestCase):
             )
 
             # the depth skipped by the node (eg: an older gravo pilot) is
-            # marked as skipped in the information of the job, as the server
-            # doesn't read the payload of the gravo jobs
+            # marked as skipped in the information of the job, as reported
+            # by the node in the result of the job
             code, job_info = self._print(type="gravo")
             self.assertEqual("depth_skipped" in job_info, False)
             code = self._result(
@@ -257,6 +257,31 @@ class NodeControllerTest(unittest.TestCase):
                 self.assertEqual(
                     "depth_skipped" in self.app.jobs_info[job_info["id"]], False
                 )
+
+            # an older node (that doesn't read the depth of the job) is known
+            # not to support the depth when it posts the result, marking the
+            # depth as skipped, as the node doesn't report it
+            data = json.dumps(dict(text="Hello World", depth=0.5)).encode("utf-8")
+            data_b64 = base64.b64encode(data).decode("utf-8")
+            self._register(id="engraver", version="0.24.0", capabilities=["gravo"])
+            code, job_info = self._print(
+                url="/nodes/engraver/print", type="gravo", data_b64=data_b64
+            )
+            self.assertEqual("depth_skipped" in job_info, False)
+            code = self._result(job_info["id"], id="engraver", result="success")
+            self.assertEqual(code, 200)
+            self.assertEqual(self.app.jobs_info[job_info["id"]]["depth_skipped"], True)
+
+            # a node that supports the depth doesn't mark it as skipped
+            self._register(id="engraver", capabilities=["gravo", "gravo-depth"])
+            code, job_info = self._print(
+                url="/nodes/engraver/print", type="gravo", data_b64=data_b64
+            )
+            code = self._result(job_info["id"], id="engraver", result="success")
+            self.assertEqual(code, 200)
+            self.assertEqual(
+                "depth_skipped" in self.app.jobs_info[job_info["id"]], False
+            )
         finally:
             appier.conf_r("DATA_PATH")
             shutil.rmtree(data_path, ignore_errors=True)
