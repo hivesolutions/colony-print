@@ -712,13 +712,19 @@ class FontCache(object):
         Retrieves the path to the file of the font with the provided MD5,
         an invalid MD5 resulting in a path where no font exists.
 
+        The MD5 (hexadecimal) is converted into a native string, as in
+        Python 2 the MD5s of the index and of the jobs are unicode strings,
+        that can't be joined with the path of the cache, a byte string,
+        when it's not ASCII (eg: the data directory of a windows that is
+        not in english).
+
         :type md5: String
         :param md5: The MD5 of the font file.
         :rtype: String
         :return: The path to the font file in the cache.
         """
 
-        return os.path.join(self.path, "%s.ttf" % md5)
+        return os.path.join(self.path, "%s.ttf" % str(md5))
 
     def _write(self, path, data):
         """

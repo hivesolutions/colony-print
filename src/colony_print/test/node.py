@@ -2304,6 +2304,19 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(json.loads(json.dumps(result)), result)
 
+        # the font cache of that data directory is loaded once more (as when
+        # the node starts), with the (unicode) MD5s of its index, and its font
+        # is installed by its (unicode) MD5, as referenced by the jobs
+        md5 = result["fonts"][0]["md5"]
+        font_cache = colony_print.FontCache(fonts_dir)
+        font_cache.load()
+        files = font_cache.files()
+        self.assertEqual(len(files), 1)
+        self.assertEqual(list(files.values())[0], font_cache._file(str(md5)))
+        info = font_cache.install(dict(name="Colonia", md5=md5))
+        self.assertEqual(info["md5"], md5)
+        self.assertEqual(os.path.exists(info["path"]), True)
+
     def test_handle_restart(self):
         self.node.node_restart = "exec"
         self.node._handle_restart("first")

@@ -1056,13 +1056,16 @@ class FontCacheTest(unittest.TestCase):
 
     def test_context(self):
         # the bundle of netius (when installed) is the one exposed at the top
-        # of its package, the one loaded into the context of the downloads
+        # of its package, the one loaded into the context of the downloads,
+        # with the authority of the current certificates (eg: Let's Encrypt)
         try:
             import netius
         except ImportError:
             netius = None
         if netius:
             self.assertEqual(os.path.isfile(netius.SSL_CA_PATH), True)
+            context = ssl.create_default_context(cafile=netius.SSL_CA_PATH)
+            self.assertEqual("ISRG Root X1" in self._authorities(context), True)
 
         # the certificates of the servers (and their names) are verified,
         # against the authorities of the system and the ones of the bundle
@@ -1132,6 +1135,17 @@ class FontCacheTest(unittest.TestCase):
         self.assertEqual(
             font_cache._file("a" * 32), os.path.join(self.path, "a" * 32 + ".ttf")
         )
+
+        # the (unicode) MD5s of the index and of the jobs result in a path of
+        # the type of the path of the cache, as in Python 2 it's a byte string
+        # that can't be joined with an unicode string when it's not ASCII
+        path = os.path.join(self.target_dir, appier.legacy.u("Dados de aplicações"))
+        if not appier.legacy.PYTHON_3:
+            path = path.encode(sys.getfilesystemencoding(), "replace")
+        font_cache = colony_print.FontCache(path)
+        file_path = font_cache._file(appier.legacy.u("a" * 32))
+        self.assertEqual(file_path, os.path.join(path, "a" * 32 + ".ttf"))
+        self.assertEqual(type(file_path), type(path))
 
     def test_write(self):
         font_cache = colony_print.FontCache(self.path)
