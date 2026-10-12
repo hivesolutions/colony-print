@@ -198,7 +198,7 @@ class MockGravoPilotLegacy(object):
 
     GravostyleAPI = MockGravostyleAPILegacy
 
-    capture_logs = MockGravoPilot.capture_logs
+    capture_logs = staticmethod(MockGravoPilot.capture_logs)
 
 
 class MockNPColony(object):
