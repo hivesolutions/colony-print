@@ -1024,22 +1024,31 @@ class FontCacheTest(unittest.TestCase):
         for options in self.options:
             self.assertEqual(sorted(options.keys()), ["context"])
             self.assertEqual(options["context"].verify_mode, ssl.CERT_REQUIRED)
+
+        # the URLs that are not secure (HTTP) are downloaded with the context
+        # as well, as they may be redirected to secure ones (eg: by the hosts
+        # that force HTTPS), that are verified with the context of the request
+        http_url = "http://fonts.hive.pt/colonia.ttf"
+        self.responses[http_url] = b"font"
+        self.options = []
+        self.assertEqual(font_cache._download("Colonia", http_url), b"fon")
+        self.assertEqual(sorted(self.options[0].keys()), ["context"])
+        self.assertEqual(self.options[0]["context"].verify_mode, ssl.CERT_REQUIRED)
+
         font_cache._context = lambda: None
         self.options = []
         self.responses[url] = b"font"
         self.assertEqual(font_cache._download("Colonia", url), b"fon")
         self.assertEqual(self.options, [dict()])
 
-        # no context is built for the URLs that are not secure (HTTP), that
-        # are downloaded even when the context can't be built, which fails
-        # the download of the secure ones (whatever the case of their scheme)
+        # the URLs that are not secure (HTTP) are downloaded (without the
+        # context) even when the context can't be built, which fails the
+        # download of the secure ones (whatever the case of their scheme)
         # as any other problem downloading the font
         def context_error():
             raise IOError("No such file or directory")
 
         font_cache._context = context_error
-        http_url = "http://fonts.hive.pt/colonia.ttf"
-        self.responses[http_url] = b"font"
         self.options = []
         self.assertEqual(font_cache._download("Colonia", http_url), b"fon")
         self.assertEqual(self.options, [dict()])
