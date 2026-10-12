@@ -659,9 +659,13 @@ class FontCache(object):
         case it's larger than the maximum size of the font files).
         """
 
-        context = self._context()
-        kwargs = dict(context=context) if context else dict()
+        # the SSL context is only built for the secure (HTTPS) URLs and
+        # inside the try block, so that a failure building it (eg: a bundle
+        # of authorities that can't be loaded) is a failure of the download
         try:
+            secure = url.lower().startswith("https://")
+            context = self._context() if secure else None
+            kwargs = dict(context=context) if context else dict()
             response = appier.legacy.urlopen(url, timeout=FONT_TIMEOUT, **kwargs)
             try:
                 data = response.read(self.max_size + 1)

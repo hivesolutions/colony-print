@@ -42,6 +42,22 @@ EXAMPLE = '<?xml version="1.0" encoding="UTF-8"?>\
 of the printing document (and in a paragraph, where they are
 not valid) using the XML printing language """
 
+TEST_CA = b"""-----BEGIN CERTIFICATE-----
+MIIBpTCCAUugAwIBAgIUL7tC7g4jp5qhCejlyvYHxb/knKQwCgYIKoZIzj0EAwIw
+HzEdMBsGA1UEAwwUQ29sb255IFByaW50IFRlc3QgQ0EwIBcNMjYxMDEyMTk0OTQ4
+WhgPMjEyNjA5MTgxOTQ5NDhaMB8xHTAbBgNVBAMMFENvbG9ueSBQcmludCBUZXN0
+IENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExUoryTrZx/Blzal+1nLT8BG/
+31SjecgprjLOzZdqeC2VJFG31T5o40PGSrQypg6O173bYUS5L0lz9g7c1qgO5KNj
+MGEwHQYDVR0OBBYEFK4/BK4KVhZB1qUddlu1CmzWansvMB8GA1UdIwQYMBaAFK4/
+BK4KVhZB1qUddlu1CmzWansvMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQD
+AgEGMAoGCCqGSM49BAMCA0gAMEUCICFHgg/59Pi8WEPlYdOfEYGiZ4xeSmlY3W+w
+sZP2sZahAiEAiUzMDB9X25Lh0BirwpGzXv3Tjnz7zKzyrqtWOqR5bcM=
+-----END CERTIFICATE-----
+"""
+""" The certificate (PEM) of a certificate authority that is only
+trusted by the tests, so that the authorities loaded into the SSL
+context of the downloads can be verified in any system """
+
 
 def build_font(name="Colonia", style="regular"):
     """
@@ -167,6 +183,8 @@ class MockKernel32(object):
         MockKernel32.moves.append((source, target, flags))
         if MockKernel32.error:
             return 0
+        if os.path.exists(target):
+            os.remove(target)
         os.rename(source, target)
         return 1
 
@@ -541,6 +559,12 @@ class FontCacheTest(unittest.TestCase):
 
     def _files(self):
         return sorted(os.listdir(self.path)) if os.path.exists(self.path) else []
+
+    def _authorities(self, context):
+        return [
+            dict(item[0] for item in cert["subject"]).get("commonName", None)
+            for cert in context.get_ca_certs()
+        ]
 
     def test_init(self):
         font_cache = colony_print.FontCache(self.path)
@@ -1006,24 +1030,63 @@ class FontCacheTest(unittest.TestCase):
         self.assertEqual(font_cache._download("Colonia", url), b"fon")
         self.assertEqual(self.options, [dict()])
 
+        # no context is built for the URLs that are not secure (HTTP), that
+        # are downloaded even when the context can't be built, which fails
+        # the download of the secure ones (whatever the case of their scheme)
+        # as any other problem downloading the font
+        def context_error():
+            raise IOError("No such file or directory")
+
+        font_cache._context = context_error
+        http_url = "http://fonts.hive.pt/colonia.ttf"
+        self.responses[http_url] = b"font"
+        self.options = []
+        self.assertEqual(font_cache._download("Colonia", http_url), b"fon")
+        self.assertEqual(self.options, [dict()])
+        for secure_url in (url, url.replace("https://", "HTTPS://")):
+            with self.assertRaises(appier.OperationalError) as context:
+                font_cache._download("Colonia", secure_url)
+            self.assertEqual(
+                context.exception.message,
+                "Font 'Colonia' not downloaded from '%s': No such file or directory"
+                % secure_url,
+            )
+            self.assertEqual(context.exception.code, 400)
+        self.assertEqual(len(self.options), 1)
+
     def test_context(self):
         # the certificates of the servers (and their names) are verified,
-        # against authorities that include the one of the current certificates
-        # (eg: Let's Encrypt), that the ones of older systems (eg: Windows XP,
-        # no longer updated) miss
+        # against the authorities of the system and the ones of the bundle
+        # of netius, that the ones of older systems (eg: Windows XP, no longer
+        # updated) miss, as the one of the tests
         font_cache = colony_print.FontCache(self.path)
-        context = font_cache._context()
-        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
-        self.assertEqual(context.check_hostname, True)
-        names = [
-            dict(item[0] for item in cert["subject"]).get("commonName", None)
-            for cert in context.get_ca_certs()
-        ]
-        self.assertEqual("ISRG Root X1" in names, True)
+        ca_path = os.path.join(self.target_dir, "net.ca")
+        with open(ca_path, "wb") as file:
+            file.write(TEST_CA)
+        netius = sys.modules.get("netius", None)
+        sys.modules["netius"] = MockNetius
+        MockNetius.SSL_CA_PATH = ca_path
+        try:
+            context = font_cache._context()
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+            self.assertEqual(context.check_hostname, True)
+            self.assertEqual("Colony Print Test CA" in self._authorities(context), True)
+
+            sys.modules["netius"] = None
+            context = font_cache._context()
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+            self.assertEqual(
+                "Colony Print Test CA" in self._authorities(context), False
+            )
+        finally:
+            MockNetius.SSL_CA_PATH = None
+            if netius == None:
+                sys.modules.pop("netius", None)
+            else:
+                sys.modules["netius"] = netius
 
         # the authorities of the system are complemented with the ones of
         # the bundle of netius, when netius (and its bundle) is available
-        netius = sys.modules.get("netius", None)
         create_default_context = ssl.create_default_context
         MockContext.contexts = []
         ssl.create_default_context = MockContext

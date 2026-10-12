@@ -142,6 +142,8 @@ class MockKernel32(object):
         MockKernel32.moves.append((source, target, flags))
         if MockKernel32.error:
             return 0
+        if os.path.exists(target):
+            os.remove(target)
         os.rename(source, target)
         return 1
 

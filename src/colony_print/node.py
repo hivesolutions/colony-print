@@ -1047,7 +1047,19 @@ class ColonyPrintNode(object):
     def _handle_fonts(self, data_b64):
         self._ensure_capability("dynamic-fonts")
         data_j = self._decode_payload(data_b64)
-        return dict(fonts=self._install_fonts(data_j["fonts"]))
+        fonts = self._install_fonts(data_j["fonts"])
+
+        # hands the paths of the fonts over to the server as unicode strings,
+        # as in Python 2 they're byte strings in the encoding of the file system
+        # (eg: the ANSI code page of windows), that can't be serialized as JSON
+        # when they're not ASCII (eg: in the data directory of a windows that
+        # is not in english)
+        encoding = sys.getfilesystemencoding() or "utf-8"
+        for font in fonts:
+            font["path"] = appier.legacy.u(
+                font["path"], encoding=encoding, errors="replace"
+            )
+        return dict(fonts=fonts)
 
     def _handle_restart(self, job_id, update=False):
         """
@@ -1153,7 +1165,7 @@ class ColonyPrintNode(object):
                 if font["path"] in self.loaded_fonts:
                     continue
                 raise appier.OperationalError(
-                    "Font '%s' not loaded in the system" % font["name"]
+                    message="Font '%s' not loaded in the system" % font["name"]
                 )
 
         return fonts

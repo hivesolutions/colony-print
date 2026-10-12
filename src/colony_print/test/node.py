@@ -2277,6 +2277,27 @@ class ColonyPrintNodeTest(unittest.TestCase):
             appier.OperationalError, lambda: self.node._handle_fonts(data_b64)
         )
 
+        # the paths of the fonts are handed over to the server as unicode
+        # strings, as in Python 2 the paths of the font cache are byte strings
+        # in the encoding of the file system (eg: the ANSI code page of windows)
+        # that can't be serialized as JSON when they're not ASCII (eg: in the
+        # data directory of a windows that is not in english)
+        sys.modules["npcolony"] = MockNPColony
+        encoding = sys.getfilesystemencoding()
+        fonts_dir = os.path.join(
+            self.target_dir, appier.legacy.u("Dados de aplicações")
+        )
+        if not appier.legacy.PYTHON_3:
+            fonts_dir = fonts_dir.encode(encoding, "replace")
+        self.node.font_cache = colony_print.FontCache(fonts_dir)
+        result = self.node._handle_fonts(data_b64)
+        path = result["fonts"][0]["path"]
+        self.assertEqual(appier.legacy.is_unicode(path), True)
+        self.assertEqual(
+            path.startswith(appier.legacy.u(fonts_dir, encoding=encoding)), True
+        )
+        self.assertEqual(json.loads(json.dumps(result)), result)
+
     def test_handle_restart(self):
         self.node.node_restart = "exec"
         self.node._handle_restart("first")
@@ -2464,8 +2485,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
         font = dict(name="Telhado", data_b64=base64.b64encode(data).decode())
         path = self.node.font_cache._file(hashlib.md5(data).hexdigest())
         MockNPColonyWindows.errors = {path: IOError("Problem loading font")}
-        self.assertRaises(
-            appier.OperationalError, lambda: self.node._install_fonts([font])
+        with self.assertRaises(appier.OperationalError) as context:
+            self.node._install_fonts([font])
+        self.assertEqual(
+            str(context.exception), "Font 'Telhado' not loaded in the system"
         )
         fonts = self.node._install_fonts([self._font(name="Fontana")])
         self.assertEqual(fonts[0]["name"], "Fontana")
