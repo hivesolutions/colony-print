@@ -314,7 +314,7 @@ Both installers use the same service, so only one of the nodes is installed in a
 .\windows\build.ps1 -XP -Python C:\Python27\python.exe
 ```
 
-The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release. It also installs each of the installers over the node of the other one, to verify that the node is replaced.
+The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The NSSM service wrapper (the 32 bit build of its 2.24 version, which is public domain) is kept in the repository (`windows/nssm.exe`, with its digest pinned in `build.ps1`), as its site is unavailable too often for the build to download it. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release. It also installs each of the installers over the node of the other one, to verify that the node is replaced.
 
 ## Admin UI
 

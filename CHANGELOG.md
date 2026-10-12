@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* Build of the Windows installers failing whenever one of its downloads fails, the downloads being tried again and NSSM kept in the repository
 
 ## [0.24.0] - 2026-10-06
 
