@@ -139,12 +139,15 @@ class MockGravostyleAPI(object):
 class MockGravoPilot(object):
     """
     Stand-in for the gravo pilot module that exposes the minimal
-    surface used by the node, namely the GravostyleAPI class and the
-    capture_logs context manager, so that _handle_gravo can be
-    exercised without the real dependency installed.
+    surface used by the node, namely the GravostyleAPI class, the
+    capture_logs context manager and the features it supports, so
+    that _handle_gravo can be exercised without the real dependency
+    installed.
     """
 
     GravostyleAPI = MockGravostyleAPI
+
+    FEATURES = ("depth",)
 
     @staticmethod
     def capture_logs(*args, **kwargs):
@@ -155,6 +158,47 @@ class MockGravoPilot(object):
             yield []
 
         return _capture()
+
+
+class MockGravostyleAPILegacy(object):
+    """
+    Stand-in for the GravostyleAPI of a legacy version of gravo pilot,
+    whose write_text accepts only the arguments that existed before the
+    depth of the tool (failing for any other one, as the real one does),
+    recording the keyword arguments it receives.
+    """
+
+    calls = []
+
+    def write_text(
+        self,
+        text,
+        font="HELVETICA 1L",
+        font_size=None,
+        width=80,
+        height=100,
+        margins=None,
+        dry_run=False,
+        record=False,
+        check_path=False,
+        extra_fonts=None,
+    ):
+        MockGravostyleAPILegacy.calls.append(
+            dict(dry_run=dry_run, check_path=check_path)
+        )
+        return []
+
+
+class MockGravoPilotLegacy(object):
+    """
+    Stand-in for a legacy version of the gravo pilot module that is
+    not able to report the features it supports, as the versions that
+    were released before the depth of the tool.
+    """
+
+    GravostyleAPI = MockGravostyleAPILegacy
+
+    capture_logs = staticmethod(MockGravoPilot.capture_logs)
 
 
 class MockNPColony(object):
@@ -419,6 +463,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.features = ["load-fonts"]
         MockNPColonyWindows.errors = dict()
         MockGravostyleAPI.calls = []
+        MockGravostyleAPILegacy.calls = []
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
         MockNPColony.format = "pdf"
@@ -1201,8 +1246,16 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 "gravo-extra-fonts",
                 "gravo-record",
                 "gravo-check-path",
+                "gravo-depth",
             ],
         )
+
+        # the gravo pilot of the system doesn't report its features (an
+        # older version), so the depth of the tool can't be set by the node
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        self.assertEqual("gravo-depth" in self.node.capabilities, False)
+        self.assertEqual("gravo-check-path" in self.node.capabilities, True)
+        sys.modules["gravo_pilot"] = MockGravoPilot
 
         # the printers don't report their custom paper sizes (an older
         # version of npcolony) or there are no printers to report them
@@ -1950,6 +2003,97 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(len(MockGravostyleAPI.calls), 1)
         self.assertEqual(MockGravostyleAPI.calls[0]["check_path"], False)
 
+    def test_handle_gravo_forwards_depth(self):
+        result = self.node._handle_gravo(self._gravo_payload(depth=0.5, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual(MockGravostyleAPI.calls[0]["depth"], 0.5)
+        self.assertEqual("depth_skipped" in result, False)
+
+        # a depth of zero is still a depth to be set by gravo pilot, as
+        # it differs from the one that is kept by the engraving software
+        self.node._handle_gravo(self._gravo_payload(depth=0, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 2)
+        self.assertEqual(MockGravostyleAPI.calls[1]["depth"], 0)
+
+        # the largest finite depth is still a valid one, as only the
+        # depths that are not finite numbers are refused by the node
+        depth = sys.float_info.max
+        self.node._handle_gravo(self._gravo_payload(depth=depth, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 3)
+        self.assertEqual(MockGravostyleAPI.calls[2]["depth"], depth)
+
+    def test_handle_gravo_depth_defaults_to_unset(self):
+        # the depth is not forwarded when the job has none, so that the
+        # jobs without it are engraved by every version of gravo pilot
+        result = self.node._handle_gravo(self._gravo_payload(dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual("depth" in MockGravostyleAPI.calls[0], False)
+        self.assertEqual("depth_skipped" in result, False)
+
+        self.node._handle_gravo(self._gravo_payload(depth=None, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 2)
+        self.assertEqual("depth" in MockGravostyleAPI.calls[1], False)
+
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        result = self.node._handle_gravo(self._gravo_payload(dry_run=True))
+        self.assertEqual(len(MockGravostyleAPILegacy.calls), 1)
+        self.assertEqual("depth_skipped" in result, False)
+
+    def test_handle_gravo_depth_skipped(self):
+        # the gravo pilot of the system doesn't support the depth (an
+        # older version, that fails for the arguments it doesn't know), so
+        # the job is engraved without it and the depth reported as skipped
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        result = self.node._handle_gravo(self._gravo_payload(depth=0.5, dry_run=True))
+        self.assertEqual(
+            MockGravostyleAPILegacy.calls, [dict(dry_run=True, check_path=False)]
+        )
+        self.assertEqual(result["depth_skipped"], True)
+        self.assertEqual(result["files"], [])
+
+        result = self.node._handle_gravo(
+            self._gravo_payload(depth=0.5, dry_run=True, debug=True)
+        )
+        self.assertEqual(result["depth_skipped"], True)
+        self.assertEqual(result["logs"], [])
+
+    def test_handle_gravo_depth_invalid(self):
+        for depth in ("0.5", "deep", -0.5, -1, True, False, [0.5], dict(value=0.5)):
+            self.assertRaises(
+                appier.AssertionError,
+                lambda: self.node._handle_gravo(
+                    self._gravo_payload(depth=depth, dry_run=True)
+                ),
+            )
+
+        # the depths that are not finite numbers are refused as well, the
+        # ones that are encoded as constants (Infinity and NaN) and the one
+        # that overflows the float it's decoded into (1e309)
+        for depth in (float("inf"), float("-inf"), float("nan")):
+            self.assertRaises(
+                appier.AssertionError,
+                lambda: self.node._handle_gravo(
+                    self._gravo_payload(depth=depth, dry_run=True)
+                ),
+            )
+        data_b64 = base64.b64encode(b'{"text": "Hello World", "depth": 1e309}')
+        self.assertRaises(
+            appier.AssertionError, lambda: self.node._handle_gravo(data_b64)
+        )
+        self.assertEqual(MockGravostyleAPI.calls, [])
+
+        # an invalid depth fails the job even if the node is not able
+        # to set it, instead of being skipped as a valid one would
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        for depth in (-0.5, float("inf")):
+            self.assertRaises(
+                appier.AssertionError,
+                lambda: self.node._handle_gravo(
+                    self._gravo_payload(depth=depth, dry_run=True)
+                ),
+            )
+        self.assertEqual(MockGravostyleAPILegacy.calls, [])
+
     def test_stage_extra_fonts_writes_payloads(self):
         payload_a = b"\x00\x01\x00\x00font-a-payload"
         payload_b = b"\x00\x01\x00\x00font-b-payload"
@@ -2569,6 +2713,13 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
         sys.modules["npcolony"] = MockNPColonyLegacy
         self.assertEqual(self.node._has_feature("load-fonts"), False)
+
+    def test_has_gravo_feature(self):
+        self.assertEqual(self.node._has_gravo_feature("depth"), True)
+        self.assertEqual(self.node._has_gravo_feature("unknown"), False)
+
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        self.assertEqual(self.node._has_gravo_feature("depth"), False)
 
     def test_is_enabled(self):
         self.assertEqual(self.node._is_enabled("NODE_CONTROL"), True)

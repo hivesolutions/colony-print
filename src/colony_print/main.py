@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import time
+import json
 import base64
 
 import appier
@@ -190,6 +191,40 @@ class ColonyPrintApp(appier.APIApp):
         if job_info.get("type", None) == "fonts":
             return False
         return not "dynamic-fonts" in node.get("capabilities", [])
+
+    def depth_skipped(self, job_info):
+        """
+        Verifies if the depth of the job with the provided information is
+        skipped for its node, as the node is known not to support the depth
+        (eg: an older node, that doesn't read it), the unknown nodes being
+        considered to support it, as the nodes that don't support it report
+        it as skipped.
+
+        Only the gravo jobs whose payload has a depth have one to be skipped,
+        the payload that can't be decoded (not verified by the server) being
+        considered to have none.
+
+        :type job_info: Dictionary
+        :param job_info: The information of the job, with its identifier,
+        its type and the identifier of its node.
+        :rtype: bool
+        :return: If the depth of the job is skipped for its node, that
+        engraves it with the depth of the engraving software.
+        """
+
+        node = self.nodes.get(job_info["node_id"], None)
+        if not node or not job_info.get("type", None) == "gravo":
+            return False
+        if "gravo-depth" in node.get("capabilities", []):
+            return False
+        try:
+            data = base64.b64decode(self.jobs_data.get(job_info["id"], None))
+            payload = json.loads(data.decode("utf-8"))
+        except Exception:
+            return False
+        if not isinstance(payload, dict):
+            return False
+        return not payload.get("depth", None) == None
 
     def _version(self):
         return "0.24.0"

@@ -28,8 +28,7 @@ param(
     [string]$Npcolony = "npcolony>=1.4.0",
     [string]$WinSWVersion = "2.12.0",
     [string]$WinSWSha256 = "b5066b7bbdfba1293e5d15cda3caaea88fbeab35bd5b38c41c913d492aadfc4f",
-    [string]$NssmVersion = "2.24",
-    [string]$NssmSha256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743",
+    [string]$NssmSha256 = "472232ca821b5c2ef562ab07f53638bc2cc82eae84cea13fbe674d6022b6481c",
     [string]$VCRedistSha256 = "8742bcbf24ef328a72d2a27b693cc7071e38d3bb4b9b44dec42aa3d2c8d61d92",
     [string]$Iscc = "",
     [switch]$XP
@@ -86,6 +85,26 @@ function Get-NativeOutput {
     return ($Output | Out-String).Trim()
 }
 
+# downloads the file at the provided URL, trying again (after a pause) when
+# it fails, as the servers of the downloads are unavailable every now and
+# then (eg: answering with a 503), which would otherwise fail the whole build
+function Invoke-Download {
+    param([string]$Uri, [string]$OutFile, [int]$Attempts = 5, [int]$Delay = 15)
+    for ($Attempt = 1; $true; $Attempt++) {
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile
+            return
+        }
+        catch {
+            if ($Attempt -ge $Attempts) {
+                throw
+            }
+            Write-Host "Download of $Uri failed, trying again in $Delay seconds"
+            Start-Sleep -Seconds $Delay
+        }
+    }
+}
+
 # retrieves the version of the node (from the package) and the version of
 # the Python interpreter, the embedded Python must be of the same version
 # so that the native wheels (eg: npcolony) built with it are compatible,
@@ -139,7 +158,7 @@ if ($XP) {
     Write-Host "Downloading Python $PythonVersion installer"
     $EmbedMsi = Join-Path $BuildDir "python.msi"
     $EmbedUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion.msi"
-    Invoke-WebRequest -Uri $EmbedUrl -OutFile $EmbedMsi
+    Invoke-Download -Uri $EmbedUrl -OutFile $EmbedMsi
     $EmbedHash = (Get-FileHash -Path $EmbedMsi -Algorithm SHA256).Hash.ToLower()
     if ($EmbedHash -ne $InstallerDigests[$PythonVersion]) {
         throw "Invalid Python installer digest $EmbedHash (expected $($InstallerDigests[$PythonVersion]))"
@@ -168,7 +187,7 @@ else {
     Write-Host "Downloading embedded Python $PythonVersion"
     $EmbedZip = Join-Path $BuildDir "python-embed.zip"
     $EmbedUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-embed-amd64.zip"
-    Invoke-WebRequest -Uri $EmbedUrl -OutFile $EmbedZip
+    Invoke-Download -Uri $EmbedUrl -OutFile $EmbedZip
     $EmbedHash = (Get-FileHash -Path $EmbedZip -Algorithm SHA256).Hash.ToLower()
     if ($EmbedHash -ne $EmbedDigests[$PythonVersion]) {
         throw "Invalid embedded Python digest $EmbedHash (expected $($EmbedDigests[$PythonVersion]))"
@@ -212,21 +231,19 @@ Invoke-Native $EmbedPython @(
 Copy-Item -Path (Join-Path $Root "src\colony_print\boot.py") -Destination (Join-Path $BuildDir "boot.py")
 
 if ($XP) {
-    # downloads the NSSM service wrapper (its 32 bit build), verifying its
-    # digest, as WinSW requires a .NET Framework that Windows XP lacks
-    Write-Host "Downloading NSSM $NssmVersion"
-    $NssmZip = Join-Path $BuildDir "nssm.zip"
-    $NssmUrl = "https://nssm.cc/release/nssm-$NssmVersion.zip"
-    Invoke-WebRequest -Uri $NssmUrl -OutFile $NssmZip
-    $NssmHash = (Get-FileHash -Path $NssmZip -Algorithm SHA256).Hash.ToLower()
+    # copies the NSSM service wrapper (the 32 bit build of its 2.24 version),
+    # verifying its digest, as WinSW requires a .NET Framework that Windows XP
+    # lacks, the wrapper being kept in the repository (it's public domain) as
+    # its site (nssm.cc) is unavailable too often for it to be downloaded, it's
+    # the win32\nssm.exe of https://nssm.cc/release/nssm-2.24.zip, the digest
+    # (SHA256) of that archive being
+    # 727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743
+    $Nssm = Join-Path $BuildDir "nssm.exe"
+    Copy-Item -Path (Join-Path $PSScriptRoot "nssm.exe") -Destination $Nssm
+    $NssmHash = (Get-FileHash -Path $Nssm -Algorithm SHA256).Hash.ToLower()
     if ($NssmHash -ne $NssmSha256.ToLower()) {
         throw "Invalid NSSM digest $NssmHash (expected $NssmSha256)"
     }
-    Expand-Archive -Path $NssmZip -DestinationPath $BuildDir
-    Remove-Item $NssmZip
-    $NssmDir = Join-Path $BuildDir "nssm-$NssmVersion"
-    Copy-Item -Path (Join-Path $NssmDir "win32\nssm.exe") -Destination (Join-Path $BuildDir "nssm.exe")
-    Remove-Item -Recurse -Force $NssmDir
 
     # downloads the redistributable of the Visual C++ 2008 runtime (32 bit),
     # verifying its digest, that is run by the installer of the node, as the
@@ -236,7 +253,7 @@ if ($XP) {
     Write-Host "Downloading Visual C++ 2008 redistributable"
     $VCRedist = Join-Path $BuildDir "vcredist_x86.exe"
     $VCRedistUrl = "https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x86.exe"
-    Invoke-WebRequest -Uri $VCRedistUrl -OutFile $VCRedist
+    Invoke-Download -Uri $VCRedistUrl -OutFile $VCRedist
     $VCRedistHash = (Get-FileHash -Path $VCRedist -Algorithm SHA256).Hash.ToLower()
     if ($VCRedistHash -ne $VCRedistSha256.ToLower()) {
         throw "Invalid Visual C++ redistributable digest $VCRedistHash (expected $VCRedistSha256)"
@@ -248,7 +265,7 @@ else {
     Write-Host "Downloading WinSW $WinSWVersion"
     $WinSW = Join-Path $BuildDir "colony-print-node.exe"
     $WinSWUrl = "https://github.com/winsw/winsw/releases/download/v$WinSWVersion/WinSW.NET461.exe"
-    Invoke-WebRequest -Uri $WinSWUrl -OutFile $WinSW
+    Invoke-Download -Uri $WinSWUrl -OutFile $WinSW
     $WinSWHash = (Get-FileHash -Path $WinSW -Algorithm SHA256).Hash.ToLower()
     if ($WinSWHash -ne $WinSWSha256.ToLower()) {
         throw "Invalid WinSW digest $WinSWHash (expected $WinSWSha256)"

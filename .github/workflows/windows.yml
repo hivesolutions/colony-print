@@ -31,7 +31,10 @@ jobs:
         run: |
           $Version = $env:INNO_SETUP_VERSION
           $Url = "https://github.com/jrsoftware/issrc/releases/download/is-$($Version.Replace('.', '_'))/innosetup-$Version.exe"
-          Invoke-WebRequest -Uri $Url -OutFile innosetup.exe
+          foreach ($Attempt in 1..5) {
+            try { Invoke-WebRequest -Uri $Url -OutFile innosetup.exe; break }
+            catch { if ($Attempt -eq 5) { throw }; Start-Sleep -Seconds 15 }
+          }
           $Hash = (Get-FileHash -Path innosetup.exe -Algorithm SHA256).Hash.ToLower()
           if ($Hash -ne $env:INNO_SETUP_SHA256) { throw "Invalid Inno Setup digest $Hash" }
           Start-Process -Wait -FilePath .\innosetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=C:\InnoSetup"
@@ -70,7 +73,10 @@ jobs:
         run: |
           $Version = $env:XP_PYTHON_VERSION
           $Url = "https://www.python.org/ftp/python/$Version/python-$Version.msi"
-          Invoke-WebRequest -Uri $Url -OutFile python.msi
+          foreach ($Attempt in 1..5) {
+            try { Invoke-WebRequest -Uri $Url -OutFile python.msi; break }
+            catch { if ($Attempt -eq 5) { throw }; Start-Sleep -Seconds 15 }
+          }
           $Hash = (Get-FileHash -Path python.msi -Algorithm SHA256).Hash.ToLower()
           if ($Hash -ne $env:XP_PYTHON_SHA256) { throw "Invalid Python digest $Hash" }
           $Process = Start-Process -Wait -PassThru -FilePath msiexec.exe -ArgumentList "/i", "python.msi", "/qn", "/norestart", "ALLUSERS=1", "TARGETDIR=C:\Python27"
@@ -80,7 +86,10 @@ jobs:
         run: |
           $Version = $env:INNO_SETUP_VERSION
           $Url = "https://files.jrsoftware.org/is/5/innosetup-$Version-unicode.exe"
-          Invoke-WebRequest -Uri $Url -OutFile innosetup.exe
+          foreach ($Attempt in 1..5) {
+            try { Invoke-WebRequest -Uri $Url -OutFile innosetup.exe; break }
+            catch { if ($Attempt -eq 5) { throw }; Start-Sleep -Seconds 15 }
+          }
           $Hash = (Get-FileHash -Path innosetup.exe -Algorithm SHA256).Hash.ToLower()
           if ($Hash -ne $env:INNO_SETUP_SHA256) { throw "Invalid Inno Setup digest $Hash" }
           Start-Process -Wait -FilePath .\innosetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=C:\InnoSetup"

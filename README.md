@@ -120,7 +120,7 @@ The `options` map is filtered to the following keys:
 
 The `save_output` and `email_*` options only take effect on nodes running in `email` mode (`NODE_MODE=email`).
 
-The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format) fail with `409`, except the fonts of the print jobs, that are skipped for the nodes that don't support them (see [Print Fonts](#print-fonts)), see [Node Capabilities](doc/capabilities.md).
+The requests that use a feature that requires a capability the node doesn't advertise (e.g. the `xmpl` format) fail with `409`, except the fonts of the print jobs, that are skipped for the nodes that don't support them (see [Print Fonts](#print-fonts)), and the depth of the gravo print jobs, that is skipped by the nodes without the `gravo-depth` capability (see [Gravo Print Payload](#gravo-print-payload)), see [Node Capabilities](doc/capabilities.md).
 
 ### npcolony Print Payload
 
@@ -182,6 +182,7 @@ The `gravo` engine accepts a JSON payload submitted as base64 to the print endpo
 | `width`       | number          | no       | Engraving area width. Defaults to `80`.                                                                                                                                                                                                     |
 | `height`      | number          | no       | Engraving area height. Defaults to `100`.                                                                                                                                                                                                   |
 | `margins`     | array           | no       | Four element `[left, right, top, bottom]` margin array.                                                                                                                                                                                     |
+| `depth`       | number          | no       | Non negative depth of the tool, in the engraving software's unit, the one of the software is kept when it's not set. Skipped by the nodes without the `gravo-depth` capability (`depth_skipped` in the information of the job).             |
 | `dry_run`     | boolean         | no       | When `true` the engraving job is composed but not sent to the machine. Defaults to `false`.                                                                                                                                                 |
 | `record`      | boolean         | no       | When `true` a video of the engraving session is captured and returned with the screenshots. Defaults to `false`.                                                                                                                            |
 | `check_path`  | boolean         | no       | When `true` the engraving path is traced with the laser light only, without engraving the material, for test verification. Defaults to `false`.                                                                                             |
@@ -313,7 +314,7 @@ Both installers use the same service, so only one of the nodes is installed in a
 .\windows\build.ps1 -XP -Python C:\Python27\python.exe
 ```
 
-The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release. It also installs each of the installers over the node of the other one, to verify that the node is replaced.
+The build requires a 32 bit Python 2.7.18 (with pip, setuptools and wheel) and [Inno Setup 5.6.1](https://files.jrsoftware.org/is/5/), the last one that supports Windows XP. The NSSM service wrapper (the 32 bit build of its 2.24 version, which is public domain) is kept in the repository (`windows/nssm.exe`, with its digest pinned in `build.ps1`), as its site is unavailable too often for the build to download it. The `Windows Workflow` also builds this installer on every push (the `colony-print-node-windows-xp` artifact), smoke tests it on a Windows runner (not on Windows XP itself) and attaches it to the release. It also installs each of the installers over the node of the other one, to verify that the node is replaced.
 
 ## Admin UI
 
