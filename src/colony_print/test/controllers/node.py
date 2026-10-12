@@ -234,6 +234,29 @@ class NodeControllerTest(unittest.TestCase):
             self.assertEqual(
                 "fonts_skipped" in self.app.jobs_info[job_info["id"]], False
             )
+
+            # the depth skipped by the node (eg: an older gravo pilot) is
+            # marked as skipped in the information of the job, as the server
+            # doesn't read the payload of the gravo jobs
+            code, job_info = self._print(type="gravo")
+            self.assertEqual("depth_skipped" in job_info, False)
+            code = self._result(
+                job_info["id"], result="success", data=dict(depth_skipped=True)
+            )
+            self.assertEqual(code, 200)
+            job_info = self.app.jobs_info[job_info["id"]]
+            self.assertEqual(job_info["depth_skipped"], True)
+            self.assertEqual("fonts_skipped" in job_info, False)
+            self.assertEqual(job_info["result"]["data"], dict(depth_skipped=True))
+
+            # a node that sets the depth doesn't mark it as skipped
+            for data in (dict(duration=1.0), dict(depth_skipped=False)):
+                code, job_info = self._print(type="gravo")
+                code = self._result(job_info["id"], result="success", data=data)
+                self.assertEqual(code, 200)
+                self.assertEqual(
+                    "depth_skipped" in self.app.jobs_info[job_info["id"]], False
+                )
         finally:
             appier.conf_r("DATA_PATH")
             shutil.rmtree(data_path, ignore_errors=True)

@@ -168,6 +168,25 @@ class JobControllerTest(unittest.TestCase):
         self.assertEqual("fonts_skipped" in clone_info, False)
         self.assertEqual(self.app.jobs["node"][1]["fonts"], fonts)
 
+    def test_clone_depth_skipped(self):
+        # a job whose depth was skipped (node whose gravo pilot doesn't
+        # support it) is cloned without the mark, as its clone is a new
+        # job, whose depth is set or skipped again by the node
+        self.app.jobs_info["name"] = dict(
+            id="name",
+            name="engraving",
+            node_id="node",
+            type="gravo",
+            depth_skipped=True,
+        )
+        self.app.jobs_data["name"] = "QUJD"
+        response = self.app.post("/jobs/name/clone", headers=self.headers)
+        self.assertEqual(response.code, 200)
+        clone_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(clone_info["type"], "gravo")
+        self.assertEqual("depth_skipped" in clone_info, False)
+        self.assertEqual(self.app.jobs_info["name"]["depth_skipped"], True)
+
     def test_clone_commands(self):
         # the jobs that are commands for the node (eg: its restart) can't
         # be cloned, as they're only queued by their own endpoints
