@@ -234,7 +234,10 @@ if ($XP) {
     # copies the NSSM service wrapper (the 32 bit build of its 2.24 version),
     # verifying its digest, as WinSW requires a .NET Framework that Windows XP
     # lacks, the wrapper being kept in the repository (it's public domain) as
-    # its site (nssm.cc) is unavailable too often for it to be downloaded
+    # its site (nssm.cc) is unavailable too often for it to be downloaded, it's
+    # the win32\nssm.exe of https://nssm.cc/release/nssm-2.24.zip, the digest
+    # (SHA256) of that archive being
+    # 727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743
     $Nssm = Join-Path $BuildDir "nssm.exe"
     Copy-Item -Path (Join-Path $PSScriptRoot "nssm.exe") -Destination $Nssm
     $NssmHash = (Get-FileHash -Path $Nssm -Algorithm SHA256).Hash.ToLower()
