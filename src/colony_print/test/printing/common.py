@@ -12,6 +12,7 @@ import struct
 import hashlib
 import tempfile
 import unittest
+import importlib
 
 import appier
 
@@ -1244,6 +1245,24 @@ class FontCacheTest(unittest.TestCase):
         self.assertEqual(self._files(), ["source.ttf", "target.ttf"])
         with open(target, "rb") as file:
             self.assertEqual(file.read(), b"source")
+
+        # the module is still loaded by an interpreter without ctypes (eg:
+        # one built without libffi), as it's only used to replace the files
+        # on windows, by the older versions of python
+        modules = dict(sys.modules)
+        del sys.modules["colony_print.printing.common.fonts"]
+        sys.modules["ctypes"] = None
+        try:
+            fonts = importlib.import_module("colony_print.printing.common.fonts")
+        finally:
+            sys.modules.clear()
+            sys.modules.update(modules)
+            colony_print.printing.common.fonts = modules[
+                "colony_print.printing.common.fonts"
+            ]
+        self.assertNotEqual(fonts, colony_print.printing.common.fonts)
+        self.assertEqual(fonts.ctypes, None)
+        self.assertEqual(fonts.MOVE_FLAGS, 0x01 | 0x08)
 
     def test_save(self):
         font_cache = colony_print.FontCache(self.path)

@@ -8,11 +8,15 @@ import json
 import time
 import uuid
 import base64
-import ctypes
 import struct
 import hashlib
 
 import appier
+
+try:
+    import ctypes
+except ImportError:
+    ctypes = None
 
 FONT_STYLES = ("regular", "bold", "italic", "bold_italic")
 """ The sequence of styles of the fonts of a family, the ones

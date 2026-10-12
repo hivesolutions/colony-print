@@ -8,6 +8,7 @@ import shutil
 import logging
 import tempfile
 import unittest
+import importlib
 
 import appier
 
@@ -1121,6 +1122,22 @@ class ColonyPrintBootTest(unittest.TestCase):
             sorted(os.listdir(self.temp_path)), ["config.env", "state.env.tmp"]
         )
         self.assertEqual(self.boot.load_config(self.config_path), dict(NODE_UPDATE="0"))
+
+        # the module is still loaded by an interpreter without ctypes (eg:
+        # one built without libffi), as it's only used to replace the files
+        # on windows, by the legacy interpreters (Python 2)
+        modules = dict(sys.modules)
+        del sys.modules["colony_print.boot"]
+        sys.modules["ctypes"] = None
+        try:
+            boot = importlib.import_module("colony_print.boot")
+        finally:
+            sys.modules.clear()
+            sys.modules.update(modules)
+            colony_print.boot = modules["colony_print.boot"]
+        self.assertNotEqual(boot, colony_print.boot)
+        self.assertEqual(boot.ctypes, None)
+        self.assertEqual(boot.MOVE_FLAGS, 0x01 | 0x08)
 
     def test_apply_config(self):
         environ = dict(BASE_URL="https://other.example.com/")

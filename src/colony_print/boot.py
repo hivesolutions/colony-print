@@ -6,12 +6,16 @@ import sys
 import time
 import codecs
 import shutil
-import ctypes
 import logging
 import argparse
 import tempfile
 import importlib
 import subprocess
+
+try:
+    import ctypes
+except ImportError:
+    ctypes = None
 
 BASE_URL = "https://print.bemisc.com/"
 """ The default base URL to be used for the communication with the
