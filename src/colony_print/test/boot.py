@@ -78,6 +78,13 @@ VERIFY_COMMAND = [sys.executable, "-c", "import colony_print.node, npcolony"]
 """ The command that is expected to be run by the boot to verify that
 the updated packages of the node are loaded by the system """
 
+MODULE_COMMANDS = [
+    [sys.executable, "-c", "import colony_print.node"],
+    [sys.executable, "-c", "import npcolony"],
+]
+""" The commands that are expected to be run by the boot, once the
+verification fails, to find the modules that are not loaded """
+
 
 class MockSubprocess(object):
     """
@@ -908,8 +915,31 @@ class ColonyPrintBootTest(unittest.TestCase):
         self.assertEqual(MockSubprocess.envs[-1], dict(PIP_CONFIG_FILE=os.devnull))
 
         # the packages that can't be loaded by the system (eg: their native
-        # modules are not supported by Windows XP) fail the verification
-        MockSubprocess.codes = [1]
+        # modules are not supported by Windows XP) fail the verification,
+        # naming the modules that are not loaded on their own (with the
+        # same environment), so that the packages to be pinned are known
+        MockSubprocess.codes = [1, 0, 1]
+        MockSubprocess.calls = []
+        MockSubprocess.envs = []
+        with self.assertRaises(RuntimeError) as context:
+            self.boot.verify()
+        self.assertEqual(
+            str(context.exception), "Package verification failed with code 1 (npcolony)"
+        )
+        self.assertEqual(MockSubprocess.calls, [VERIFY_COMMAND] + MODULE_COMMANDS)
+        self.assertEqual(MockSubprocess.envs, [self.environ] * 3)
+
+        MockSubprocess.codes = [2]
+        with self.assertRaises(RuntimeError) as context:
+            self.boot.verify()
+        self.assertEqual(
+            str(context.exception),
+            "Package verification failed with code 2 (colony_print.node, npcolony)",
+        )
+
+        # the modules that are loaded on their own (eg: a failure of loading
+        # them together) leave the error without any module
+        MockSubprocess.codes = [1, 0, 0]
         with self.assertRaises(RuntimeError) as context:
             self.boot.verify()
         self.assertEqual(
@@ -919,7 +949,7 @@ class ColonyPrintBootTest(unittest.TestCase):
         # and the update that installs them, that is not retried (as the
         # packages are installed) and still removes its temporary directory,
         # the failure being handed over to the node, that is run anyway
-        MockSubprocess.codes = [0, 0, 1]
+        MockSubprocess.codes = [0, 0, 1, 1, 0]
         MockSubprocess.calls = []
         boot = colony_print.boot.ColonyPrintBoot(
             environ=self.environ, retry_delay=0.0, legacy=True, flags=MockFlags()
@@ -927,17 +957,19 @@ class ColonyPrintBootTest(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             boot.update()
         self.assertEqual(
-            str(context.exception), "Package verification failed with code 1"
+            str(context.exception),
+            "Package verification failed with code 1 (colony_print.node)",
         )
-        self.assertEqual(len(MockSubprocess.calls), 3)
-        self.assertEqual(MockSubprocess.calls[-1], VERIFY_COMMAND)
+        self.assertEqual(len(MockSubprocess.calls), 5)
+        self.assertEqual(MockSubprocess.calls[2:], [VERIFY_COMMAND] + MODULE_COMMANDS)
         self.assertEqual(os.path.exists(self._temp_dir(MockSubprocess.calls[0])), False)
 
-        MockSubprocess.codes = [0, 0, 1]
+        MockSubprocess.codes = [0, 0, 1, 0, 1]
         self.boot.main(["--config", self.config_path])
         self.assertEqual(self.environ["NODE_UPDATE_STATUS"], "failure")
         self.assertEqual(
-            self.environ["NODE_UPDATE_ERROR"], "Package verification failed with code 1"
+            self.environ["NODE_UPDATE_ERROR"],
+            "Package verification failed with code 1 (npcolony)",
         )
         self.assertEqual(MockColonyPrintNode.loops, 1)
 

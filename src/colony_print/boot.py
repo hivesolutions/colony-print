@@ -386,17 +386,29 @@ class ColonyPrintBoot(object):
         supported by the system (eg: by Windows XP), that pip installs, are
         noticed instead of being silently ignored by the node.
 
+        A failed verification imports each of the modules on its own, so
+        that the modules that are not loaded are named in the error (and
+        so the packages whose versions are to be pinned are known).
+
         :type env: Dictionary
         :param env: The environment of the interpreter that imports the
         modules, the one of the node by default.
         """
 
-        command = (
-            [sys.executable] + self.options + ["-c", "import " + ", ".join(MODULES)]
-        )
-        code = subprocess.call(command, env=self.environ if env == None else env)
-        if not code == 0:
-            raise RuntimeError("Package verification failed with code %d" % code)
+        python = [sys.executable] + self.options
+        env = self.environ if env == None else env
+        code = subprocess.call(python + ["-c", "import " + ", ".join(MODULES)], env=env)
+        if code == 0:
+            return
+        failed = [
+            module
+            for module in MODULES
+            if not subprocess.call(python + ["-c", "import " + module], env=env) == 0
+        ]
+        message = "Package verification failed with code %d" % code
+        if failed:
+            message += " (%s)" % ", ".join(failed)
+        raise RuntimeError(message)
 
     def requirement(self, name, constraint):
         """
