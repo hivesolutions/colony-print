@@ -227,7 +227,7 @@ class ColonyPrintApp(appier.APIApp):
         return not payload.get("depth", None) == None
 
     def _version(self):
-        return "0.24.0"
+        return "0.25.0"
 
     def _description(self):
         return "Colony Print"
