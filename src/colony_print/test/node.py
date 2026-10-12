@@ -2015,6 +2015,13 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(len(MockGravostyleAPI.calls), 2)
         self.assertEqual(MockGravostyleAPI.calls[1]["depth"], 0)
 
+        # the largest finite depth is still a valid one, as only the
+        # depths that are not finite numbers are refused by the node
+        depth = sys.float_info.max
+        self.node._handle_gravo(self._gravo_payload(depth=depth, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 3)
+        self.assertEqual(MockGravostyleAPI.calls[2]["depth"], depth)
+
     def test_handle_gravo_depth_defaults_to_unset(self):
         # the depth is not forwarded when the job has none, so that the
         # jobs without it are engraved by every version of gravo pilot
@@ -2058,17 +2065,33 @@ class ColonyPrintNodeTest(unittest.TestCase):
                     self._gravo_payload(depth=depth, dry_run=True)
                 ),
             )
+
+        # the depths that are not finite numbers are refused as well, the
+        # ones that are encoded as constants (Infinity and NaN) and the one
+        # that overflows the float it's decoded into (1e309)
+        for depth in (float("inf"), float("-inf"), float("nan")):
+            self.assertRaises(
+                appier.AssertionError,
+                lambda: self.node._handle_gravo(
+                    self._gravo_payload(depth=depth, dry_run=True)
+                ),
+            )
+        data_b64 = base64.b64encode(b'{"text": "Hello World", "depth": 1e309}')
+        self.assertRaises(
+            appier.AssertionError, lambda: self.node._handle_gravo(data_b64)
+        )
         self.assertEqual(MockGravostyleAPI.calls, [])
 
         # an invalid depth fails the job even if the node is not able
         # to set it, instead of being skipped as a valid one would
         sys.modules["gravo_pilot"] = MockGravoPilotLegacy
-        self.assertRaises(
-            appier.AssertionError,
-            lambda: self.node._handle_gravo(
-                self._gravo_payload(depth=-0.5, dry_run=True)
-            ),
-        )
+        for depth in (-0.5, float("inf")):
+            self.assertRaises(
+                appier.AssertionError,
+                lambda: self.node._handle_gravo(
+                    self._gravo_payload(depth=depth, dry_run=True)
+                ),
+            )
         self.assertEqual(MockGravostyleAPILegacy.calls, [])
 
     def test_stage_extra_fonts_writes_payloads(self):

@@ -903,7 +903,7 @@ class ColonyPrintNode(object):
             appier.verify(
                 isinstance(depth, appier.legacy.INTEGERS + (float,))
                 and not isinstance(depth, bool)
-                and depth >= 0,
+                and 0 <= depth < float("inf"),
                 message="Depth must be a non negative number",
             )
 
