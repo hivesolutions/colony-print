@@ -223,9 +223,7 @@ class ColonyPrintNode(object):
                         result = dict(
                             result="error",
                             error=self._message(exception),
-                            traceback=appier.legacy.u(
-                                traceback.format_exc(), errors="replace"
-                            ),
+                            traceback=self._text(traceback.format_exc()),
                         )
 
                     # the jobs that restart the node have no result, as they
@@ -403,7 +401,7 @@ class ColonyPrintNode(object):
                 results[job_id] = dict(
                     result="error",
                     error=self._message(exception),
-                    traceback=appier.legacy.u(traceback.format_exc(), errors="replace"),
+                    traceback=self._text(traceback.format_exc()),
                 )
 
             # removes the update that was forced for the next start of the
@@ -1299,10 +1297,7 @@ class ColonyPrintNode(object):
         Retrieves the message of the provided exception as an unicode string,
         so that it can be mixed with the unicode strings of the jobs (as
         decoded from the JSON of the server) and serialized as JSON, as in
-        Python 2 the message may be a byte string that is not ASCII, either
-        in UTF-8 (eg: the messages of appier) or in the encoding of the file
-        system (eg: the errors of windows, in its ANSI code page), whose bytes
-        that are not valid in it are replaced.
+        Python 2 the message may be a byte string that is not ASCII.
 
         :type exception: Exception
         :param exception: The exception whose message is retrieved.
@@ -1313,12 +1308,28 @@ class ColonyPrintNode(object):
         try:
             return appier.legacy.UNICODE(exception)
         except UnicodeError:
-            message = str(exception)
+            return self._text(str(exception))
+
+    def _text(self, value):
+        """
+        Converts the provided (native) string into an unicode string, as in
+        Python 2 it's a byte string (eg: the message of an exception or its
+        traceback) that is not ASCII, either in UTF-8 (eg: the messages of
+        appier) or in the encoding of the file system (eg: the errors of
+        windows, in its ANSI code page), whose bytes that are not valid in
+        it are replaced.
+
+        :type value: String
+        :param value: The (native) string to be converted.
+        :rtype: String
+        :return: The provided string, as an unicode string.
+        """
+
         try:
-            return appier.legacy.u(message)
+            return appier.legacy.u(value)
         except UnicodeError:
             encoding = sys.getfilesystemencoding() or "utf-8"
-            return appier.legacy.u(message, encoding=encoding, errors="replace")
+            return appier.legacy.u(value, encoding=encoding, errors="replace")
 
     def _has_npcolony(self):
         try:

@@ -930,6 +930,8 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockQueue.batches = [json.loads(json.dumps(batch))]
         sys.modules["npcolony"] = MockNPColonyWindows
         MockNPColonyWindows.error = IOError(b"Acesso negado: n\xe3o")
+        colony_print.node.sys = MockSys
+        MockSys.encoding = "cp1252"
         appier.get = MockQueue.get
         appier.post = MockQueue.post
         self._loop(NODE_PRINTER="Receipt")
@@ -964,9 +966,14 @@ class ColonyPrintNodeTest(unittest.TestCase):
         result = results["node/jobs/print/result"]
         self.assertEqual(result["result"], "error")
         self.assertEqual(appier.legacy.is_unicode(result["error"]), True)
-        self.assertEqual("Acesso negado: n" in result["error"], True)
+        message = (
+            "b'Acesso negado: n\\xe3o'"
+            if appier.legacy.PYTHON_3
+            else appier.legacy.u("Acesso negado: não")
+        )
+        self.assertEqual(result["error"], message)
         self.assertEqual(appier.legacy.is_unicode(result["traceback"]), True)
-        self.assertEqual("Acesso negado: n" in result["traceback"], True)
+        self.assertEqual(message in result["traceback"], True)
         self.assertEqual(MockNPColonyWindows.calls, [])
 
         self.assertEqual(results["node/jobs/text/result"]["result"], "success")
@@ -2946,6 +2953,30 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 ),
             )
             self.assertEqual(appier.legacy.is_unicode(message), True)
+
+    def test_text(self):
+        # the (native) strings are retrieved as unicode strings, the byte
+        # strings of Python 2 being decoded as UTF-8 (eg: the messages of
+        # appier) or in the encoding of the file system when they're not
+        # valid UTF-8 (eg: the errors of windows, in its ANSI code page)
+        colony_print.node.sys = MockSys
+        MockSys.encoding = "cp1252"
+        text = appier.legacy.u("Fonte Ação")
+        for encoding in ("utf-8", "cp1252"):
+            value = text if appier.legacy.PYTHON_3 else text.encode(encoding)
+            self.assertEqual(self.node._text(value), text)
+            self.assertEqual(appier.legacy.is_unicode(self.node._text(value)), True)
+        self.assertEqual(self.node._text(text), text)
+
+        # the bytes that are not valid in the encoding of the file system
+        # either (or with no encoding of the file system) are replaced
+        for encoding in ("ascii", None):
+            MockSys.encoding = encoding
+            value = text if appier.legacy.PYTHON_3 else text.encode("cp1252")
+            self.assertEqual(
+                self.node._text(value),
+                text if appier.legacy.PYTHON_3 else appier.legacy.u("Fonte A��o"),
+            )
 
     def test_has_feature(self):
         self.assertEqual(self.node._has_feature("load-fonts"), False)
