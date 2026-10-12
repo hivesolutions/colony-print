@@ -272,6 +272,19 @@ class NodeControllerTest(unittest.TestCase):
             self.assertEqual(code, 200)
             self.assertEqual(self.app.jobs_info[job_info["id"]]["depth_skipped"], True)
 
+            # a job that was not engraved by that node (eg: it failed, as
+            # the node has no gravo engine) has no depth marked as skipped,
+            # as nothing was engraved with the depth of the engraving software
+            for result in (dict(result="error", error="failure"), dict()):
+                code, job_info = self._print(
+                    url="/nodes/engraver/print", type="gravo", data_b64=data_b64
+                )
+                code = self._result(job_info["id"], id="engraver", **result)
+                self.assertEqual(code, 200)
+                job_info = self.app.jobs_info[job_info["id"]]
+                self.assertEqual(job_info["status"], "finished")
+                self.assertEqual("depth_skipped" in job_info, False)
+
             # a node that supports the depth doesn't mark it as skipped
             self._register(id="engraver", capabilities=["gravo", "gravo-depth"])
             code, job_info = self._print(
