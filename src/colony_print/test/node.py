@@ -240,13 +240,15 @@ class MockNPColonyWindows(object):
     """
     Stand-in for the npcolony module of windows systems, that prints the
     binie documents (through GDI) and loads the fonts installed on demand
-    in the system, recording both the printed documents and the fonts.
+    in the system, recording both the printed documents and the fonts, or
+    raising the configured error when printing.
     """
 
     calls = []
     fonts = []
     features = ["load-fonts"]
     errors = dict()
+    error = None
 
     @staticmethod
     def get_format():
@@ -262,6 +264,8 @@ class MockNPColonyWindows(object):
 
     @staticmethod
     def print_printer_base64(printer, data_b64, options=None):
+        if MockNPColonyWindows.error:
+            raise MockNPColonyWindows.error
         MockNPColonyWindows.calls.append((printer, data_b64, dict(options or dict())))
 
     @staticmethod
@@ -384,14 +388,15 @@ class MockSys(object):
     """
     Stand-in for the sys module that exposes a configurable command line
     (the original one of the interpreter and the one of its script) and
-    records the exit codes of the node, interrupting it (as the exit of
-    the process does), so that the restart of the node can be exercised
-    without exiting.
+    encoding of the file system, and records the exit codes of the node,
+    interrupting it (as the exit of the process does), so that the restart
+    of the node can be exercised without exiting.
     """
 
     executable = "/usr/bin/python"
     argv = ["boot.py", "--config", "config.env"]
     orig_argv = ["python", "-I", "-u", "boot.py", "--config", "config.env"]
+    encoding = "utf-8"
     exits = []
 
     @staticmethod
@@ -399,16 +404,34 @@ class MockSys(object):
         MockSys.exits.append(code)
         raise MockInterrupt()
 
+    @staticmethod
+    def getfilesystemencoding():
+        return MockSys.encoding
+
+
+class MockFlags(object):
+    """
+    Stand-in for the flags of the interpreter (sys.flags) with configurable
+    options, without the isolated mode (as in Python 2), so that the options
+    of the interpreter of the node that restarts itself can be exercised.
+    """
+
+    def __init__(self, ignore_environment=0, no_user_site=0):
+        self.ignore_environment = ignore_environment
+        self.no_user_site = no_user_site
+
 
 class MockSysLegacy(object):
     """
     Stand-in for the sys module of the interpreters that don't keep their
     original command line (older than Python 3.10), only the one of their
-    script (without the options of the interpreter).
+    script (without the options of the interpreter), with the configurable
+    flags of the interpreter.
     """
 
     executable = "/usr/bin/python"
     argv = ["boot.py", "--config", "config.env"]
+    flags = MockFlags()
     exit = staticmethod(MockSys.exit)
 
 
@@ -462,6 +485,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.fonts = []
         MockNPColonyWindows.features = ["load-fonts"]
         MockNPColonyWindows.errors = dict()
+        MockNPColonyWindows.error = None
         MockGravostyleAPI.calls = []
         MockGravostyleAPILegacy.calls = []
         self._gravo_pilot = sys.modules.get("gravo_pilot")
@@ -485,6 +509,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self._get = appier.get
         self._post = appier.post
         MockSys.exits = []
+        MockSys.encoding = "utf-8"
         MockOS.name = "posix"
         MockOS.environ = dict()
         MockOS.execs = []
@@ -883,6 +908,76 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(os.path.exists(self.state_path), False)
         self.assertEqual(MockOS.execs, [])
 
+    def test_loop_error(self):
+        # the errors of the jobs whose messages are not ASCII (eg: with the
+        # name of a font or from a windows that is not in english) are posted
+        # as the (unicode) results of the jobs, together with the results of
+        # the other jobs of their batch, as in Python 2 the messages may be
+        # byte strings (in any encoding) that can't be mixed with the unicode
+        # strings of the jobs (as decoded from the JSON of the server) nor
+        # serialized as JSON
+        fonts_b64 = base64.b64encode(
+            json.dumps(
+                dict(fonts=[dict(name=appier.legacy.u("Fonte Ação"), md5="0" * 32)])
+            ).encode("utf-8")
+        ).decode("utf-8")
+        data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
+        batch = [
+            dict(id="fonts", name="fonts", type="fonts", data_b64=fonts_b64),
+            dict(id="print", name=appier.legacy.u("Balcão"), data_b64=data_b64),
+            dict(id="text", name="text", type="text", data_b64=data_b64),
+        ]
+        MockQueue.batches = [json.loads(json.dumps(batch))]
+        sys.modules["npcolony"] = MockNPColonyWindows
+        MockNPColonyWindows.error = IOError(b"Acesso negado: n\xe3o")
+        colony_print.node.sys = MockSys
+        MockSys.encoding = "cp1252"
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        self._loop(NODE_PRINTER="Receipt")
+        urls = self._urls(MockQueue.calls)
+        self.assertEqual((urls[0], urls[-1]), ("node", "node"))
+        results = dict(
+            (url, data_j)
+            for url, (_url, data_j, _headers) in zip(urls, MockQueue.calls)
+            if url.endswith("/result")
+        )
+        self.assertEqual(
+            sorted(results.keys()),
+            [
+                "node/jobs/fonts/result",
+                "node/jobs/print/result",
+                "node/jobs/text/result",
+            ],
+        )
+        for result in results.values():
+            self.assertEqual(json.loads(json.dumps(result)), result)
+
+        result = results["node/jobs/fonts/result"]
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(
+            result["error"],
+            appier.legacy.u("Font 'Fonte Ação' with MD5 '%s' is not installed")
+            % ("0" * 32),
+        )
+        self.assertEqual(appier.legacy.is_unicode(result["traceback"]), True)
+        self.assertEqual("is not installed" in result["traceback"], True)
+
+        result = results["node/jobs/print/result"]
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(appier.legacy.is_unicode(result["error"]), True)
+        message = (
+            "b'Acesso negado: n\\xe3o'"
+            if appier.legacy.PYTHON_3
+            else appier.legacy.u("Acesso negado: não")
+        )
+        self.assertEqual(result["error"], message)
+        self.assertEqual(appier.legacy.is_unicode(result["traceback"]), True)
+        self.assertEqual(message in result["traceback"], True)
+        self.assertEqual(MockNPColonyWindows.calls, [])
+
+        self.assertEqual(results["node/jobs/text/result"]["result"], "success")
+
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
         self.node.node_email_receivers = []
@@ -1123,6 +1218,19 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(results["seventh"]["result"], "error")
         self.assertEqual(results["seventh"]["error"], "Exec format error")
         self.assertEqual(self.node.restart_jobs, [])
+
+        # the error whose message is not ASCII (eg: from a windows that is
+        # not in english, a byte string in Python 2) results in the unicode
+        # errors of the jobs, that are serialized as JSON
+        MockOS.error = OSError(b"O sistema n\xe3o encontra o ficheiro")
+        self.node.node_state = None
+        self.node.restart_jobs = ["eighth"]
+        results = self.node.restart()
+        self.assertEqual(results["eighth"]["result"], "error")
+        self.assertEqual(appier.legacy.is_unicode(results["eighth"]["error"]), True)
+        self.assertEqual("O sistema n" in results["eighth"]["error"], True)
+        self.assertEqual(appier.legacy.is_unicode(results["eighth"]["traceback"]), True)
+        self.assertEqual(json.loads(json.dumps(results)), results)
 
     def test_libraries(self):
         sys.modules["npcolony"] = MockLibrary
@@ -1393,14 +1501,29 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
 
         self.node.node_mode = "normal"
-        self.assertRaises(
-            appier.OperationalError,
-            lambda: self.node.print_job(
-                dict(data_b64=data_b64, name="hello", type="zpl")
-            ),
-        )
+        with self.assertRaises(appier.OperationalError) as context:
+            self.node.print_job(dict(data_b64=data_b64, name="hello", type="zpl"))
+        self.assertEqual(str(context.exception), "Type 'zpl' not valid")
         self.assertEqual(MockNPColony.calls, [])
         self.assertEqual(MockGravostyleAPI.calls, [])
+
+        # the jobs of a node whose mode is not valid fail with its mode
+        self.node.node_mode = "fax"
+        with self.assertRaises(appier.OperationalError) as context:
+            self.node.print_job(dict(data_b64=data_b64, name="hello", type="text"))
+        self.assertEqual(str(context.exception), "Mode 'fax' not valid")
+
+        # the jobs of the engines that are not available (eg: an npcolony that
+        # can't be loaded by the system) fail with the engine that is missing
+        sys.modules["npcolony"] = None
+        sys.modules["gravo_pilot"] = None
+        for type, message in (
+            ("npcolony", "npcolony engine is not available"),
+            ("gravo", "gravo engine is not available"),
+        ):
+            with self.assertRaises(appier.OperationalError) as context:
+                self.node._handle_job(dict(data_b64=data_b64, name="hello", type=type))
+            self.assertEqual(str(context.exception), message)
 
     def test_handle_job_fonts(self):
         fonts = [self._font(), self._font(name="Binaria", style="regular")]
@@ -2167,6 +2290,40 @@ class ColonyPrintNodeTest(unittest.TestCase):
             appier.OperationalError, lambda: self.node._handle_fonts(data_b64)
         )
 
+        # the paths of the fonts are handed over to the server as unicode
+        # strings, as in Python 2 the paths of the font cache are byte strings
+        # in the encoding of the file system (eg: the ANSI code page of windows)
+        # that can't be serialized as JSON when they're not ASCII (eg: in the
+        # data directory of a windows that is not in english)
+        sys.modules["npcolony"] = MockNPColony
+        encoding = sys.getfilesystemencoding()
+        fonts_dir = os.path.join(
+            self.target_dir, appier.legacy.u("Dados de aplicações")
+        )
+        if not appier.legacy.PYTHON_3:
+            fonts_dir = fonts_dir.encode(encoding, "replace")
+        self.node.font_cache = colony_print.FontCache(fonts_dir)
+        result = self.node._handle_fonts(data_b64)
+        path = result["fonts"][0]["path"]
+        self.assertEqual(appier.legacy.is_unicode(path), True)
+        self.assertEqual(
+            path.startswith(appier.legacy.u(fonts_dir, encoding=encoding)), True
+        )
+        self.assertEqual(json.loads(json.dumps(result)), result)
+
+        # the font cache of that data directory is loaded once more (as when
+        # the node starts), with the (unicode) MD5s of its index, and its font
+        # is installed by its (unicode) MD5, as referenced by the jobs
+        md5 = result["fonts"][0]["md5"]
+        font_cache = colony_print.FontCache(fonts_dir)
+        font_cache.load()
+        files = font_cache.files()
+        self.assertEqual(len(files), 1)
+        self.assertEqual(list(files.values())[0], font_cache._file(str(md5)))
+        info = font_cache.install(dict(name="Colonia", md5=md5))
+        self.assertEqual(info["md5"], md5)
+        self.assertEqual(os.path.exists(info["path"]), True)
+
     def test_handle_restart(self):
         self.node.node_restart = "exec"
         self.node._handle_restart("first")
@@ -2354,8 +2511,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
         font = dict(name="Telhado", data_b64=base64.b64encode(data).decode())
         path = self.node.font_cache._file(hashlib.md5(data).hexdigest())
         MockNPColonyWindows.errors = {path: IOError("Problem loading font")}
-        self.assertRaises(
-            appier.OperationalError, lambda: self.node._install_fonts([font])
+        with self.assertRaises(appier.OperationalError) as context:
+            self.node._install_fonts([font])
+        self.assertEqual(
+            str(context.exception), "Font 'Telhado' not loaded in the system"
         )
         fonts = self.node._install_fonts([self._font(name="Fontana")])
         self.assertEqual(fonts[0]["name"], "Fontana")
@@ -2522,6 +2681,21 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(MockSysLegacy.argv, ["boot.py", "--config", "config.env"])
 
+        # with the options of their flags that isolate them from the system,
+        # as the ones of the Windows XP nodes (-E and -s), as the restarted
+        # node runs pip (through the boot) with them
+        MockSysLegacy.flags = MockFlags(ignore_environment=1, no_user_site=1)
+        MockOS.execs = []
+        try:
+            self.assertRaises(MockInterrupt, self.node._restart)
+        finally:
+            MockSysLegacy.flags = MockFlags()
+        self.assertEqual(
+            MockOS.execs[0][1],
+            ["/usr/bin/python", "-E", "-s", "boot.py", "--config", "config.env"],
+        )
+        self.assertEqual(MockSysLegacy.argv, ["boot.py", "--config", "config.env"])
+
         # a process that can't be replaced fails the restart
         MockOS.error = OSError("Exec format error")
         self.assertRaises(OSError, self.node._restart)
@@ -2563,8 +2737,31 @@ class ColonyPrintNodeTest(unittest.TestCase):
             MockSubprocess.error = OSError("The system cannot find the file")
             self.assertRaises(OSError, self.node._restart)
             self.assertEqual(MockSys.exits, [0])
+
+            # the node of Windows XP (Python 2) starts the new process with
+            # the options of the interpreter that isolate it from the system
+            colony_print.node.sys = MockSysLegacy
+            MockSysLegacy.executable = "C:\\Python\\python.exe"
+            MockSysLegacy.flags = MockFlags(ignore_environment=1, no_user_site=1)
+            MockSubprocess.error = None
+            MockSubprocess.calls = []
+            self.assertRaises(MockInterrupt, self.node._restart)
+            self.assertEqual(
+                MockSubprocess.calls[0][0],
+                [
+                    "C:\\Python\\python.exe",
+                    "-E",
+                    "-s",
+                    "boot.py",
+                    "--config",
+                    "config.env",
+                ],
+            )
+            self.assertEqual(MockSys.exits, [0, 0])
         finally:
             MockSys.executable = "/usr/bin/python"
+            MockSysLegacy.executable = "/usr/bin/python"
+            MockSysLegacy.flags = MockFlags()
 
     def test_restart_invalid(self):
         colony_print.node.sys = MockSys
@@ -2701,6 +2898,86 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.node.node_state = None
         self.assertRaises(Exception, lambda: self.node._save_state(NODE_UPDATE="0"))
 
+    def test_message(self):
+        message = self.node._message(OSError("Exec format error"))
+        self.assertEqual(message, "Exec format error")
+        self.assertEqual(appier.legacy.is_unicode(message), True)
+
+        # the messages that are not ASCII, either unicode strings or the
+        # (UTF-8) byte strings of the exceptions of appier in Python 2, are
+        # retrieved as they are, as unicode strings
+        name = appier.legacy.u("Fonte Ação")
+        message = self.node._message(ValueError(name))
+        self.assertEqual(message, name)
+        self.assertEqual(appier.legacy.is_unicode(message), True)
+        message = self.node._message(
+            appier.OperationalError(message="Font '%s'" % name)
+        )
+        self.assertEqual(message, appier.legacy.u("Font 'Fonte Ação'"))
+        self.assertEqual(appier.legacy.is_unicode(message), True)
+
+        # the byte strings of the exceptions in Python 2 are decoded as UTF-8
+        # (eg: the messages of the other libraries) or, when they're not valid
+        # UTF-8, in the encoding of the file system (eg: the errors of a windows
+        # that is not in english, in its ANSI code page), keeping their accents
+        colony_print.node.sys = MockSys
+        MockSys.encoding = "cp1252"
+        message = self.node._message(ValueError(name.encode("utf-8")))
+        self.assertEqual(
+            message,
+            "b'Fonte A\\xc3\\xa7\\xc3\\xa3o'" if appier.legacy.PYTHON_3 else name,
+        )
+        message = self.node._message(OSError(b"O sistema n\xe3o encontra"))
+        self.assertEqual(
+            message,
+            (
+                "b'O sistema n\\xe3o encontra'"
+                if appier.legacy.PYTHON_3
+                else appier.legacy.u("O sistema não encontra")
+            ),
+        )
+        self.assertEqual(appier.legacy.is_unicode(message), True)
+        self.assertEqual(json.loads(json.dumps(message)), message)
+
+        # the bytes that are not valid in the encoding of the file system
+        # either (or with no encoding of the file system) are replaced
+        for encoding in ("ascii", None):
+            MockSys.encoding = encoding
+            message = self.node._message(OSError(b"O sistema n\xe3o encontra"))
+            self.assertEqual(
+                message,
+                (
+                    "b'O sistema n\\xe3o encontra'"
+                    if appier.legacy.PYTHON_3
+                    else appier.legacy.u("O sistema n�o encontra")
+                ),
+            )
+            self.assertEqual(appier.legacy.is_unicode(message), True)
+
+    def test_text(self):
+        # the (native) strings are retrieved as unicode strings, the byte
+        # strings of Python 2 being decoded as UTF-8 (eg: the messages of
+        # appier) or in the encoding of the file system when they're not
+        # valid UTF-8 (eg: the errors of windows, in its ANSI code page)
+        colony_print.node.sys = MockSys
+        MockSys.encoding = "cp1252"
+        text = appier.legacy.u("Fonte Ação")
+        for encoding in ("utf-8", "cp1252"):
+            value = text if appier.legacy.PYTHON_3 else text.encode(encoding)
+            self.assertEqual(self.node._text(value), text)
+            self.assertEqual(appier.legacy.is_unicode(self.node._text(value)), True)
+        self.assertEqual(self.node._text(text), text)
+
+        # the bytes that are not valid in the encoding of the file system
+        # either (or with no encoding of the file system) are replaced
+        for encoding in ("ascii", None):
+            MockSys.encoding = encoding
+            value = text if appier.legacy.PYTHON_3 else text.encode("cp1252")
+            self.assertEqual(
+                self.node._text(value),
+                text if appier.legacy.PYTHON_3 else appier.legacy.u("Fonte A��o"),
+            )
+
     def test_has_feature(self):
         self.assertEqual(self.node._has_feature("load-fonts"), False)
 
@@ -2814,8 +3091,10 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.node._ensure_format("pdf")
         self.node._ensure_format("binie")
         self.node._ensure_format("xmpl")
-        self.assertRaises(
-            appier.OperationalError, lambda: self.node._ensure_format("zpl")
+        with self.assertRaises(appier.OperationalError) as context:
+            self.node._ensure_format("zpl")
+        self.assertEqual(
+            str(context.exception), "Format 'zpl' not compatible with system"
         )
 
         MockNPColony.format = "binie"

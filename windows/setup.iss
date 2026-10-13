@@ -114,6 +114,9 @@ const
   ServiceName = '{#ServiceName}';
   DefaultUrl = 'https://print.bemisc.com/';
   PdfPrinter = 'Microsoft Print to PDF';
+  ScManagerConnect = $0001;
+  ServiceQueryStatus = $0004;
+  ErrorServiceDoesNotExist = 1060;
 
 var
   ServerPage: TInputQueryWizardPage;
@@ -335,6 +338,15 @@ begin
       Result := False;
 end;
 
+{ Retrieves the command line (image path) of the existing service, as it's
+  registered, empty in case there's no service }
+function ServiceImagePath: String;
+begin
+  Result := '';
+  RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'ImagePath', Result);
+end;
+
 #ifdef XP
 function ConvertStringSecurityDescriptorToSecurityDescriptor(Descriptor: String;
   Revision: Cardinal; var SecurityDescriptor: Longint; Size: Longint): BOOL;
@@ -432,20 +444,32 @@ end;
   are not removed and that the path of the wrapper is quoted in the service,
   as NSSM registers it without quotes, which would allow another program
   (eg: C:\Program.exe) to be run by the service as the system account, the
-  node is told about the service (through its environment), for it to restart
-  itself by exiting unless configured otherwise, as NSSM starts it again and
-  (unlike WinSW) is not detected by the node }
+  quoted path being verified in the registry, as the exit code of sc.exe
+  can't be relied on (eg: its query exits with success in Windows XP even
+  for a service that doesn't exist), the node is told about the service
+  (through its environment), for it to restart itself by exiting unless
+  configured otherwise, as NSSM starts it again and (unlike WinSW) is not
+  detected by the node }
 function ConfigureService: Boolean;
 var
-  Prefix, Logs: String;
+  Prefix, Logs, Wrapper: String;
   ResultCode: Integer;
 begin
+  Result := False;
   Prefix := 'set ' + ServiceName + ' ';
   Logs := DataDir + '\logs\' + ServiceName;
-  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'config ' + ServiceName + ' binPath= "\"' +
+  Wrapper := '"' + ExpandConstant('{app}\nssm.exe') + '"';
+  Exec(ExpandConstant('{sys}\sc.exe'), 'config ' + ServiceName + ' binPath= "\"' +
     ExpandConstant('{app}\nssm.exe') + '\""', '', SW_HIDE, ewWaitUntilTerminated,
-    ResultCode) and (ResultCode = 0) and
-    Nssm(Prefix + 'DisplayName {#AppName}') and
+    ResultCode);
+  Log('Configuration of the ' + ServiceName + ' service returned code ' + IntToStr(ResultCode));
+  if CompareText(ServiceImagePath, Wrapper) <> 0 then
+  begin
+    Log('The ' + ServiceName + ' service has the image path ' + ServiceImagePath +
+      ' instead of ' + Wrapper);
+    Exit;
+  end;
+  Result := Nssm(Prefix + 'DisplayName {#AppName}') and
     Nssm(Prefix + 'Description Receives the print jobs of the Colony Print server ' +
       'and prints them on the printers of this machine, updating itself from PyPI ' +
       'whenever it starts.') and
@@ -566,12 +590,37 @@ begin
   end;
 end;
 
+function OpenSCManager(MachineName, DatabaseName: String; DesiredAccess: Cardinal): Longint;
+  external 'OpenSCManagerW@advapi32.dll stdcall';
+
+function OpenService(Manager: Longint; Name: String; DesiredAccess: Cardinal): Longint;
+  external 'OpenServiceW@advapi32.dll stdcall';
+
+function CloseServiceHandle(Handle: Longint): BOOL;
+  external 'CloseServiceHandle@advapi32.dll stdcall';
+
+{ Verifies if the service exists by opening it through the service control
+  manager, as the exit code of sc.exe (query) can't be relied on, being zero
+  in Windows XP even for a service that doesn't exist, a service that can't
+  be opened for any other reason is taken as an existing one, and its key in
+  the registry is verified in case the manager itself can't be opened }
 function ServiceExists: Boolean;
 var
-  ResultCode: Integer;
+  Manager, Service: Longint;
 begin
-  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'query ' + ServiceName, '', SW_HIDE,
-    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  Manager := OpenSCManager('', 'ServicesActive', ScManagerConnect);
+  if Manager = 0 then
+  begin
+    Log('Could not open the service control manager (code ' +
+      IntToStr(DLLGetLastError) + ')');
+    Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName);
+    Exit;
+  end;
+  Service := OpenService(Manager, ServiceName, ServiceQueryStatus);
+  Result := (Service <> 0) or (DLLGetLastError <> ErrorServiceDoesNotExist);
+  if Service <> 0 then
+    CloseServiceHandle(Service);
+  CloseServiceHandle(Manager);
 end;
 
 { Retrieves the path to the wrapper (image) of the existing service, without
@@ -580,11 +629,7 @@ function ServiceImage: String;
 var
   Index: Integer;
 begin
-  Result := '';
-  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
-    'ImagePath', Result) then
-    Exit;
-  Result := Trim(Result);
+  Result := Trim(ServiceImagePath);
   if (Result <> '') and (Result[1] = '"') then
   begin
     Result := Copy(Result, 2, Length(Result));
@@ -600,11 +645,29 @@ end;
   whose wrapper is in its directory, as the installer of the Windows XP nodes
   and the one of the other nodes use the same service name with different
   wrappers in different directories, the short names of the directories are
-  compared, so that the same directory is never taken as another one }
+  compared, so that the same directory is never taken as another one, the
+  paths compared being logged, as they're the ones explaining why a service
+  is taken as the one of another installer }
 function OwnService: Boolean;
+var
+  ImageDir, AppDir: String;
 begin
-  Result := CompareText(GetShortName(ExtractFilePath(ServiceImage)),
-    GetShortName(AddBackslash(ExpandConstant('{app}')))) = 0;
+  ImageDir := GetShortName(ExtractFilePath(ServiceImage));
+  AppDir := GetShortName(AddBackslash(ExpandConstant('{app}')));
+  Result := CompareText(ImageDir, AppDir) = 0;
+  Log('The ' + ServiceName + ' service has the image path ' + ServiceImagePath +
+    ' (' + ImageDir + ' compared with ' + AppDir + ')');
+end;
+
+{ Verifies if the existing service is marked for deletion, as one deleted
+  while any handle to it is open (eg: the services console) is only removed
+  once they're all closed (or Windows is restarted) }
+function ServiceMarkedForDeletion: Boolean;
+var
+  DeleteFlag: Cardinal;
+begin
+  Result := RegQueryDWordValue(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName,
+    'DeleteFlag', DeleteFlag) and (DeleteFlag <> 0);
 end;
 
 { Retrieves the directory where the other installer (the one of the Windows
@@ -639,8 +702,10 @@ begin
   if (OtherDir <> '') and (CompareText(GetShortName(ExtractFilePath(ServiceImage)),
     GetShortName(AddBackslash(OtherDir))) = 0) and FileExists(Uninstaller) then
   begin
+    Log('Running the uninstaller ' + Uninstaller);
     Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+    Log('Uninstaller returned code ' + IntToStr(ResultCode));
     for I := 1 to 60 do
     begin
       if not ServiceExists then
@@ -649,9 +714,15 @@ begin
     end;
   end;
   if ServiceExists then
+  begin
     Exec(ExpandConstant('{sys}\sc.exe'), 'delete ' + ServiceName, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+    Log('Deletion of the ' + ServiceName + ' service returned code ' + IntToStr(ResultCode));
+  end;
   Result := not ServiceExists;
+  if not Result and ServiceMarkedForDeletion then
+    Log('The ' + ServiceName + ' service is marked for deletion, being only removed ' +
+      'once every handle to it is closed (eg: the services console) or Windows is restarted');
 end;
 
 { Retrieves the default printer of the user running the installer, as the
@@ -1032,6 +1103,7 @@ begin
     Log('Stopping the ' + ServiceName + ' service');
     Exec(ExpandConstant('{sys}\net.exe'), 'stop ' + ServiceName, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+    Log('Stop of the ' + ServiceName + ' service returned code ' + IntToStr(ResultCode));
   end;
 
   { removes the node of the other installer (the one of the Windows XP

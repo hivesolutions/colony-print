@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+import ssl
+import sys
 import json
 import time
 import base64
@@ -10,6 +12,7 @@ import struct
 import hashlib
 import tempfile
 import unittest
+import importlib
 
 import appier
 
@@ -39,6 +42,22 @@ EXAMPLE = '<?xml version="1.0" encoding="UTF-8"?>\
 """ Example XML string that declares fonts in the font elements
 of the printing document (and in a paragraph, where they are
 not valid) using the XML printing language """
+
+TEST_CA = b"""-----BEGIN CERTIFICATE-----
+MIIBpTCCAUugAwIBAgIUL7tC7g4jp5qhCejlyvYHxb/knKQwCgYIKoZIzj0EAwIw
+HzEdMBsGA1UEAwwUQ29sb255IFByaW50IFRlc3QgQ0EwIBcNMjYxMDEyMTk0OTQ4
+WhgPMjEyNjA5MTgxOTQ5NDhaMB8xHTAbBgNVBAMMFENvbG9ueSBQcmludCBUZXN0
+IENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExUoryTrZx/Blzal+1nLT8BG/
+31SjecgprjLOzZdqeC2VJFG31T5o40PGSrQypg6O173bYUS5L0lz9g7c1qgO5KNj
+MGEwHQYDVR0OBBYEFK4/BK4KVhZB1qUddlu1CmzWansvMB8GA1UdIwQYMBaAFK4/
+BK4KVhZB1qUddlu1CmzWansvMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQD
+AgEGMAoGCCqGSM49BAMCA0gAMEUCICFHgg/59Pi8WEPlYdOfEYGiZ4xeSmlY3W+w
+sZP2sZahAiEAiUzMDB9X25Lh0BirwpGzXv3Tjnz7zKzyrqtWOqR5bcM=
+-----END CERTIFICATE-----
+"""
+""" The certificate (PEM) of a certificate authority that is only
+trusted by the tests, so that the authorities loaded into the SSL
+context of the downloads can be verified in any system """
 
 
 def build_font(name="Colonia", style="regular"):
@@ -120,6 +139,69 @@ class MockResponse(object):
 
     def close(self):
         self.closed = True
+
+
+class MockContext(object):
+    """
+    Stand-in for the SSL context of the downloads, that records the files
+    of the certificate authorities that are loaded into it (and the contexts
+    that are created), so that the authorities of the downloads can be
+    inspected in any system.
+    """
+
+    contexts = []
+
+    def __init__(self):
+        self.cafiles = []
+        MockContext.contexts.append(self)
+
+    def load_verify_locations(self, cafile=None):
+        self.cafiles.append(cafile)
+
+
+class MockNetius(object):
+    """
+    Stand-in for the netius module that exposes a configurable path to
+    its bundle of certificate authorities (none when it has no bundle).
+    """
+
+    SSL_CA_PATH = None
+
+
+class MockKernel32(object):
+    """
+    Stand-in for the kernel32 library of windows (as exposed by ctypes)
+    that records the moves of the files (MoveFileEx) and replaces the files
+    as windows does, or fails them with the configured error code, so that
+    the replacement of the files on windows can be exercised in any system.
+    """
+
+    moves = []
+    error = 0
+
+    @staticmethod
+    def MoveFileExW(source, target, flags):
+        MockKernel32.moves.append((source, target, flags))
+        if MockKernel32.error:
+            return 0
+        if os.path.exists(target):
+            os.remove(target)
+        os.rename(source, target)
+        return 1
+
+
+class MockCtypes(object):
+    """
+    Stand-in for the ctypes module of windows, that exposes the stand-in
+    of its kernel32 library and builds the errors of its failed calls.
+    """
+
+    class windll(object):
+        kernel32 = MockKernel32
+
+    @staticmethod
+    def WinError():
+        return OSError(MockKernel32.error, "Access is denied")
 
 
 class FontsTest(unittest.TestCase):
@@ -452,16 +534,23 @@ class FontCacheTest(unittest.TestCase):
         self.target_dir = tempfile.mkdtemp(prefix="colony-print-fonts-cache-test-")
         self.path = os.path.join(self.target_dir, "fonts")
         self.downloads = []
+        self.options = []
         self.responses = dict()
         self._urlopen = appier.legacy.urlopen
         appier.legacy.urlopen = self._open
+        MockKernel32.moves = []
+        MockKernel32.error = 0
+        self._ctypes = colony_print.printing.common.fonts.ctypes
+        colony_print.printing.common.fonts.ctypes = MockCtypes
 
     def tearDown(self):
         appier.legacy.urlopen = self._urlopen
+        colony_print.printing.common.fonts.ctypes = self._ctypes
         shutil.rmtree(self.target_dir, ignore_errors=True)
 
-    def _open(self, url, timeout=None):
+    def _open(self, url, timeout=None, **kwargs):
         self.downloads.append((url, timeout))
+        self.options.append(kwargs)
         response = self.responses[url]
         if isinstance(response, Exception):
             raise response
@@ -471,6 +560,12 @@ class FontCacheTest(unittest.TestCase):
 
     def _files(self):
         return sorted(os.listdir(self.path)) if os.path.exists(self.path) else []
+
+    def _authorities(self, context):
+        return [
+            dict(item[0] for item in cert["subject"]).get("commonName", None)
+            for cert in context.get_ca_certs()
+        ]
 
     def test_init(self):
         font_cache = colony_print.FontCache(self.path)
@@ -924,11 +1019,143 @@ class FontCacheTest(unittest.TestCase):
         )
         self.assertEqual(response.closed, True)
 
+        # the certificate of the server is verified against the authorities
+        # of the context of the downloads, unless python doesn't support the
+        # contexts (older versions), with its default verification
+        for options in self.options:
+            self.assertEqual(sorted(options.keys()), ["context"])
+            self.assertEqual(options["context"].verify_mode, ssl.CERT_REQUIRED)
+
+        # the URLs that are not secure (HTTP) are downloaded with the context
+        # as well, as they may be redirected to secure ones (eg: by the hosts
+        # that force HTTPS), that are verified with the context of the request
+        http_url = "http://fonts.hive.pt/colonia.ttf"
+        self.responses[http_url] = b"font"
+        self.options = []
+        self.assertEqual(font_cache._download("Colonia", http_url), b"fon")
+        self.assertEqual(sorted(self.options[0].keys()), ["context"])
+        self.assertEqual(self.options[0]["context"].verify_mode, ssl.CERT_REQUIRED)
+
+        font_cache._context = lambda: None
+        self.options = []
+        self.responses[url] = b"font"
+        self.assertEqual(font_cache._download("Colonia", url), b"fon")
+        self.assertEqual(self.options, [dict()])
+
+        # the URLs that are not secure (HTTP) are downloaded (without the
+        # context) even when the context can't be built, which fails the
+        # download of the secure ones (whatever the case of their scheme)
+        # as any other problem downloading the font
+        def context_error():
+            raise IOError("No such file or directory")
+
+        font_cache._context = context_error
+        self.options = []
+        self.assertEqual(font_cache._download("Colonia", http_url), b"fon")
+        self.assertEqual(self.options, [dict()])
+        for secure_url in (url, url.replace("https://", "HTTPS://")):
+            with self.assertRaises(appier.OperationalError) as context:
+                font_cache._download("Colonia", secure_url)
+            self.assertEqual(
+                context.exception.message,
+                "Font 'Colonia' not downloaded from '%s': No such file or directory"
+                % secure_url,
+            )
+            self.assertEqual(context.exception.code, 400)
+        self.assertEqual(len(self.options), 1)
+
+    def test_context(self):
+        # the bundle of netius (when installed) is the one exposed at the top
+        # of its package, the one loaded into the context of the downloads,
+        # with the authority of the current certificates (eg: Let's Encrypt)
+        try:
+            import netius
+        except ImportError:
+            netius = None
+        if netius:
+            self.assertEqual(os.path.isfile(netius.SSL_CA_PATH), True)
+            context = ssl.create_default_context(cafile=netius.SSL_CA_PATH)
+            self.assertEqual("ISRG Root X1" in self._authorities(context), True)
+
+        # the certificates of the servers (and their names) are verified,
+        # against the authorities of the system and the ones of the bundle
+        # of netius, that the ones of older systems (eg: Windows XP, no longer
+        # updated) miss, as the one of the tests
+        font_cache = colony_print.FontCache(self.path)
+        ca_path = os.path.join(self.target_dir, "net.ca")
+        with open(ca_path, "wb") as file:
+            file.write(TEST_CA)
+        netius = sys.modules.get("netius", None)
+        sys.modules["netius"] = MockNetius
+        MockNetius.SSL_CA_PATH = ca_path
+        try:
+            context = font_cache._context()
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+            self.assertEqual(context.check_hostname, True)
+            self.assertEqual("Colony Print Test CA" in self._authorities(context), True)
+
+            sys.modules["netius"] = None
+            context = font_cache._context()
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+            self.assertEqual(
+                "Colony Print Test CA" in self._authorities(context), False
+            )
+        finally:
+            MockNetius.SSL_CA_PATH = None
+            if netius == None:
+                sys.modules.pop("netius", None)
+            else:
+                sys.modules["netius"] = netius
+
+        # the authorities of the system are complemented with the ones of
+        # the bundle of netius, when netius (and its bundle) is available
+        create_default_context = ssl.create_default_context
+        MockContext.contexts = []
+        ssl.create_default_context = MockContext
+        sys.modules["netius"] = MockNetius
+        try:
+            MockNetius.SSL_CA_PATH = "/netius/base/extras/net.ca"
+            self.assertEqual(font_cache._context(), MockContext.contexts[-1])
+            self.assertEqual(
+                MockContext.contexts[-1].cafiles, ["/netius/base/extras/net.ca"]
+            )
+
+            MockNetius.SSL_CA_PATH = None
+            self.assertEqual(font_cache._context(), MockContext.contexts[-1])
+            self.assertEqual(MockContext.contexts[-1].cafiles, [])
+
+            sys.modules["netius"] = None
+            self.assertEqual(font_cache._context(), MockContext.contexts[-1])
+            self.assertEqual(MockContext.contexts[-1].cafiles, [])
+            self.assertEqual(len(MockContext.contexts), 3)
+
+            # the older versions of python have no SSL contexts
+            del ssl.create_default_context
+            self.assertEqual(font_cache._context(), None)
+        finally:
+            ssl.create_default_context = create_default_context
+            MockNetius.SSL_CA_PATH = None
+            if netius == None:
+                sys.modules.pop("netius", None)
+            else:
+                sys.modules["netius"] = netius
+
     def test_file(self):
         font_cache = colony_print.FontCache(self.path)
         self.assertEqual(
             font_cache._file("a" * 32), os.path.join(self.path, "a" * 32 + ".ttf")
         )
+
+        # the (unicode) MD5s of the index and of the jobs result in a path of
+        # the type of the path of the cache, as in Python 2 it's a byte string
+        # that can't be joined with an unicode string when it's not ASCII
+        path = os.path.join(self.target_dir, appier.legacy.u("Dados de aplicações"))
+        if not appier.legacy.PYTHON_3:
+            path = path.encode(sys.getfilesystemencoding(), "replace")
+        font_cache = colony_print.FontCache(path)
+        file_path = font_cache._file(appier.legacy.u("a" * 32))
+        self.assertEqual(file_path, os.path.join(path, "a" * 32 + ".ttf"))
+        self.assertEqual(type(file_path), type(path))
 
     def test_write(self):
         font_cache = colony_print.FontCache(self.path)
@@ -954,21 +1181,88 @@ class FontCacheTest(unittest.TestCase):
             self.assertEqual(file.read(), b"third")
         self.assertEqual(self._files(), ["file.ttf", "other.ttf"])
 
-        # simulates an older version of python on windows, that removes the
-        # file before (the other systems replace it with the rename)
+        # simulates an older version of python on windows, where the file is
+        # replaced by windows itself (the other systems replace it with the
+        # rename), a failed replacement keeping the file as it was
         name = os.name
         if replace:
             del os.replace
         os.name = "nt"
         try:
             font_cache._write(file_path, b"fourth")
+            MockKernel32.error = 5
+            self.assertRaises(OSError, lambda: font_cache._write(file_path, b"fifth"))
         finally:
             os.name = name
             if replace:
                 os.replace = replace
         with open(file_path, "rb") as file:
             self.assertEqual(file.read(), b"fourth")
+        self.assertEqual(len(MockKernel32.moves), 2)
+        self.assertEqual(MockKernel32.moves[0][1], file_path)
+        self.assertEqual(
+            MockKernel32.moves[0][2], colony_print.printing.common.fonts.MOVE_FLAGS
+        )
         self.assertEqual(self._files(), ["file.ttf", "other.ttf"])
+
+    def test_replace(self):
+        # the file is replaced by windows (MoveFileEx) with the unicode paths
+        # of the files, as the paths of Python 2 are byte strings, in the
+        # encoding of the file system (the ANSI code page of windows)
+        font_cache = colony_print.FontCache(self.path)
+        os.makedirs(self.path)
+        source = os.path.join(self.path, "source.ttf")
+        target = os.path.join(self.path, "target.ttf")
+        for path, data in ((source, b"source"), (target, b"target")):
+            with open(path, "wb") as file:
+                file.write(data)
+        encoding = sys.getfilesystemencoding()
+        font_cache._replace(source.encode(encoding), target.encode(encoding))
+        with open(target, "rb") as file:
+            self.assertEqual(file.read(), b"source")
+        self.assertEqual(self._files(), ["target.ttf"])
+        self.assertEqual(
+            MockKernel32.moves,
+            [
+                (
+                    appier.legacy.u(source, encoding=encoding, force=True),
+                    appier.legacy.u(target, encoding=encoding, force=True),
+                    0x01 | 0x08,
+                )
+            ],
+        )
+        for path in MockKernel32.moves[0][:2]:
+            self.assertEqual(appier.legacy.is_unicode(path), True)
+
+        # a replacement that fails (eg: the file is open without sharing its
+        # deletion) raises the error of windows, keeping both files
+        with open(source, "wb") as file:
+            file.write(b"other")
+        MockKernel32.error = 32
+        with self.assertRaises(OSError) as context:
+            font_cache._replace(source, target)
+        self.assertEqual(context.exception.errno, 32)
+        self.assertEqual(self._files(), ["source.ttf", "target.ttf"])
+        with open(target, "rb") as file:
+            self.assertEqual(file.read(), b"source")
+
+        # the module is still loaded by an interpreter without ctypes (eg:
+        # one built without libffi), as it's only used to replace the files
+        # on windows, by the older versions of python
+        modules = dict(sys.modules)
+        del sys.modules["colony_print.printing.common.fonts"]
+        sys.modules["ctypes"] = None
+        try:
+            fonts = importlib.import_module("colony_print.printing.common.fonts")
+        finally:
+            sys.modules.clear()
+            sys.modules.update(modules)
+            colony_print.printing.common.fonts = modules[
+                "colony_print.printing.common.fonts"
+            ]
+        self.assertNotEqual(fonts, colony_print.printing.common.fonts)
+        self.assertEqual(fonts.ctypes, None)
+        self.assertEqual(fonts.MOVE_FLAGS, 0x01 | 0x08)
 
     def test_save(self):
         font_cache = colony_print.FontCache(self.path)

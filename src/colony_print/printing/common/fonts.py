@@ -3,6 +3,7 @@
 
 import os
 import re
+import sys
 import json
 import time
 import uuid
@@ -11,6 +12,11 @@ import struct
 import hashlib
 
 import appier
+
+try:
+    import ctypes
+except ImportError:
+    ctypes = None
 
 FONT_STYLES = ("regular", "bold", "italic", "bold_italic")
 """ The sequence of styles of the fonts of a family, the ones
@@ -44,6 +50,11 @@ of a font file, the name of its file in the font cache """
 
 INDEX_NAME = "index.json"
 """ The name of the file of the index of the font cache """
+
+MOVE_FLAGS = 0x01 | 0x08
+""" The flags of the move of windows (MoveFileEx) that replaces a file,
+replacing the existing one (MOVEFILE_REPLACE_EXISTING) and returning only
+once it's written to the disk (MOVEFILE_WRITE_THROUGH) """
 
 
 def verify_font(font, reference=True):
@@ -652,8 +663,20 @@ class FontCache(object):
         case it's larger than the maximum size of the font files).
         """
 
+        # the SSL context is built inside the try block, so that a failure
+        # building it (eg: a bundle of authorities that can't be loaded) is a
+        # failure of the download, except for the URLs that are not secure
+        # (HTTP), that only use it when they're redirected to secure ones
         try:
-            response = appier.legacy.urlopen(url, timeout=FONT_TIMEOUT)
+            secure = url.lower().startswith("https://")
+            try:
+                context = self._context()
+            except Exception:
+                if secure:
+                    raise
+                context = None
+            kwargs = dict(context=context) if context else dict()
+            response = appier.legacy.urlopen(url, timeout=FONT_TIMEOUT, **kwargs)
             try:
                 data = response.read(self.max_size + 1)
             finally:
@@ -666,10 +689,44 @@ class FontCache(object):
             )
         return data
 
+    def _context(self):
+        """
+        Builds the SSL context of the downloads of the font files, that
+        verifies the certificates of the servers against the certificate
+        authorities of the system together with the ones of the bundle of
+        netius (when available), as the ones of the system may be outdated
+        (eg: the ones of Windows XP, that are no longer updated) and miss
+        the authorities of the current certificates (eg: Let's Encrypt).
+
+        :rtype: SSLContext
+        :return: The SSL context of the downloads, none in case the SSL
+        contexts are not supported (by older versions of python).
+        """
+
+        import ssl
+
+        if not hasattr(ssl, "create_default_context"):
+            return None
+        context = ssl.create_default_context()
+        try:
+            import netius
+        except ImportError:
+            return context
+        ca_path = getattr(netius, "SSL_CA_PATH", None)
+        if ca_path:
+            context.load_verify_locations(cafile=ca_path)
+        return context
+
     def _file(self, md5):
         """
         Retrieves the path to the file of the font with the provided MD5,
         an invalid MD5 resulting in a path where no font exists.
+
+        The MD5 (hexadecimal) is converted into a native string, as in
+        Python 2 the MD5s of the index and of the jobs are unicode strings,
+        that can't be joined with the path of the cache, a byte string,
+        when it's not ASCII (eg: the data directory of a windows that is
+        not in english).
 
         :type md5: String
         :param md5: The MD5 of the font file.
@@ -677,7 +734,7 @@ class FontCache(object):
         :return: The path to the font file in the cache.
         """
 
-        return os.path.join(self.path, "%s.ttf" % md5)
+        return os.path.join(self.path, "%s.ttf" % str(md5))
 
     def _write(self, path, data):
         """
@@ -695,21 +752,54 @@ class FontCache(object):
         if not os.path.exists(self.path):
             os.makedirs(self.path)
         temp_path = "%s.%s.tmp" % (path, str(uuid.uuid4()))
-        with open(temp_path, "wb") as file:
-            file.write(data)
-            file.flush()
-            os.fsync(file.fileno())
 
-        # replaces the file with the temporary one, note that older
-        # versions of python are not able to replace (rename into) an
-        # existing file on windows, so the file is removed first there
-        # (on the other systems the rename replaces it atomically)
-        if hasattr(os, "replace"):
-            os.replace(temp_path, path)
-        else:
-            if os.name == "nt" and os.path.exists(path):
-                os.remove(path)
-            os.rename(temp_path, path)
+        # writes the temporary file and replaces the file with it, with a try
+        # and finally block guaranteeing that the temporary file is removed
+        # when the write fails, note that older versions of python are not
+        # able to replace (rename into) an existing file on windows, so the
+        # file is replaced by windows itself there (on the other systems the
+        # rename replaces it atomically)
+        try:
+            with open(temp_path, "wb") as file:
+                file.write(data)
+                file.flush()
+                os.fsync(file.fileno())
+            if hasattr(os, "replace"):
+                os.replace(temp_path, path)
+            elif os.name == "nt":
+                self._replace(temp_path, path)
+            else:
+                os.rename(temp_path, path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def _replace(self, source, target):
+        """
+        Replaces the file in the target path with the one in the source path
+        (that is moved into its place) using the move of windows (MoveFileEx),
+        as older versions of python are not able to replace a file on windows,
+        where removing the file before the move would lose it in case the move
+        fails, as in Windows XP the name of a removed file that is still open
+        by another process (eg: an antivirus) is kept until it's closed,
+        failing the move.
+
+        :type source: String
+        :param source: The path to the file that replaces the target one.
+        :type target: String
+        :param target: The path to the file to be replaced.
+        """
+
+        source, target = [
+            (
+                path.decode(sys.getfilesystemencoding())
+                if isinstance(path, bytes)
+                else path
+            )
+            for path in (source, target)
+        ]
+        if not ctypes.windll.kernel32.MoveFileExW(source, target, MOVE_FLAGS):
+            raise ctypes.WinError()
 
     def _save(self):
         """

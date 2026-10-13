@@ -9,15 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Verification of the packages updated by the nodes, by importing their modules, failing the update (naming the modules that are not loaded) when they're not loaded by the system (eg: native modules not supported by Windows XP) instead of the node silently dropping their engine
 
 ### Changed
 
-*
+* Status of the result posted by a node for the job of another node (`Node ID mismatch`), a conflict (409) instead of a server error (500)
+* Logging of the existing service by the Windows installers, with its image path, the exit codes of its stop and deletion and whether it's marked for deletion, explaining why the service of another installer is not removed
 
 ### Fixed
 
-*
+* Service of the node taken as existing by the installer of the Windows XP nodes even when not installed, as the exit code of `sc query` is zero in Windows XP, failing the install with the service of another installer not removed, the service being now verified through the service control manager
+* Path of the service of the Windows XP nodes not verified once configured, as the exit code of `sc config` can't be relied on in Windows XP, the quoted path being now verified in the registry
+* Results of a batch of jobs never posted by the Windows XP nodes (Python 2) when the error of one of its jobs is not ASCII (eg: the name of a font or an error of a Windows that is not in English), the jobs being kept as printing
+* Messages of the errors of the nodes (eg: npcolony engine not available) and of the result posted by another node replaced by "Operational Error"
+* State of the Windows XP nodes and index of their font cache lost when their file is open by another process (eg: an antivirus) while being replaced, the file being now replaced by Windows itself (`MoveFileEx`)
+* Temporary file of the font cache kept when its write fails
+* Results of a batch of jobs never posted by the Windows XP nodes (Python 2) when it installs fonts in a data directory whose path is not ASCII (eg: a Windows that is not in English), the paths of the fonts being now posted as unicode strings
+* Font cache of the Windows XP nodes (Python 2) failing with a data directory whose path is not ASCII once its index is loaded (eg: when the node starts, which then fails) or a font is referenced by its MD5, as the unicode MD5s were joined with the path (a byte string)
+* Fonts not downloaded by the Windows XP nodes from the servers with certificates of the current certificate authorities (eg: Let's Encrypt), the bundle of netius being now trusted together with the authorities of the system
+* Packages of the Windows XP nodes updated by pip without the options that isolate the interpreter from the system (eg: from the `PYTHONPATH` of the machine), also dropped by the node that restarts itself (Python 2)
 
 ## [0.25.0] - 2026-10-12
 

@@ -92,7 +92,7 @@ class NodeController(appier.Controller):
 
         job_info = self.owner.jobs_info[job_id]
         if not id == job_info["node_id"]:
-            raise appier.OperationalError("Node ID mismatch")
+            raise appier.OperationalError(message="Node ID mismatch", code=409)
 
         # marks the fonts of the job as skipped in case the node skipped them,
         # as the node may not support the fonts when it prints the job (eg:
