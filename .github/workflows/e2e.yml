@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHON_VERSION: "3.12"
-      WINE_PYTHON_VERSION: "3.12.10"
-      WINE_PYTHON_SHA256: "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
+      WINE_PYTHON_VERSION: "3.11.9"
+      WINE_PYTHON_SHA256: "009d6bf7e3b2ddca3d784fa09f90fe54336d5b60f0e0f305c37f400bf83cfd3b"
       WINEPREFIX: ${{ github.workspace }}/.wine
       WINEDEBUG: "-all"
       WINEDLLOVERRIDES: "mscoree,mshtml="
@@ -41,7 +41,7 @@ jobs:
           curl -fsSL --retry 5 --retry-delay 15 -o python.zip "$Url"
           echo "$WINE_PYTHON_SHA256  python.zip" | sha256sum -c -
           unzip -q python.zip -d wine-python
-          pip download npcolony --platform win_amd64 --python-version 3.12 --only-binary=:all: --no-deps -d wheels
+          pip download npcolony --platform win_amd64 --python-version 3.11 --only-binary=:all: --no-deps -d wheels
           unzip -q -o wheels/npcolony-*.whl -d wine-python
           ls wheels
       - name: Create the Wine prefix
