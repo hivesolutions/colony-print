@@ -162,16 +162,18 @@ def ink_lines(image, offset=0.0, resolution=RESOLUTION):
             else:
                 segments.append([x, x + 1])
 
-        # sums the ink of every segment as the coverage of its pixels (the
-        # lighter ones of the edges of the glyphs included), that unlike
-        # the number of pixels with ink doesn't change with the position
-        # of the glyphs in the grid of pixels
+        # sums the ink of every segment as the coverage of its pixels, with
+        # a pixel around them for the lighter ones of the edges of the glyphs
+        # (that don't reach the other bands or segments), that unlike the
+        # number of pixels with ink doesn't change with the position of the
+        # glyphs in the grid of pixels
         inks = []
+        top, bottom = max(band["top"] - 1, 0), min(band["bottom"] + 2, height)
         for left, right in segments:
             ink = sum(
                 255 - pixels[x, y]
-                for x in range(left, right)
-                for y in range(band["top"], band["bottom"] + 1)
+                for x in range(max(left - 1, 0), min(right + 1, width))
+                for y in range(top, bottom)
             )
             inks.append(ink / 255.0 * scale * scale)
         segments = [
@@ -264,11 +266,26 @@ class InkLinesTest(unittest.TestCase):
     def test_ink_lines_inks(self):
         image = self._image([(10, 5, 20, 15), (12, 2, 14, 3), (40, 10, 45, 15)])
         image.paste(204, (12, 3, 17, 5))
+        image.paste(204, (10, 0, 20, 2))
         image.paste(200, (20, 5, 25, 15))
         lines = ink_lines(image, resolution=72)
         self.assertEqual(len(lines), 1)
         self.assertEqual(lines[0]["segments"], [(10.0, 20.0), (40.0, 45.0)])
-        self.assertEqual(lines[0]["inks"], [104.0, 25.0])
+
+        # the ink of the segment includes the light pixels around it (the
+        # edges of the glyphs), the last row of the light rows above it and
+        # the first column of the light box on its right, but not the others
+        self.assertAlmostEqual(lines[0]["inks"][0], 104.0 + (10 * 51 + 10 * 55) / 255.0)
+        self.assertEqual(lines[0]["inks"][1], 25.0)
+
+    def test_ink_lines_borders(self):
+        image = self._image([(0, 0, 5, 5), (95, 35, 100, 40)])
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0]["segments"], [(0.0, 5.0)])
+        self.assertEqual(lines[0]["inks"], [25.0])
+        self.assertEqual(lines[1]["segments"], [(95.0, 100.0)])
+        self.assertEqual(lines[1]["inks"], [25.0])
 
     def test_ink_lines_offset(self):
         image = self._image([(10, 5, 20, 15), (30, 5, 40, 15)])
@@ -347,6 +364,10 @@ class EndToEndTest(unittest.TestCase):
             )
             self.assertAlmostEqual(
                 line_pdf["right"], line_gdi["right"], delta=tolerance, msg=message
+            )
+            ink_pdf, ink_gdi = sum(line_pdf["inks"]), sum(line_gdi["inks"])
+            self.assertAlmostEqual(
+                ink_gdi, ink_pdf, delta=INK_RATIO * ink_pdf, msg=message
             )
 
     def test_receipt_wrap(self):
