@@ -39,7 +39,8 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo mkdir -pm755 /etc/apt/keyrings
           curl -fsSL --retry 5 https://dl.winehq.org/wine-builds/winehq.key | sudo gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key
-          sudo curl -fsSL --retry 5 -o /etc/apt/sources.list.d/winehq-noble.sources https://dl.winehq.org/wine-builds/ubuntu/dists/noble/winehq-noble.sources
+          Codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          sudo curl -fsSL --retry 5 -o /etc/apt/sources.list.d/winehq-$Codename.sources https://dl.winehq.org/wine-builds/ubuntu/dists/$Codename/winehq-$Codename.sources
           sudo apt-get update
           sudo apt-get install -y --install-recommends winehq-${{ matrix.wine }}
           wine --version

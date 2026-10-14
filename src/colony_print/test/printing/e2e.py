@@ -68,6 +68,13 @@ relative to the width of the line, as the renderers measure the
 texts with the same font files but GDI rounds (and hints) their
 metrics, drawing them about 2% narrower """
 
+SEGMENT_GAP = 8.0
+""" The widest gap (in points) between the runs of ink of a line of
+text that are part of the same segment, wider than the gaps between
+the words of a text (up to about 3.5 points in the documents) and
+narrower than the gaps between the texts placed by the margins of
+a line (at least about 14 points in the documents) """
+
 GDI_SCRIPT = """# -*- coding: utf-8 -*-
 import sys
 import json
@@ -91,6 +98,160 @@ sys.exit(1 if result else 0)
 a Binie document through the GDI renderer of npcolony, loading the
 fonts of the document as private fonts and writing the output of
 the printer driver (PostScript) into a file """
+
+
+def ink_lines(image, offset=0.0, resolution=RESOLUTION):
+    """
+    Retrieves the lines of text of the provided (grayscale) image, as the
+    bands of rows with ink, each one split into its segments, the runs of
+    ink separated by gaps wider than the spaces between the words.
+
+    :type image: Image
+    :param image: The grayscale image (rasterized page) to be analyzed.
+    :type offset: float
+    :param offset: The horizontal offset (in points) of the printable
+    area in the page, so that the positions are relative to it.
+    :type resolution: int
+    :param resolution: The resolution (in dpi) of the image.
+    :rtype: List
+    :return: The lines of text, each one a map with the top and bottom
+    positions, the left and right ink extents and the segments (pairs of
+    left and right extents), in points relative to the top left corner
+    of the printable area.
+    """
+
+    width, height = image.size
+    pixels = image.load()
+    scale = 72.0 / resolution
+
+    # finds the columns with ink in every row of the image, grouping
+    # the consecutive rows with ink (allowing small gaps, the accents)
+    # into the bands that represent the lines of text
+    bands, current, gap = [], None, 0
+    for y in range(height):
+        columns = [x for x in range(width) if pixels[x, y] < 128]
+        if columns:
+            if current and gap <= 2:
+                current["bottom"] = y
+                current["columns"].update(columns)
+            else:
+                current = dict(top=y, bottom=y, columns=set(columns))
+                bands.append(current)
+            gap = 0
+        else:
+            gap += 1
+
+    # splits the columns with ink of every band into its segments, joining
+    # the runs of ink separated by gaps that are not wider than the segment
+    # gap, converting the positions into points relative to the printable
+    # area (the end of each segment being the end of its last column)
+    lines = []
+    for band in bands:
+        segments = []
+        for x in sorted(band["columns"]):
+            if segments and (x - segments[-1][1]) * scale <= SEGMENT_GAP:
+                segments[-1][1] = x + 1
+            else:
+                segments.append([x, x + 1])
+        segments = [
+            (left * scale - offset, right * scale - offset) for left, right in segments
+        ]
+        lines.append(
+            dict(
+                top=band["top"] * scale,
+                bottom=(band["bottom"] + 1) * scale,
+                left=segments[0][0],
+                right=segments[-1][1],
+                segments=segments,
+            )
+        )
+    return lines
+
+
+class InkLinesTest(unittest.TestCase):
+    def _image(self, boxes, size=(100, 40), color=0):
+        image = PIL.Image.new("L", size, 255)
+        for box in boxes:
+            image.paste(color, box)
+        return image
+
+    def test_ink_lines(self):
+        image = self._image(
+            [(10, 5, 20, 15), (30, 5, 40, 15), (10, 25, 20, 30), (23, 25, 33, 30)]
+        )
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(
+            lines,
+            [
+                dict(
+                    top=5.0,
+                    bottom=15.0,
+                    left=10.0,
+                    right=40.0,
+                    segments=[(10.0, 20.0), (30.0, 40.0)],
+                ),
+                dict(
+                    top=25.0,
+                    bottom=30.0,
+                    left=10.0,
+                    right=33.0,
+                    segments=[(10.0, 33.0)],
+                ),
+            ],
+        )
+
+    def test_ink_lines_empty(self):
+        self.assertEqual(ink_lines(self._image([]), resolution=72), [])
+
+    def test_ink_lines_threshold(self):
+        image = self._image([(10, 5, 20, 15)], color=128)
+        self.assertEqual(ink_lines(image, resolution=72), [])
+
+        image = self._image([(10, 5, 20, 15)], color=127)
+        self.assertEqual(len(ink_lines(image, resolution=72)), 1)
+
+    def test_ink_lines_rows(self):
+        image = self._image([(10, 5, 20, 8), (10, 10, 20, 15)])
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(len(lines), 1)
+        self.assertEqual((lines[0]["top"], lines[0]["bottom"]), (5.0, 15.0))
+
+        image = self._image([(10, 5, 20, 8), (10, 11, 20, 15)])
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual((lines[0]["top"], lines[0]["bottom"]), (5.0, 8.0))
+        self.assertEqual((lines[1]["top"], lines[1]["bottom"]), (11.0, 15.0))
+
+    def test_ink_lines_rows_extents(self):
+        image = self._image([(30, 5, 40, 8), (10, 10, 20, 15)])
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["segments"], [(10.0, 20.0), (30.0, 40.0)])
+
+    def test_ink_lines_gap(self):
+        image = self._image([(10, 5, 20, 15), (28, 5, 35, 15)])
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(lines[0]["segments"], [(10.0, 35.0)])
+
+        image = self._image([(10, 5, 20, 15), (29, 5, 35, 15)])
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(lines[0]["segments"], [(10.0, 20.0), (29.0, 35.0)])
+
+    def test_ink_lines_offset(self):
+        image = self._image([(10, 5, 20, 15), (30, 5, 40, 15)])
+        lines = ink_lines(image, offset=15.0, resolution=72)
+        self.assertEqual(lines[0]["left"], -5.0)
+        self.assertEqual(lines[0]["right"], 25.0)
+        self.assertEqual(lines[0]["segments"], [(-5.0, 5.0), (15.0, 25.0)])
+        self.assertEqual((lines[0]["top"], lines[0]["bottom"]), (5.0, 15.0))
+
+    def test_ink_lines_resolution(self):
+        image = self._image([(10, 5, 20, 15), (25, 5, 30, 15)])
+        lines = ink_lines(image)
+        scale = 72.0 / RESOLUTION
+        self.assertEqual(lines[0]["top"], 5 * scale)
+        self.assertEqual(lines[0]["bottom"], 15 * scale)
+        self.assertEqual(lines[0]["segments"], [(10 * scale, 30 * scale)])
 
 
 class EndToEndTest(unittest.TestCase):
@@ -140,19 +301,31 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(len(overflows_pdf), 2)
         self.assertEqual(len(overflows_gdi), 2)
         for line_pdf, line_gdi in zip(overflows_pdf, overflows_gdi):
+            message = "%s against %s" % (line_gdi, line_pdf)
+            tolerance = max(
+                EXTENT_TOLERANCE, EXTENT_RATIO * (line_pdf["right"] - line_pdf["left"])
+            )
             self.assertAlmostEqual(
-                line_pdf["top"], line_gdi["top"], delta=POSITION_TOLERANCE
+                line_pdf["top"], line_gdi["top"], delta=POSITION_TOLERANCE, msg=message
+            )
+            self.assertAlmostEqual(
+                line_pdf["left"], line_gdi["left"], delta=tolerance, msg=message
+            )
+            self.assertAlmostEqual(
+                line_pdf["right"], line_gdi["right"], delta=tolerance, msg=message
             )
 
-    @unittest.expectedFailure
     def test_receipt_wrap(self):
-        # the wrapping of the long texts is not yet supported by the
-        # renderers (hivesolutions/colony-npapi#7), so the notes still
-        # go beyond the printable area, this test is expected to pass
-        # once the wrap flag of Binie 1.1 is implemented
         outputs = self._print("receipt", wrap=True)
-        self.assertEqual(self._overflows(outputs["binie_pdf"]), [])
-        self.assertEqual(self._overflows(outputs["binie_gdi"]), [])
+        for name in ("binie_pdf", "binie_gdi"):
+            self._assert_layout(outputs["xmpl_pdf"], outputs[name], name)
+
+        # the wrapping of the long texts is not yet supported by the
+        # renderers (hivesolutions/colony-npapi#7), so the two lines of
+        # the notes still go beyond the printable area, once the wrap
+        # flag of Binie 1.1 is implemented no line must go beyond it
+        self.assertEqual(len(self._overflows(outputs["binie_pdf"])), 2)
+        self.assertEqual(len(self._overflows(outputs["binie_gdi"])), 2)
 
     def _print(self, name, wrap=False):
         """
@@ -291,9 +464,7 @@ class EndToEndTest(unittest.TestCase):
         :type name: String
         :param name: The name of the output, used for the files.
         :rtype: List
-        :return: The lines of text, each one a map with the top and bottom
-        positions and the left and right ink extents (in points, relative
-        to the top left corner of the printable area).
+        :return: The lines of text, as retrieved by `ink_lines`.
         """
 
         pdf_path = os.path.join(self.target_dir, name + ".pdf")
@@ -313,36 +484,7 @@ class EndToEndTest(unittest.TestCase):
             self._store(name + ".png", file.read())
 
         image = PIL.Image.open(png_path).convert("L")
-        width, height = image.size
-        pixels = image.load()
-        scale = 72.0 / RESOLUTION
-
-        # finds the extent of the ink in every row of the image, grouping
-        # the consecutive rows with ink (allowing small gaps, the accents)
-        # into the bands that represent the lines of text
-        lines, current, gap = [], None, 0
-        for y in range(height):
-            columns = [x for x in range(width) if pixels[x, y] < 128]
-            if columns:
-                if current and gap <= 2:
-                    current["bottom"] = y
-                    current["left"] = min(current["left"], columns[0])
-                    current["right"] = max(current["right"], columns[-1])
-                else:
-                    current = dict(top=y, bottom=y, left=columns[0], right=columns[-1])
-                    lines.append(current)
-                gap = 0
-            else:
-                gap += 1
-        return [
-            dict(
-                top=line["top"] * scale,
-                bottom=(line["bottom"] + 1) * scale,
-                left=line["left"] * scale - offset,
-                right=(line["right"] + 1) * scale - offset,
-            )
-            for line in lines
-        ]
+        return ink_lines(image, offset=offset)
 
     def _overflows(self, lines):
         return [
@@ -354,9 +496,9 @@ class EndToEndTest(unittest.TestCase):
     def _assert_layout(self, reference, lines, name):
         """
         Asserts that the provided lines of text have the same layout of
-        the reference ones, inside of the printable area (the reference
-        being the direct conversion of XMPL into PDF, that has no room
-        beyond the printable area).
+        the reference ones, segment by segment, inside of the printable
+        area (the reference being the direct conversion of XMPL into PDF,
+        that has no room beyond the printable area).
 
         :type reference: List
         :param reference: The reference lines of text.
@@ -366,6 +508,7 @@ class EndToEndTest(unittest.TestCase):
         :param name: The name of the renderer of the lines (for errors).
         """
 
+        self.assertNotEqual(reference, [], name)
         self.assertEqual(len(lines), len(reference), name)
         for line_reference, line in zip(reference, lines):
             message = "%s: %s against %s" % (name, line, line_reference)
@@ -375,18 +518,21 @@ class EndToEndTest(unittest.TestCase):
                 delta=POSITION_TOLERANCE,
                 msg=message,
             )
-            left = max(line["left"], 0.0)
-            right = min(line["right"], PRINTABLE_WIDTH)
-            tolerance = max(
-                EXTENT_TOLERANCE,
-                EXTENT_RATIO * (line_reference["right"] - line_reference["left"]),
-            )
-            self.assertAlmostEqual(
-                left, line_reference["left"], delta=tolerance, msg=message
-            )
-            self.assertAlmostEqual(
-                right, line_reference["right"], delta=tolerance, msg=message
-            )
+            segments_reference = line_reference["segments"]
+            self.assertEqual(len(line["segments"]), len(segments_reference), message)
+            for segment_reference, segment in zip(segments_reference, line["segments"]):
+                left = max(segment[0], 0.0)
+                right = min(segment[1], PRINTABLE_WIDTH)
+                tolerance = max(
+                    EXTENT_TOLERANCE,
+                    EXTENT_RATIO * (segment_reference[1] - segment_reference[0]),
+                )
+                self.assertAlmostEqual(
+                    left, segment_reference[0], delta=tolerance, msg=message
+                )
+                self.assertAlmostEqual(
+                    right, segment_reference[1], delta=tolerance, msg=message
+                )
 
     def _store(self, name, data):
         if not self.output_dir:
