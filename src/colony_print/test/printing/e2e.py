@@ -536,9 +536,10 @@ class EndToEndTest(unittest.TestCase):
         with open(log_path, "rb") as file:
             output = file.read()
         self._store(name + "_binie_gdi.log", output)
+        if os.path.exists(ps_path):
+            with open(ps_path, "rb") as file:
+                self._store(name + "_binie_gdi.ps", file.read())
         self.assertEqual(result, 0, output.decode("utf-8", "replace"))
-        with open(ps_path, "rb") as file:
-            self._store(name + "_binie_gdi.ps", file.read())
         subprocess.check_call(["ps2pdf", ps_path, pdf_path])
         with open(pdf_path, "rb") as file:
             return file.read()
