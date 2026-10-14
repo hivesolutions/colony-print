@@ -75,6 +75,13 @@ the words of a text (up to about 3.5 points in the documents) and
 narrower than the gaps between the texts placed by the margins of
 a line (at least about 14 points in the documents) """
 
+INK_RATIO = 0.2
+""" The tolerance for the ink of each segment of the lines of text,
+relative to the ink of the reference, as the renderers draw the same
+texts with up to about 12% of difference (GDI) while a regular text
+has about 30% less ink than a bold one (the italic style is not
+distinguished, as it has about the same ink of the regular one) """
+
 GDI_SCRIPT = """# -*- coding: utf-8 -*-
 import sys
 import json
@@ -117,7 +124,8 @@ def ink_lines(image, offset=0.0, resolution=RESOLUTION):
     :return: The lines of text, each one a map with the top and bottom
     positions, the left and right ink extents and the segments (pairs of
     left and right extents), in points relative to the top left corner
-    of the printable area.
+    of the printable area, and the ink of each segment (the coverage of
+    its pixels, in square points).
     """
 
     width, height = image.size
@@ -153,6 +161,19 @@ def ink_lines(image, offset=0.0, resolution=RESOLUTION):
                 segments[-1][1] = x + 1
             else:
                 segments.append([x, x + 1])
+
+        # sums the ink of every segment as the coverage of its pixels (the
+        # lighter ones of the edges of the glyphs included), that unlike
+        # the number of pixels with ink doesn't change with the position
+        # of the glyphs in the grid of pixels
+        inks = []
+        for left, right in segments:
+            ink = sum(
+                255 - pixels[x, y]
+                for x in range(left, right)
+                for y in range(band["top"], band["bottom"] + 1)
+            )
+            inks.append(ink / 255.0 * scale * scale)
         segments = [
             (left * scale - offset, right * scale - offset) for left, right in segments
         ]
@@ -163,6 +184,7 @@ def ink_lines(image, offset=0.0, resolution=RESOLUTION):
                 left=segments[0][0],
                 right=segments[-1][1],
                 segments=segments,
+                inks=inks,
             )
         )
     return lines
@@ -189,6 +211,7 @@ class InkLinesTest(unittest.TestCase):
                     left=10.0,
                     right=40.0,
                     segments=[(10.0, 20.0), (30.0, 40.0)],
+                    inks=[100.0, 100.0],
                 ),
                 dict(
                     top=25.0,
@@ -196,6 +219,7 @@ class InkLinesTest(unittest.TestCase):
                     left=10.0,
                     right=33.0,
                     segments=[(10.0, 33.0)],
+                    inks=[100.0],
                 ),
             ],
         )
@@ -237,6 +261,15 @@ class InkLinesTest(unittest.TestCase):
         lines = ink_lines(image, resolution=72)
         self.assertEqual(lines[0]["segments"], [(10.0, 20.0), (29.0, 35.0)])
 
+    def test_ink_lines_inks(self):
+        image = self._image([(10, 5, 20, 15), (12, 2, 14, 3), (40, 10, 45, 15)])
+        image.paste(204, (12, 3, 17, 5))
+        image.paste(200, (20, 5, 25, 15))
+        lines = ink_lines(image, resolution=72)
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["segments"], [(10.0, 20.0), (40.0, 45.0)])
+        self.assertEqual(lines[0]["inks"], [104.0, 25.0])
+
     def test_ink_lines_offset(self):
         image = self._image([(10, 5, 20, 15), (30, 5, 40, 15)])
         lines = ink_lines(image, offset=15.0, resolution=72)
@@ -252,6 +285,7 @@ class InkLinesTest(unittest.TestCase):
         self.assertEqual(lines[0]["top"], 5 * scale)
         self.assertEqual(lines[0]["bottom"], 15 * scale)
         self.assertEqual(lines[0]["segments"], [(10 * scale, 30 * scale)])
+        self.assertAlmostEqual(lines[0]["inks"][0], 150 * scale * scale)
 
 
 class EndToEndTest(unittest.TestCase):
@@ -453,8 +487,8 @@ class EndToEndTest(unittest.TestCase):
 
     def _lines(self, data, offset, name):
         """
-        Rasterizes the first page of the provided PDF document and
-        retrieves its lines of text, as the bands of rows with ink.
+        Rasterizes the provided PDF document, that must have a single
+        page, and retrieves its lines of text, as the bands of rows with ink.
 
         :type data: String
         :param data: The PDF document to be analyzed.
@@ -472,14 +506,15 @@ class EndToEndTest(unittest.TestCase):
             file.write(data)
         prefix = os.path.join(self.target_dir, name)
         subprocess.check_call(
-            ["pdftoppm", "-r", str(RESOLUTION), "-gray", "-png", "-f", "1", "-l", "1"]
-            + [pdf_path, prefix]
+            ["pdftoppm", "-r", str(RESOLUTION), "-gray", "-png", pdf_path, prefix]
         )
-        png_path = [
+        png_paths = [
             os.path.join(self.target_dir, value)
             for value in os.listdir(self.target_dir)
             if value.startswith(name + "-") and value.endswith(".png")
-        ][0]
+        ]
+        self.assertEqual(len(png_paths), 1, name)
+        png_path = png_paths[0]
         with open(png_path, "rb") as file:
             self._store(name + ".png", file.read())
 
@@ -496,9 +531,9 @@ class EndToEndTest(unittest.TestCase):
     def _assert_layout(self, reference, lines, name):
         """
         Asserts that the provided lines of text have the same layout of
-        the reference ones, segment by segment, inside of the printable
-        area (the reference being the direct conversion of XMPL into PDF,
-        that has no room beyond the printable area).
+        the reference ones, segment by segment (extents and ink), inside
+        of the printable area (the reference being the direct conversion
+        of XMPL into PDF, that has no room beyond the printable area).
 
         :type reference: List
         :param reference: The reference lines of text.
@@ -532,6 +567,20 @@ class EndToEndTest(unittest.TestCase):
                 )
                 self.assertAlmostEqual(
                     right, segment_reference[1], delta=tolerance, msg=message
+                )
+
+            # compares the ink of the segments (telling the bold texts from
+            # the regular ones), except for the ones that go beyond the
+            # printable area, as the reference is cut by its limits
+            for index, segment in enumerate(line["segments"]):
+                if segment[0] < -0.5 or segment[1] > PRINTABLE_WIDTH + 0.5:
+                    continue
+                ink_reference = line_reference["inks"][index]
+                self.assertAlmostEqual(
+                    line["inks"][index],
+                    ink_reference,
+                    delta=INK_RATIO * ink_reference,
+                    msg=message,
                 )
 
     def _store(self, name, data):
