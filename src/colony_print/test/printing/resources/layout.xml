@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<printing_document name="layout" font="Calibri" font_size="9">
+    <paragraph text_align="center">
+        <line><text>Centered text</text></line>
+        <line font_style="bold"><text>Bold centered text</text></line>
+        <line><text font_size="11">Larger centered text</text></line>
+    </paragraph>
+    <line margin_top="10"></line>
+    <paragraph>
+        <line><text text_align="left">Left aligned text</text></line>
+        <line><text text_align="right">Right aligned text</text></line>
+        <line><text text_align="left" font_style="bold">Code</text><text text_align="right">12.50€</text></line>
+        <line><text text_align="left" margin_left="50">Text with a left margin</text></line>
+        <line><text text_align="right" margin_right="40">Text with a right margin</text></line>
+    </paragraph>
+    <line margin_top="10"></line>
+    <paragraph text_align="center">
+        <line><text font_style="italic">Italic centered text</text></line>
+        <line><text font_style="bold_italic">Bold italic centered text</text></line>
+    </paragraph>
+</printing_document>

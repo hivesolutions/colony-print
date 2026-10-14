@@ -338,6 +338,19 @@ PYTHONPATH=$BASE_PATH/colony_print/src python \
 $BASE_PATH/colony_print/src/colony_print/main.py
 ```
 
+### End to End Tests
+
+The end to end tests (`src/colony_print/test/printing/e2e.py`) print the XMPL documents of `src/colony_print/test/printing/resources` with every renderer and compare their layout: the conversion of XMPL into PDF, the conversion into Binie rendered as PDF (as the Linux nodes do) and the same Binie document printed through the GDI renderer of npcolony (as the Windows nodes do), under Wine. The outputs are rasterized and their lines of text must have the same positions and extents, within the small differences of the metrics of GDI, and the texts that go beyond the printable area must be the same in both renderers of Binie.
+
+They require Wine with a Windows Python that has npcolony (`E2E_PYTHON`, the path of its `python.exe`), a printer that uses the `receipt.ppd` description of the resources (`E2E_PRINTER`, a 72 mm printable area in a sheet wide enough for the texts beyond it to be visible), Ghostscript and Poppler, and they only run when `E2E` is set, keeping the outputs in `E2E_OUTPUT` when defined:
+
+```bash
+E2E=1 E2E_PYTHON=$HOME/wine-python/python.exe E2E_PRINTER=colony-print-e2e \
+E2E_OUTPUT=e2e-output pytest src/colony_print/test/printing/e2e.py
+```
+
+The `E2E Workflow` runs them on every push, installing Wine, the embedded Windows Python (with npcolony from PyPI) and the printer, and keeps the outputs (PDF documents, rasterized pages and Binie documents) in the `colony-print-e2e` artifact.
+
 ## License
 
 Colony Print Infra-structure is currently licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/).
