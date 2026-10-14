@@ -102,6 +102,7 @@ As the other attributes of the text (such as `text_align` or `font_style`) it ca
 ```
 
 The wrapped texts are converted into Binie text elements with the wrap flag, that are laid out by the renderer, see [Text Wrapping](binie.md#text-wrapping).
+The conversion of XMPL documents straight into PDF documents (`POST /documents.pdf`) applies the same rules from the attribute, so the PDF version of a document wraps its texts as the printed one does (see [Renderers and PDF](binie.md#renderers-and-pdf)).
 
 ### Convertibility to Binie
 

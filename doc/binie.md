@@ -127,6 +127,14 @@ A text with the wrap flag is laid out in as many lines as needed, following the 
 
 The wrapping happens in the renderer as it's the only one that knows both the available width (the paper of the printer, for the documents without a size) and the metrics of the fonts, the producers only set the flag.
 
+#### Renderers and PDF
+
+The Binie documents are rendered by the GDI renderer of npcolony (the Windows nodes and the browser plugin) and by the PDF renderer of Colony Print, that replays them into PDF documents with the GDI layout. The PDF renderer is used by the Linux nodes (that print the PDF documents through CUPS), by the nodes in the email mode (that send them by email) and by the nodes that save their output, such as the ones that generate the PDF version of a document for a client. Both renderers follow the rules above, with these consequences for the PDF documents:
+
+* The lines are measured with the font embedded in the PDF document, the same font file the GDI renderer uses when it's installed. The GDI renderer rounds and hints the metrics of the fonts, so in a few cases a line may break one word earlier or later in one of the renderers.
+* A wrapped text makes the document taller, so the documents get more pages when their content goes beyond the page, as with any other content.
+* The PDF documents printed as they are (the `pdf` format of the nodes) are not affected, as Colony Print doesn't lay them out.
+
 ## Validation and Compatibility
 
 The Binie file format is designed to be robust and flexible. Implementations should handle unexpected values gracefully, defaulting to sensible behavior where possible. For example, unknown element types should be ignored, and missing data should be handled without causing crashes or major issues.
