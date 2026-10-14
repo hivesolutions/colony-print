@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHON_VERSION: "3.12"
-      WINE_PYTHON_VERSION: "3.11.9"
-      WINE_PYTHON_SHA256: "009d6bf7e3b2ddca3d784fa09f90fe54336d5b60f0e0f305c37f400bf83cfd3b"
+      WINE_PYTHON_VERSION: "3.12.10"
+      WINE_PYTHON_SHA256: "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
       WINEPREFIX: ${{ github.workspace }}/.wine
       WINEDEBUG: "-all"
       WINEDLLOVERRIDES: "mscoree,mshtml="
@@ -26,7 +26,18 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends wine wine64 cups-daemon cups-client ghostscript poppler-utils
+          sudo apt-get install -y --no-install-recommends cups-daemon cups-client ghostscript poppler-utils
+      - name: Install Wine
+        run: |
+          # the Wine of the Ubuntu runners (9.0) fails to initialize the
+          # standard streams of the Windows Python, so the stable version
+          # of the WineHQ packages is used instead
+          sudo dpkg --add-architecture i386
+          sudo mkdir -pm755 /etc/apt/keyrings
+          curl -fsSL --retry 5 https://dl.winehq.org/wine-builds/winehq.key | sudo gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key
+          sudo curl -fsSL --retry 5 -o /etc/apt/sources.list.d/winehq-noble.sources https://dl.winehq.org/wine-builds/ubuntu/dists/noble/winehq-noble.sources
+          sudo apt-get update
+          sudo apt-get install -y --install-recommends winehq-stable
           wine --version
       - name: Add the end to end printer
         run: |
@@ -41,7 +52,7 @@ jobs:
           curl -fsSL --retry 5 --retry-delay 15 -o python.zip "$Url"
           echo "$WINE_PYTHON_SHA256  python.zip" | sha256sum -c -
           unzip -q python.zip -d wine-python
-          pip download npcolony --platform win_amd64 --python-version 3.11 --only-binary=:all: --no-deps -d wheels
+          pip download npcolony --platform win_amd64 --python-version 3.12 --only-binary=:all: --no-deps -d wheels
           unzip -q -o wheels/npcolony-*.whl -d wine-python
           ls wheels
       - name: Create the Wine prefix
