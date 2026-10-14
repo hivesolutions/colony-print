@@ -404,6 +404,12 @@ class EndToEndTest(unittest.TestCase):
             ],
         )
 
+    def test_print_wrap_error(self):
+        # the wrapping may only be requested for the documents with texts
+        # that disable it, otherwise the document would be printed as it
+        # is, without any wrapping requested
+        self.assertRaises(AssertionError, lambda: self._print("layout", wrap=True))
+
     def _print(self, name, wrap=False):
         """
         Prints the XMPL document with the provided name (from the resources)
@@ -422,6 +428,7 @@ class EndToEndTest(unittest.TestCase):
         with open(os.path.join(RESOURCES_PATH, name + ".xml"), "rb") as file:
             data = file.read().decode("utf-8")
         if wrap:
+            self.assertEqual('text_wrap="nowrap"' in data, True)
             data = data.replace('text_wrap="nowrap"', 'text_wrap="wrap"')
             name += "_wrap"
 

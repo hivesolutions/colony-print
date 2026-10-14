@@ -349,7 +349,7 @@ E2E=1 E2E_PYTHON=$HOME/wine-python/python.exe E2E_PRINTER=colony-print-e2e \
 E2E_OUTPUT=e2e-output pytest src/colony_print/test/printing/e2e.py
 ```
 
-The `E2E Workflow` runs them on every push, with both the stable and the development versions of Wine (from the WineHQ packages), installing the embedded Windows Python (with npcolony from PyPI) and the printer, and keeps the outputs (PDF documents, rasterized pages and Binie documents) in the `colony-print-e2e-stable` and `colony-print-e2e-devel` artifacts.
+The `E2E Workflow` runs them on every push, with both the stable and the development versions of Wine (from the WineHQ packages), installing the embedded Windows Python (with npcolony from PyPI) and the printer, and keeps the outputs (PDF documents, rasterized pages, Binie documents, and the PostScript of the printer driver and the log of Wine of the GDI prints), including the ones produced before a print that fails, in the `colony-print-e2e-stable` and `colony-print-e2e-devel` artifacts.
 
 ## License
 
