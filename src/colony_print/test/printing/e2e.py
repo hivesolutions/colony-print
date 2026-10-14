@@ -376,11 +376,33 @@ class EndToEndTest(unittest.TestCase):
             self._assert_layout(outputs["xmpl_pdf"], outputs[name], name)
 
         # the wrapping of the long texts is not yet supported by the
-        # renderers (hivesolutions/colony-npapi#7), so the two lines of
-        # the notes still go beyond the printable area, once the wrap
-        # flag of Binie 1.1 is implemented no line must go beyond it
+        # conversion into Binie (that has no wrap flag) nor by the renderers
+        # (hivesolutions/colony-npapi#7), so the two lines of the notes
+        # still go beyond the printable area, once the wrap flag of Binie
+        # 1.1 is implemented in both no line must go beyond it
         self.assertEqual(len(self._overflows(outputs["binie_pdf"])), 2)
         self.assertEqual(len(self._overflows(outputs["binie_gdi"])), 2)
+
+    def test_print_error(self):
+        # prints with a Windows Python that doesn't exist, so that the GDI
+        # print fails, verifying that the outputs produced before it (and
+        # the log of Wine) are still stored, for the artifacts of the runs
+        python = appier.conf("E2E_PYTHON")
+        appier.conf_s("E2E_PYTHON", os.path.join(self.target_dir, "python.exe"))
+        self.output_dir = os.path.join(self.target_dir, "output")
+        try:
+            self.assertRaises(AssertionError, lambda: self._print("layout"))
+        finally:
+            appier.conf_s("E2E_PYTHON", python)
+        self.assertEqual(
+            sorted(os.listdir(self.output_dir)),
+            [
+                "layout.binie",
+                "layout_binie_gdi.log",
+                "layout_binie_pdf.pdf",
+                "layout_xmpl_pdf.pdf",
+            ],
+        )
 
     def _print(self, name, wrap=False):
         """
@@ -403,20 +425,24 @@ class EndToEndTest(unittest.TestCase):
             data = data.replace('text_wrap="nowrap"', 'text_wrap="wrap"')
             name += "_wrap"
 
+        # stores every output as soon as it's produced, so that the ones
+        # of a failed print are kept as well (for the artifacts of the runs)
         xmpl_pdf = self._convert(data, "pdf", size=(PRINTABLE_WIDTH, PAPER_HEIGHT))
+        self._store(name + "_xmpl_pdf.pdf", xmpl_pdf)
         binie = self._convert(data, "binie")
+        self._store(name + ".binie", binie)
         self.assertEqual(colony_print.valid_binie(binie), True)
         binie_pdf = self._render(binie)
+        self._store(name + "_binie_pdf.pdf", binie_pdf)
         binie_gdi = self._print_gdi(binie, name)
+        self._store(name + "_binie_gdi.pdf", binie_gdi)
 
-        self._store(name + ".binie", binie)
         outputs = dict()
         for renderer, data, offset in (
             ("xmpl_pdf", xmpl_pdf, 0.0),
             ("binie_pdf", binie_pdf, SHEET_MARGIN),
             ("binie_gdi", binie_gdi, SHEET_MARGIN),
         ):
-            self._store("%s_%s.pdf" % (name, renderer), data)
             outputs[renderer] = self._lines(data, offset, "%s_%s" % (name, renderer))
         return outputs
 
@@ -500,8 +526,11 @@ class EndToEndTest(unittest.TestCase):
                 env=env,
             )
         with open(log_path, "rb") as file:
-            output = file.read().decode("utf-8", "replace")
-        self.assertEqual(result, 0, output)
+            output = file.read()
+        self._store(name + "_binie_gdi.log", output)
+        self.assertEqual(result, 0, output.decode("utf-8", "replace"))
+        with open(ps_path, "rb") as file:
+            self._store(name + "_binie_gdi.ps", file.read())
         subprocess.check_call(["ps2pdf", ps_path, pdf_path])
         with open(pdf_path, "rb") as file:
             return file.read()
