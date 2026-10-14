@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Specification of the wrapping of long texts in Binie and XMPL documents - [hivesolutions/colony-npapi#7](https://github.com/hivesolutions/colony-npapi/issues/7)
 
 ### Changed
 

@@ -1,4 +1,4 @@
-# XMPL – XML Markup Language for Printing 1.0
+# XMPL – XML Markup Language for Printing 1.1
 
 ## Motivation
 
@@ -90,6 +90,19 @@ The attributes of the element are the fields of the entries of the fonts of a pr
 
 Elements in XMPL files may have various attributes defining their properties, such as font for text or size for images.
 
+#### Text Wrapping
+
+The `text_wrap` attribute defines if a text wider than the available width is wrapped into as many lines as needed (`wrap`) or kept in a single line (`nowrap`, the default).
+As the other attributes of the text (such as `text_align` or `font_style`) it can be defined in the `text` element or in one of its parents (`line`, `paragraph` or `block`), the closest one being used.
+
+```xml
+<paragraph text_align="center" text_wrap="wrap">
+    <line><text>A long note for the team that prepares the order, wrapped to the width of the paper</text></line>
+</paragraph>
+```
+
+The wrapped texts are converted into Binie text elements with the wrap flag, that are laid out by the renderer, see [Text Wrapping](binie.md#text-wrapping).
+
 ### Convertibility to Binie
 
 The XMPL format has been designed for easy and efficient conversion to the Binie file format.
@@ -113,3 +126,10 @@ Below is an example of an XMPL document designed to display "Hello World" in a c
 
 XMPL is structured to be robust and flexible, ensuring that the conversion to Binie maintains the integrity and layout of the document.
 Implementations are expected to handle XMPL structure gracefully, supporting a wide range of document configurations.
+
+## Version History
+
+| Version | Changes                                                       |
+| ------- | ------------------------------------------------------------- |
+| 1.0     | Initial version                                               |
+| 1.1     | `text_wrap` attribute, converted into the Binie 1.1 wrap flag |
