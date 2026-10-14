@@ -254,15 +254,26 @@ class EndToEndTest(unittest.TestCase):
         env = dict(os.environ)
         env.setdefault("WINEDEBUG", "-all")
         env.setdefault("WINEDLLOVERRIDES", "mscoree,mshtml=")
-        subprocess.check_call(
-            [
-                appier.conf("E2E_WINE", "wine"),
-                appier.conf("E2E_PYTHON"),
-                self._windows_path(script_path),
-                self._windows_path(args_path),
-            ],
-            env=env,
-        )
+        # runs the script with explicit standard streams, as the Windows
+        # Python fails to start under (older versions of) Wine when they
+        # are inherited from a process that has no console (eg: CI runners)
+        log_path = os.path.join(self.target_dir, name + ".log")
+        with open(os.devnull, "rb") as stdin, open(log_path, "wb") as log:
+            result = subprocess.call(
+                [
+                    appier.conf("E2E_WINE", "wine"),
+                    appier.conf("E2E_PYTHON"),
+                    self._windows_path(script_path),
+                    self._windows_path(args_path),
+                ],
+                stdin=stdin,
+                stdout=log,
+                stderr=log,
+                env=env,
+            )
+        with open(log_path, "rb") as file:
+            output = file.read().decode("utf-8", "replace")
+        self.assertEqual(result, 0, output)
         subprocess.check_call(["ps2pdf", ps_path, pdf_path])
         with open(pdf_path, "rb") as file:
             return file.read()
