@@ -312,10 +312,11 @@ class EndToEndTest(unittest.TestCase):
     XMPL and from Binie) with the one of the GDI renderer of npcolony, that
     prints the same Binie document under Wine.
 
-    These tests require Wine (with a Windows Python that has npcolony,
-    `E2E_PYTHON`), a printer that uses the `receipt.ppd` description
-    (`E2E_PRINTER`), Ghostscript and Poppler, and only run when `E2E`
-    is set, the outputs being kept in `E2E_OUTPUT` (when defined).
+    These tests require Wine (the `wine` of the `PATH` or the one of
+    `E2E_WINE`, with a Windows Python that has npcolony, `E2E_PYTHON`),
+    a printer that uses the `receipt.ppd` description (`E2E_PRINTER`),
+    Ghostscript and Poppler, and only run when `E2E` is set, the outputs
+    being kept in `E2E_OUTPUT` (when defined).
     """
 
     def setUp(self):
