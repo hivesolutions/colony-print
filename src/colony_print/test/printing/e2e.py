@@ -376,10 +376,11 @@ class EndToEndTest(unittest.TestCase):
             self._assert_layout(outputs["xmpl_pdf"], outputs[name], name)
 
         # the wrapping of the long texts is not yet supported by the
-        # conversion into Binie (that has no wrap flag) nor by the renderers
+        # conversions of XMPL (into PDF, the reference of the layout, and
+        # into Binie, that has no wrap flag) nor by the renderers of Binie
         # (hivesolutions/colony-npapi#7), so the two lines of the notes
-        # still go beyond the printable area, once the wrap flag of Binie
-        # 1.1 is implemented in both no line must go beyond it
+        # still go beyond the printable area, once the wrap is implemented
+        # in all of them (as specified in #43) no line must go beyond it
         self.assertEqual(len(self._overflows(outputs["binie_pdf"])), 2)
         self.assertEqual(len(self._overflows(outputs["binie_gdi"])), 2)
 
