@@ -3,13 +3,13 @@
 }
 
 .text-default {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--color-gray-900);
 }
 
 .text-secondary {
-    font-size: 14px;
-    color: var(--color-gray-500);
+    font-size: 13px;
+    color: var(--color-gray-600);
 }
 
 .text-small {

@@ -9,6 +9,20 @@ export const formatTimestamp = (timestamp?: number): string => {
 };
 
 /**
+ * Formats a Unix timestamp (seconds) into a compact string, its
+ * time of day when it's from today, its full date and time
+ * otherwise, using the browser's locale.
+ */
+export const formatTime = (timestamp?: number): string => {
+    if (timestamp === undefined || timestamp === null) return "-";
+    const date = new Date(timestamp * 1000);
+    if (date.toDateString() !== new Date().toDateString()) {
+        return date.toLocaleString();
+    }
+    return date.toLocaleTimeString();
+};
+
+/**
  * Formats a duration in seconds into a human-readable
  * string (e.g., "2h 15m", "3d 4h").
  */

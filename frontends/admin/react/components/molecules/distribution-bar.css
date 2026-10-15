@@ -1,0 +1,83 @@
+.distribution-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+}
+
+.distribution-bar-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.distribution-bar-description {
+    font-size: 13px;
+}
+
+.distribution-bar-track {
+    display: flex;
+    gap: 2px;
+    height: 10px;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.distribution-bar-track:empty {
+    background-color: var(--color-gray-100);
+}
+
+.distribution-bar-segment {
+    flex-basis: 0;
+    min-width: 4px;
+}
+
+.distribution-bar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-gray-600);
+}
+
+.distribution-bar-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.distribution-bar-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+.distribution-bar-count {
+    font-family: var(--font-family-mono);
+    color: var(--color-gray-900);
+}
+
+.distribution-bar-success {
+    background-color: var(--color-success-500);
+}
+
+.distribution-bar-error {
+    background-color: var(--color-error-500);
+}
+
+.distribution-bar-warning {
+    background-color: var(--color-warning-500);
+}
+
+.distribution-bar-info {
+    background-color: var(--color-info-500);
+}
+
+.distribution-bar-default {
+    background-color: var(--color-gray-400);
+}

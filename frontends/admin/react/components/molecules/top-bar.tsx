@@ -1,15 +1,31 @@
-import React, { FC, useContext } from "react";
+import React, { FC, Fragment, useMemo } from "react";
+import { useLocation } from "react-router-dom";
+import {
+    chevronForwardOutline,
+    menuOutline,
+    refreshOutline
+} from "ionicons/icons";
 
-import { DataContext } from "../../contexts";
+import { Icon, Link } from "../atoms";
+import { getBreadcrumbs } from "../../utils";
+import { QuickSearch } from "./quick-search";
 
 import "./top-bar.css";
 
 interface TopBarProps {
     onToggleSidebar?: () => void;
+    onRefresh?: () => void;
 }
 
-export const TopBar: FC<TopBarProps> = ({ onToggleSidebar }) => {
-    const { username } = useContext(DataContext);
+export const TopBar: FC<TopBarProps> = ({
+    onToggleSidebar,
+    onRefresh
+}) => {
+    const location = useLocation();
+    const breadcrumbs = useMemo(
+        () => getBreadcrumbs(location.pathname),
+        [location.pathname]
+    );
     return (
         <header className="top-bar">
             <div className="top-bar-left">
@@ -19,26 +35,49 @@ export const TopBar: FC<TopBarProps> = ({ onToggleSidebar }) => {
                         onClick={onToggleSidebar}
                         aria-label="Toggle menu"
                     >
-                        <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 20 20"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                        >
-                            <line x1="3" y1="5" x2="17" y2="5" />
-                            <line x1="3" y1="10" x2="17" y2="10" />
-                            <line x1="3" y1="15" x2="17" y2="15" />
-                        </svg>
+                        <Icon icon={menuOutline} size="lg" />
                     </button>
                 )}
-                <div className="top-bar-brand">Colony Print</div>
+                <nav className="top-bar-breadcrumb" aria-label="Breadcrumb">
+                    <span className="top-bar-breadcrumb-root">
+                        Colony Print
+                    </span>
+                    {breadcrumbs.map((breadcrumb, index) => (
+                        <Fragment key={breadcrumb.path}>
+                            <Icon icon={chevronForwardOutline} size="sm" />
+                            {index < breadcrumbs.length - 1 ? (
+                                <Link
+                                    to={breadcrumb.path}
+                                    style={["top-bar-breadcrumb-link"]}
+                                >
+                                    {breadcrumb.label}
+                                </Link>
+                            ) : (
+                                <span
+                                    className="top-bar-breadcrumb-current"
+                                    aria-current="page"
+                                >
+                                    {breadcrumb.label}
+                                </span>
+                            )}
+                        </Fragment>
+                    ))}
+                </nav>
             </div>
-            {username && (
-                <div className="top-bar-user">{username}</div>
-            )}
+            <div className="top-bar-actions">
+                <QuickSearch />
+                {onRefresh && (
+                    <button
+                        className="top-bar-refresh"
+                        type="button"
+                        onClick={onRefresh}
+                        aria-label="Refresh"
+                        title="Refresh"
+                    >
+                        <Icon icon={refreshOutline} />
+                    </button>
+                )}
+            </div>
         </header>
     );
 };

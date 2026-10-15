@@ -67,6 +67,7 @@ export const App: FC = () => {
 const Layout: FC = () => {
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const toggleSidebar = useCallback(
         () => setSidebarOpen((prev) => !prev),
@@ -74,23 +75,31 @@ const Layout: FC = () => {
     );
     const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
+    // refreshes the shown page (and the side bar) by mounting it
+    // again, so that all of its data is fetched again
+    const refresh = useCallback(() => setRefreshKey((prev) => prev + 1), []);
+
     useEffect(() => {
         setSidebarOpen(false);
     }, [location.pathname]);
 
     return (
         <div className="layout">
-            <TopBar onToggleSidebar={toggleSidebar} />
+            {sidebarOpen && (
+                <div
+                    className="layout-overlay"
+                    onClick={closeSidebar}
+                />
+            )}
+            <SideBar
+                key={refreshKey}
+                open={sidebarOpen}
+                onClose={closeSidebar}
+            />
             <div className="layout-body">
-                {sidebarOpen && (
-                    <div
-                        className="layout-overlay"
-                        onClick={closeSidebar}
-                    />
-                )}
-                <SideBar open={sidebarOpen} onClose={closeSidebar} />
+                <TopBar onToggleSidebar={toggleSidebar} onRefresh={refresh} />
                 <Content>
-                    <Routes>
+                    <Routes key={refreshKey}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/nodes" element={<NodesList />} />
                         <Route

@@ -20,3 +20,4 @@ session.shelve*
 /frontends/admin/node_modules
 /frontends/admin/.parcel-cache
 /frontends/admin/dist
+/frontends/admin/coverage

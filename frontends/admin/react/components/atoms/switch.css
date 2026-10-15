@@ -1,0 +1,35 @@
+.switch {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    width: 36px;
+    height: 20px;
+    padding: 2px;
+    border: none;
+    border-radius: 999px;
+    background-color: var(--color-gray-300);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.switch:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.switch-checked {
+    background-color: var(--color-primary-500);
+}
+
+.switch-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: var(--color-white);
+    box-shadow: var(--shadow-xs);
+    transition: transform 0.15s ease;
+}
+
+.switch-checked .switch-thumb {
+    transform: translateX(16px);
+}
