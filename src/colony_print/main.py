@@ -98,6 +98,73 @@ class ColonyPrintApp(appier.APIApp):
             )
         return stats
 
+    def node_printers(self):
+        """
+        Lists the printers of the registered nodes, the devices reported
+        by the npcolony engine of each node (as part of its information)
+        and an engraver for each node with the gravo engine, as gravo
+        drives its own device without reporting it.
+
+        Each printer carries the identifier, the name, the printer (the one
+        of the jobs that select none) and the time of the last ping of its
+        node, so that the printers of the nodes that are offline can be told
+        apart, the nodes being listed by identifier.
+
+        :rtype: List
+        :return: The printers of the registered nodes, the ones of each
+        node in the order in which the node reports them.
+        """
+
+        printers = []
+        for id in sorted(self.nodes.keys()):
+            node = self.nodes[id]
+
+            # the information is stored as reported by the node, its values
+            # that are not of the expected type being taken as missing, so
+            # that a node can't prevent the printers of the others from being
+            # listed
+            engine_info = node.get("engine_info", None)
+            if not isinstance(engine_info, dict):
+                engine_info = dict()
+            colony_info = engine_info.get("colony", None)
+            if not isinstance(colony_info, dict):
+                colony_info = dict()
+            devices = colony_info.get("devices", None)
+            if not isinstance(devices, list):
+                devices = []
+            engines = node.get("engines", None)
+            if not isinstance(engines, list):
+                engines = []
+
+            base = dict(
+                node_id=id,
+                node_name=node.get("name", None),
+                node_printer=node.get("printer", None),
+                last_ping=node.get("last_ping", None),
+            )
+
+            # the devices reported by npcolony are the printers of the node,
+            # keeping their complete information (eg: their media and size),
+            # the invalid ones (not objects or without a name, that can't be
+            # printed to) being skipped
+            for device in devices:
+                if not isinstance(device, dict):
+                    continue
+                if not appier.legacy.is_string(device.get("name", None)):
+                    continue
+                printer = dict(device, engine="npcolony")
+                printer.update(base)
+                printers.append(printer)
+
+            # gravo drives its own device (an engraver) without reporting it,
+            # so the engraver is listed without any information of its own
+            if "gravo" in engines:
+                printer = dict(name="Gravo engraver", engine="gravo")
+                printer.update(base)
+                printers.append(printer)
+
+        return printers
+
     def queue_job(self, job_info, data_b64=None, fonts=None):
         """
         Queues the job with the provided information for its node, keeping

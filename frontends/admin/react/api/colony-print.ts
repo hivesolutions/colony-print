@@ -108,6 +108,19 @@ export interface PrinterInfo {
     length: number;
 }
 
+export interface NodePrinterInfo {
+    name: string;
+    engine: string;
+    node_id: string;
+    node_name: string | null;
+    node_printer?: string | null;
+    last_ping: number | null;
+    is_default?: boolean;
+    media?: string;
+    width?: number;
+    length?: number;
+}
+
 export interface ServerInfo {
     name: string;
     version: string;
@@ -252,6 +265,25 @@ export class ColonyPrintAPI {
     async listPrinters(): Promise<PrinterInfo[]> {
         const response = await this._fetch("/printers");
         return (await response.json()) as PrinterInfo[];
+    }
+
+    async listNodePrinters(): Promise<NodePrinterInfo[]> {
+        const response = await this._fetch("/printers/nodes");
+        return (await response.json()) as NodePrinterInfo[];
+    }
+
+    async printNodeHello(id: string, printer: string): Promise<JobInfo> {
+        const response = await this._fetch(
+            `/nodes/${encodeURIComponent(id)}/printers/print_hello`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({ printer: printer })
+            }
+        );
+        return (await response.json()) as JobInfo;
     }
 
     async getInfo(): Promise<ServerInfo> {

@@ -90,6 +90,7 @@ The admin UI (`frontends/admin/`) uses [Ionicons](https://ionic.io/ionicons) (MI
 | Capabilities              | `extension-puzzle-outline`                                         |
 | Libraries                 | `library-outline`                                                  |
 | Search                    | `search-outline`                                                   |
+| Password visibility       | `eye-outline`, `eye-off-outline`                                   |
 | API connection            | `link-outline`                                                     |
 | Session, log out          | `person-outline`, `log-out-outline`                                |
 

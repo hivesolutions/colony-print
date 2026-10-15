@@ -10,14 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Specification of the wrapping of long texts in Binie and XMPL documents - [hivesolutions/colony-npapi#7](https://github.com/hivesolutions/colony-npapi/issues/7)
+* Printers of every node in the admin UI, the ones reported by npcolony (with their media and paper) and an engraver for the nodes with the gravo engine, from the new `GET /printers/nodes`, with a test page for each printer and the printers of the server listed apart
+* Confirmation of the log out of the admin UI, from its side bar and its settings, so that it's not done by mistake
+* Health of the server, visibility of the password and address of the server in the login of the admin UI
 
 ### Changed
 
-*
+* Login of the admin UI redesigned, with the dark panel of the brand and its sliced logo next to the form
+* Danger buttons of the admin UI in a darker red, for the contrast of their white text
 
 ### Fixed
 
-*
+* Accessible name of the links to the nodes in the dashboard of the admin UI, whose state was joined to the name of the node (eg: "OnlineShop 1")
 
 ## [0.26.0] - 2026-10-15
 

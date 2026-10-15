@@ -5,7 +5,8 @@ import {
     cleanup,
     fireEvent,
     render,
-    screen
+    screen,
+    within
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { documentTextOutline, serverOutline } from "ionicons/icons";
@@ -315,10 +316,57 @@ describe("SideBarTest", () => {
         const avatar = container.querySelector(".side-bar-avatar");
         expect(avatar?.textContent).toBe("AD");
         expect(avatar?.getAttribute("aria-hidden")).toBe("true");
+
+        // the log out is confirmed first, so that it's not done by mistake
+        fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+        const dialog = screen.getByRole("dialog", {
+            name: "Log out of Colony Print?"
+        });
+        expect(dialog.textContent).toContain("You're signed in as admin.");
+        expect(api.logout).not.toHaveBeenCalled();
         await act(async () => {
-            fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+            fireEvent.click(
+                within(dialog).getByRole("button", { name: "Log out" })
+            );
         });
         expect(api.logout).toHaveBeenCalledTimes(1);
+        expect(location).toBe("/login");
+    });
+
+    test("test_logout_cancel", async () => {
+        await renderBar("/settings");
+        fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+        expect(screen.queryByRole("dialog")).toBe(null);
+
+        // as is the escape key, both keeping the user signed in
+        fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+        fireEvent.keyDown(document, { key: "Escape" });
+        expect(screen.queryByRole("dialog")).toBe(null);
+        expect(api.logout).not.toHaveBeenCalled();
+        expect(location).toBe("/settings");
+    });
+
+    test("test_logout_pending", async () => {
+        // the dialog is closed once the log out is confirmed, as the log
+        // out is done whatever happens to its request, so that no cancel
+        // (that wouldn't keep the session) is offered while it's pending
+        let resolve: (value: unknown) => void = () => {};
+        api.logout = vi.fn().mockReturnValue(new Promise((r) => (resolve = r)));
+        await renderBar("/settings");
+        fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+        fireEvent.click(
+            within(screen.getByRole("dialog")).getByRole("button", {
+                name: "Log out"
+            })
+        );
+        expect(screen.queryByRole("dialog")).toBe(null);
+        expect(api.logout).toHaveBeenCalledTimes(1);
+        expect(location).toBe("/settings");
+
+        await act(async () => {
+            resolve(undefined);
+        });
         expect(location).toBe("/login");
     });
 

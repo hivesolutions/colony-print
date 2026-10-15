@@ -290,6 +290,9 @@ describe("DashboardTest", () => {
             ["Online", "Shop 2 shop-2", "0.25.0", "2m ago"],
             ["Offline", "Engraver engraver", "0.24.0", "3h ago"]
         ]);
+        expect(
+            screen.getByRole("link", { name: /^Offline Engraver engraver/ })
+        ).toBeTruthy();
         expect(rows.map((row) => row.getAttribute("href"))).toEqual([
             "/nodes/shop-1",
             "/nodes/shop-2",

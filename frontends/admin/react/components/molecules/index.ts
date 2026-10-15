@@ -1,3 +1,4 @@
+export { ConfirmDialog } from "./confirm-dialog";
 export { Content } from "./content";
 export { ContentHeader } from "./content-header";
 export { DataTable } from "./data-table";

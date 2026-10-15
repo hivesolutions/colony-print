@@ -23,6 +23,7 @@ export {
     isNodeBehind,
     isNodeOnline
 } from "./node";
+export { formatPaper, isNodeDefault } from "./printer";
 
 export type { JobCounts } from "./job";
 export type { Breadcrumb } from "./navigation";

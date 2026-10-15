@@ -23,6 +23,7 @@ import { JobInfo, NodeInfo, ServerInfo } from "../../api/colony-print";
 import { DataContext } from "../../contexts";
 import { Icon, Link, Logo } from "../atoms";
 import { countJobs, formatDuration, isNodeOnline } from "../../utils";
+import { ConfirmDialog } from "./confirm-dialog";
 
 import "./side-bar.css";
 
@@ -222,6 +223,7 @@ const SideBarFooter: FC<{
 }> = ({ healthy, info }) => {
     const logout = useLogout();
     const { username } = useContext(DataContext);
+    const [confirming, setConfirming] = useState(false);
 
     const status =
         healthy === null
@@ -258,12 +260,25 @@ const SideBarFooter: FC<{
                     <button
                         className="side-bar-logout"
                         type="button"
-                        onClick={logout}
+                        onClick={() => setConfirming(true)}
                         aria-label="Log out"
                     >
                         <Icon icon={logOutOutline} />
                     </button>
                 </div>
+            )}
+            {confirming && (
+                <ConfirmDialog
+                    title="Log out of Colony Print?"
+                    message={`You're signed in as ${username}. You'll need to sign in again to manage the nodes, jobs and printers.`}
+                    confirmLabel="Log out"
+                    icon={logOutOutline}
+                    onConfirm={() => {
+                        setConfirming(false);
+                        logout();
+                    }}
+                    onCancel={() => setConfirming(false)}
+                />
             )}
         </div>
     );

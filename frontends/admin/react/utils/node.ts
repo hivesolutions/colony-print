@@ -16,7 +16,7 @@ export const ONLINE_THRESHOLD = 900;
  * offline.
  */
 export const isNodeOnline = (
-    node?: NodeInfo | null,
+    node?: { last_ping?: number | null } | null,
     now: number = Date.now() / 1000
 ): boolean => {
     if (!node?.last_ping) return false;

@@ -327,7 +327,7 @@ export const Dashboard: FC = () => {
                                                         ? "Online"
                                                         : "Offline"
                                                 }
-                                            />
+                                            />{" "}
                                             <span className="dashboard-node-name">
                                                 {entry.node.name}{" "}
                                                 <span className="dashboard-node-id">

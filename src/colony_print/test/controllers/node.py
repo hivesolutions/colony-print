@@ -670,6 +670,46 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual("fonts" in self.app.jobs["node"][2], False)
         self.assertEqual(self.app.jobs_fonts[job_info["id"]], fonts)
 
+    def test_print_hello_printer(self):
+        response = self.app.post("/nodes/node/printers/print_hello")
+        self.assertEqual(response.code, 403)
+
+        # the test page is sent to the printer of the field, posted as the
+        # admin does, so that any name of a printer is valid (eg: the one of
+        # a windows network printer, with backslashes and spaces), note that
+        # the header is named as in the environment (where the test client
+        # sets it as it is) so that the form is parsed as the server does
+        self._node()
+        printer = "\\\\server\\Receipt 80"
+        response = self.app.post(
+            "/nodes/node/printers/print_hello",
+            data=appier.legacy.urlencode(dict(printer=printer)).encode("utf-8"),
+            headers=self.headers
+            + [("Content_Type", "application/x-www-form-urlencoded")],
+        )
+        self.assertEqual(response.code, 200)
+        job_info = json.loads(response.data.decode("utf-8"))
+        self.assertEqual(job_info["name"], "hello_world")
+        self.assertEqual(job_info["printer"], printer)
+        self.assertEqual(job_info["status"], "queued")
+
+        # the node receives the test page (the hello world document) for
+        # that printer, as any other job
+        jobs = self._deliver()
+        self.assertEqual(jobs[0]["id"], job_info["id"])
+        self.assertEqual(jobs[0]["printer"], printer)
+        self.assertEqual(
+            jobs[0]["data_b64"], colony_print.controllers.node.HELLO_WORLD_B64
+        )
+
+        # as it does with the printer in the path of the route
+        code, job_info = self._print(
+            url="/nodes/node/printers/receipt/print_hello", data_b64=None
+        )
+        self.assertEqual(code, 200)
+        self.assertEqual(job_info["name"], "hello_world")
+        self.assertEqual(job_info["printer"], "receipt")
+
     def test_fonts(self):
         response = self.app.get("/nodes/node/fonts")
         self.assertEqual(response.code, 403)

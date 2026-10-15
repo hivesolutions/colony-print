@@ -6,6 +6,7 @@ import { ServerInfo } from "../../../api/colony-print";
 import { DataContext } from "../../../contexts";
 import { Button, Icon, Label, Status, Text, TextInput } from "../../atoms";
 import {
+    ConfirmDialog,
     ContentHeader,
     DetailGrid,
     Form,
@@ -28,6 +29,7 @@ export const Settings: FC = () => {
     const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
     const [healthy, setHealthy] = useState<boolean | null>(null);
     const [serverLoading, setServerLoading] = useState(true);
+    const [confirming, setConfirming] = useState(false);
 
     // the health of the server is the one of its (public) ping, as in
     // the side bar, its info requiring the session, so that an expired
@@ -178,7 +180,7 @@ export const Settings: FC = () => {
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={onLogout}
+                                onClick={() => setConfirming(true)}
                                 style={["settings-logout"]}
                             >
                                 <Icon icon={logOutOutline} size="sm" />
@@ -186,6 +188,19 @@ export const Settings: FC = () => {
                             </Button>
                         </div>
                     </Panel>
+                    {confirming && (
+                        <ConfirmDialog
+                            title="Log out of Colony Print?"
+                            message={`You're signed in as ${username || "-"}. You'll need to sign in again to manage the nodes, jobs and printers.`}
+                            confirmLabel="Log out"
+                            icon={logOutOutline}
+                            onConfirm={() => {
+                                setConfirming(false);
+                                onLogout();
+                            }}
+                            onCancel={() => setConfirming(false)}
+                        />
+                    )}
                 </div>
             </div>
         </div>

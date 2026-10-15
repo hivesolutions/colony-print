@@ -257,6 +257,147 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.assertEqual(stats["total"], 2)
         self.assertEqual(stats["in_flight"], 1)
 
+    def test_node_printers(self):
+        receipt = dict(name="Receipt", is_default=True, media="RP80x297")
+        office = dict(name="office", is_default=False, media="A4")
+        self.app.nodes["shop"] = dict(
+            name="Shop",
+            printer="office",
+            engines=["npcolony", "text"],
+            engine_info=dict(colony=dict(devices=[receipt, office])),
+            last_ping=100.0,
+        )
+        self.app.nodes["engraver"] = dict(
+            name="Engraver",
+            engines=["gravo", "text"],
+            engine_info=dict(gravo=dict(version="0.9.2")),
+            last_ping=50.0,
+        )
+
+        # the printers of each node follow the order in which the node
+        # reports them, the nodes being sorted by their identifier, and
+        # each one carries its node (with its printer) and its engine, its
+        # own information (as reported by npcolony) being kept as it is
+        self.assertEqual(
+            self.app.node_printers(),
+            [
+                dict(
+                    name="Gravo engraver",
+                    engine="gravo",
+                    node_id="engraver",
+                    node_name="Engraver",
+                    node_printer=None,
+                    last_ping=50.0,
+                ),
+                dict(
+                    name="Receipt",
+                    is_default=True,
+                    media="RP80x297",
+                    engine="npcolony",
+                    node_id="shop",
+                    node_name="Shop",
+                    node_printer="office",
+                    last_ping=100.0,
+                ),
+                dict(
+                    name="office",
+                    is_default=False,
+                    media="A4",
+                    engine="npcolony",
+                    node_id="shop",
+                    node_name="Shop",
+                    node_printer="office",
+                    last_ping=100.0,
+                ),
+            ],
+        )
+
+        # the devices reported by the node are not changed by the listing
+        self.assertEqual(
+            receipt, dict(name="Receipt", is_default=True, media="RP80x297")
+        )
+
+    def test_node_printers_both(self):
+        # a node with both engines has its devices and its engraver, the
+        # engraver being listed after the devices
+        self.app.nodes["node"] = dict(
+            name="Node",
+            engines=["npcolony", "gravo", "text"],
+            engine_info=dict(colony=dict(devices=[dict(name="Receipt")])),
+        )
+        printers = self.app.node_printers()
+        self.assertEqual(
+            [(printer["name"], printer["engine"]) for printer in printers],
+            [("Receipt", "npcolony"), ("Gravo engraver", "gravo")],
+        )
+        self.assertEqual(printers[0]["last_ping"], None)
+
+    def test_node_printers_empty(self):
+        self.assertEqual(self.app.node_printers(), [])
+
+        # the nodes that report no printer (eg: an older node, without the
+        # information of its engines, or one with the text engine only) and
+        # the ones whose information is invalid have none listed
+        self.app.nodes["old"] = dict(name="Old")
+        self.app.nodes["text"] = dict(
+            name="Text", engines=["text"], engine_info=dict(text=dict())
+        )
+        self.app.nodes["empty"] = dict(
+            name="Empty", engines=["npcolony"], engine_info=dict(colony=dict())
+        )
+        self.app.nodes["invalid"] = dict(
+            name="Invalid",
+            engines=None,
+            engine_info=dict(colony=dict(devices=None)),
+        )
+        self.app.nodes["none"] = dict(name="None", engine_info=dict(colony=None))
+        self.assertEqual(self.app.node_printers(), [])
+
+    def test_node_printers_invalid(self):
+        # the devices that are not objects or that have no name (that can't
+        # be printed to) are skipped, keeping the valid ones of the same node
+        # and the printers of the other nodes
+        self.app.nodes["invalid"] = dict(
+            name="Invalid",
+            engine_info=dict(
+                colony=dict(
+                    devices=[
+                        None,
+                        "Receipt",
+                        ["office"],
+                        dict(media="A4"),
+                        dict(name=1),
+                        dict(name="A4"),
+                    ]
+                )
+            ),
+        )
+        self.app.nodes["shop"] = dict(
+            name="Shop", engine_info=dict(colony=dict(devices=[dict(name="Receipt")]))
+        )
+        printers = self.app.node_printers()
+        self.assertEqual(
+            [(printer["node_id"], printer["name"]) for printer in printers],
+            [("invalid", "A4"), ("shop", "Receipt")],
+        )
+
+        # as the information of the nodes whose values are not of the
+        # expected type (eg: a list in the place of an object), that is
+        # taken as missing, rather than failing the listing of all nodes
+        self.app.nodes["info"] = dict(name="Info", engine_info=["colony"])
+        self.app.nodes["string"] = dict(name="String", engine_info="colony")
+        self.app.nodes["colony"] = dict(name="Colony", engine_info=dict(colony=[]))
+        self.app.nodes["devices"] = dict(
+            name="Devices", engine_info=dict(colony=dict(devices=1))
+        )
+        self.app.nodes["engines"] = dict(name="Engines", engines=1)
+        self.app.nodes["gravo"] = dict(name="Gravo", engines="gravo")
+        printers = self.app.node_printers()
+        self.assertEqual(
+            [(printer["node_id"], printer["name"]) for printer in printers],
+            [("invalid", "A4"), ("shop", "Receipt")],
+        )
+
     def test_queue_job(self):
         # the job is kept (its information, its data and its fonts) and sent
         # to its node with the data and with the fonts of the request in the
