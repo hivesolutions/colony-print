@@ -367,6 +367,23 @@ class ColonyPrintAppTest(unittest.TestCase):
             [("invalid", "A4"), ("shop", "Receipt")],
         )
 
+        # as the information of the nodes whose values are not of the
+        # expected type (eg: a list in the place of an object), that is
+        # taken as missing, rather than failing the listing of all nodes
+        self.app.nodes["info"] = dict(name="Info", engine_info=["colony"])
+        self.app.nodes["string"] = dict(name="String", engine_info="colony")
+        self.app.nodes["colony"] = dict(name="Colony", engine_info=dict(colony=[]))
+        self.app.nodes["devices"] = dict(
+            name="Devices", engine_info=dict(colony=dict(devices=1))
+        )
+        self.app.nodes["engines"] = dict(name="Engines", engines=1)
+        self.app.nodes["gravo"] = dict(name="Gravo", engines="gravo")
+        printers = self.app.node_printers()
+        self.assertEqual(
+            [(printer["node_id"], printer["name"]) for printer in printers],
+            [("invalid", "A4"), ("shop", "Receipt")],
+        )
+
     def test_queue_job(self):
         # the job is kept (its information, its data and its fonts) and sent
         # to its node with the data and with the fonts of the request in the

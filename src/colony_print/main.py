@@ -117,8 +117,24 @@ class ColonyPrintApp(appier.APIApp):
         printers = []
         for id in sorted(self.nodes.keys()):
             node = self.nodes[id]
-            engine_info = node.get("engine_info", None) or dict()
-            colony_info = engine_info.get("colony", None) or dict()
+
+            # the information is stored as reported by the node, its values
+            # that are not of the expected type being taken as missing, so
+            # that a node can't prevent the printers of the others from being
+            # listed
+            engine_info = node.get("engine_info", None)
+            if not isinstance(engine_info, dict):
+                engine_info = dict()
+            colony_info = engine_info.get("colony", None)
+            if not isinstance(colony_info, dict):
+                colony_info = dict()
+            devices = colony_info.get("devices", None)
+            if not isinstance(devices, list):
+                devices = []
+            engines = node.get("engines", None)
+            if not isinstance(engines, list):
+                engines = []
+
             base = dict(
                 node_id=id,
                 node_name=node.get("name", None),
@@ -127,9 +143,8 @@ class ColonyPrintApp(appier.APIApp):
 
             # the devices reported by npcolony are the printers of the node,
             # keeping their complete information (eg: their media and size),
-            # the invalid ones (not objects) being skipped, so that a node
-            # can't prevent the printers of the others from being listed
-            for device in colony_info.get("devices", None) or []:
+            # the invalid ones (not objects) being skipped
+            for device in devices:
                 if not isinstance(device, dict):
                     continue
                 printer = dict(device, engine="npcolony")
@@ -138,7 +153,7 @@ class ColonyPrintApp(appier.APIApp):
 
             # gravo drives its own device (an engraver) without reporting it,
             # so the engraver is listed without any information of its own
-            if "gravo" in (node.get("engines", None) or []):
+            if "gravo" in engines:
                 printer = dict(name="Gravo engraver", engine="gravo")
                 printer.update(base)
                 printers.append(printer)
