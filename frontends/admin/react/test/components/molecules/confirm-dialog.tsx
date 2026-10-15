@@ -90,6 +90,49 @@ describe("ConfirmDialogTest", () => {
         }
     });
 
+    test("test_focus_tab", () => {
+        // the focus is kept in the actions of the dialog, as the page
+        // behind it (e.g., the links of the side bar) can't be used
+        const outside = document.createElement("button");
+        document.body.appendChild(outside);
+        try {
+            renderDialog();
+            const cancel = screen.getByRole("button", { name: "Cancel" });
+            const confirm = screen.getByRole("button", { name: "Log out" });
+            fireEvent.keyDown(document, { key: "Tab" });
+            expect(document.activeElement).toBe(confirm);
+            fireEvent.keyDown(document, { key: "Tab" });
+            expect(document.activeElement).toBe(cancel);
+            fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+            expect(document.activeElement).toBe(confirm);
+            fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+            expect(document.activeElement).toBe(cancel);
+
+            // the focus that was moved out of the dialog comes back to it
+            outside.focus();
+            const event = new KeyboardEvent("keydown", {
+                key: "Tab",
+                bubbles: true,
+                cancelable: true
+            });
+            document.dispatchEvent(event);
+            expect(event.defaultPrevented).toBe(true);
+            expect(document.activeElement).toBe(cancel);
+
+            // while the other keys keep their behavior
+            const other = new KeyboardEvent("keydown", {
+                key: "a",
+                bubbles: true,
+                cancelable: true
+            });
+            document.dispatchEvent(other);
+            expect(other.defaultPrevented).toBe(false);
+            expect(document.activeElement).toBe(cancel);
+        } finally {
+            outside.remove();
+        }
+    });
+
     test("test_confirm", () => {
         const onConfirm = vi.fn();
         const onCancel = vi.fn();

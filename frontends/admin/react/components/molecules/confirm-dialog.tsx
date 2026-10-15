@@ -28,13 +28,24 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
     cancel.current = onCancel;
 
     // focuses the cancel action (the safe one) once shown, cancels the
-    // dialog with the escape key, and gives the focus back to the element
-    // that had it (e.g., the button that opened the dialog) once gone
+    // dialog with the escape key, keeps the focus in its actions (as the
+    // page behind it can't be used), and gives the focus back to the
+    // element that had it (e.g., the button that opened it) once gone
     useEffect(() => {
         const previous = document.activeElement as HTMLElement | null;
         dialog.current?.querySelector("button")?.focus();
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") cancel.current();
+            if (event.key !== "Tab" || !dialog.current) return;
+            const buttons = Array.from(
+                dialog.current.querySelectorAll("button")
+            );
+            const index = buttons.indexOf(
+                document.activeElement as HTMLButtonElement
+            );
+            const step = event.shiftKey ? -1 : 1;
+            event.preventDefault();
+            buttons[(index + step + buttons.length) % buttons.length].focus();
         };
         document.addEventListener("keydown", onKeyDown);
         return () => {
