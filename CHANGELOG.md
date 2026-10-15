@@ -11,9 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Verification of the packages updated by the nodes, by importing their modules, failing the update (naming the modules that are not loaded) when they're not loaded by the system (eg: native modules not supported by Windows XP) instead of the node silently dropping their engine
 * End to end tests of the printing in CI, comparing the PDF documents with the output of the GDI renderer of npcolony under Wine
+* Logo of Colony Print (the sliced C mark, its logotype and their lockup) in `res/`, shown in the README and in the side bar, login and favicon of the admin UI
+* Quick search of the admin UI, in its top bar, that goes to a node or job by its ID (or the start of the ID of a job, listing the jobs that start with it when several do), focused with the `/` key
+* Online and offline state of the nodes in the admin UI (seen in the last 15 minutes), with their filter, the number of jobs of each node and the versions behind the one of the server highlighted
+* Status of the jobs, their counts and a text filter (by name, node or ID) in the jobs of the admin UI, the filters being kept in the address of the page
+* Jobs by status, jobs in flight, the online nodes and the version and uptime of the server in the dashboard of the admin UI
+* Health and uptime of the API, the user and its log out, and the counts of the online nodes and of the jobs in flight in the side bar of the admin UI
+* Refresh of the page shown in the admin UI from its top bar, replacing the refresh of the jobs
+* Unit tests of the admin UI, run with Vitest (`npm test`) on every push by the `Admin Workflow`
 
 ### Changed
 
+* Redesign of the admin UI (the console design), with a dark side bar, the IBM Plex fonts (mono for identifiers, versions and times), the mint of the logo as accent, flat cards and Ionicons icons
+* Properties, updates (with an auto-update switch), last job and capabilities of the nodes in the admin UI split into their own panels
+* Last ping of the nodes also set when they pick up their jobs, so that a node printing a batch is not shown as offline, unless the batch takes longer than 15 minutes
 * Status of the result posted by a node for the job of another node (`Node ID mismatch`), a conflict (409) instead of a server error (500)
 * Logging of the existing service by the Windows installers, with its image path, the exit codes of its stop and deletion and whether it's marked for deletion, explaining why the service of another installer is not removed
 

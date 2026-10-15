@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useAPI } from "../../../hooks";
 import { DataContext } from "../../../contexts";
-import { Button, Card, TextInput, Title } from "../../atoms";
+import { Button, Card, Logo, TextInput } from "../../atoms";
 import { ErrorBox, Form } from "../../molecules";
 
 import "./login.css";
@@ -40,7 +40,9 @@ export const Login: FC = () => {
     return (
         <div className="login-page">
             <Card style={["login-card"]}>
-                <Title level={2}>Colony Print</Title>
+                <h1 className="login-brand">
+                    <Logo height={48} />
+                </h1>
                 <Form onSubmit={onSubmit}>
                     {error && <ErrorBox message={error} />}
                     <TextInput

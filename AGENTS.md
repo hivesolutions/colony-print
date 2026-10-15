@@ -26,6 +26,15 @@ pip install -r extra.txt
 python setup.py test
 ```
 
+The admin UI (`frontends/admin/`) has its own unit tests, under `react/test/` (mirroring the paths of the files they test), that run with Vitest and require Node.js 22.22 (or 24.15) and newer.
+
+```bash
+cd frontends/admin
+npm install
+npm test
+npm test -- --coverage
+```
+
 ## Style Guide
 
 - Always update `CHANGELOG.md` according to semantic versioning, mentioning your changes in the unreleased section.
@@ -40,6 +49,49 @@ python setup.py test
 - Prefer `item == None` over `item is None`.
 - The commenting style of the project is unique, try to keep commenting style consistent.
 - Use Python docstrings with the `:type:`, `:args:`, `:rtype:`, `:return:`, etc. structure and with a newline after the docstring end (`"""`).
+
+## Brand
+
+- The logo is the sliced C mark (`res/mark.svg`), the "colony print" logotype (`res/logotype.svg`) and their lockup (`res/logo.svg`), in ink `#17181c` (white on dark backgrounds) and mint `#0fa47a`, the mint being only used for the middle slice.
+- The middle slice of the mark is shifted to the right, the one of the logotype is never shifted, so that its letters stay aligned and readable.
+- In the admin UI use the `Logo` atom (`react/components/atoms/logo.tsx`), that draws the solid logotype below 48px of height (unless `sliced` is set), as the cuts of the sliced one blur at small sizes.
+
+## Admin UI Icons
+
+The admin UI (`frontends/admin/`) uses [Ionicons](https://ionic.io/ionicons) (MIT) for its icons. Browse them at <https://ionic.io/ionicons> to find their names.
+
+- Install the `ionicons` package (8.x) in `frontends/admin`, never load it from a CDN, as the admin may be served without internet access.
+- Render the icons with the `ion-icon` web component, registered once with `defineCustomElement()` from `ionicons/components/ion-icon.js`, giving it the icon data imported from `ionicons/icons` (e.g. `import { printOutline } from "ionicons/icons"` and `<ion-icon icon={printOutline} />`), so that only the icons in use are bundled and nothing is fetched at runtime.
+- Don't use the data of `ionicons/icons` without the component (e.g. as an `<img>` or a CSS mask), as some icons rely on its styles (e.g. `server-outline` is drawn filled without the `ionicon-fill-none` class).
+- Use the icons through a single `Icon` atom (`react/components/atoms/icon.tsx`, which also declares `ion-icon` in `JSX.IntrinsicElements`) taking the icon, its size and an optional label, hidden from screen readers (`aria-hidden`) when it has no label. Icon-only buttons need an `aria-label`.
+- Use the outline variant (e.g. `print-outline`), the active states (e.g. the selected item of the side bar) being told apart by their color, never the filled or the sharp ones. Logos (e.g. `logo-windows`) only exist filled.
+- Size the icons with the `size` of the `Icon` atom (`sm` of 14px in the buttons, the tables and the headers of the panels, `md` of 16px in the side bar and the top bar, `lg` of 20px for the menu toggle) and color them with `color`, as they're drawn with `currentColor`.
+- Keep one icon per concept across the views:
+
+| Concept                   | Icon                                                               |
+| ------------------------- | ------------------------------------------------------------------ |
+| Dashboard                 | `grid-outline`                                                     |
+| Nodes, server             | `server-outline`                                                   |
+| Jobs                      | `document-text-outline`                                            |
+| Printers, `npcolony` jobs | `print-outline`                                                    |
+| Settings                  | `settings-outline`                                                 |
+| `gravo` jobs              | `diamond-outline`                                                  |
+| Fonts, `fonts` jobs       | `text-outline`                                                     |
+| Email mode                | `mail-outline`                                                     |
+| Refresh                   | `refresh-outline`                                                  |
+| Restart                   | `reload-outline`                                                   |
+| Update, `update` jobs     | `cloud-download-outline`                                           |
+| Auto-update               | `sync-outline`                                                     |
+| Platform                  | `logo-windows`, `logo-tux`                                         |
+| Location                  | `location-outline`                                                 |
+| Success, error, in flight | `checkmark-circle-outline`, `alert-circle-outline`, `time-outline` |
+| API health, last job      | `pulse-outline`                                                    |
+| Breadcrumb, more          | `chevron-forward-outline`                                          |
+| Capabilities              | `extension-puzzle-outline`                                         |
+| Libraries                 | `library-outline`                                                  |
+| Search                    | `search-outline`                                                   |
+| API connection            | `link-outline`                                                     |
+| Session, log out          | `person-outline`, `log-out-outline`                                |
 
 ## Commit Messages
 

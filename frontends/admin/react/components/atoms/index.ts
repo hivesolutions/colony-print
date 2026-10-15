@@ -1,9 +1,13 @@
 export { Button } from "./button";
 export { Card } from "./card";
+export { Icon } from "./icon";
 export { Label } from "./label";
 export { Link } from "./link";
 export { Loader } from "./loader";
+export { Logo } from "./logo";
 export { Separator } from "./separator";
+export { Status } from "./status";
+export { Switch } from "./switch";
 export { Tag } from "./tag";
 export { Text } from "./text";
 export { TextInput } from "./text-input";

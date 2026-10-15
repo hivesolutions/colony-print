@@ -6,6 +6,21 @@ interface NodeVersions {
 }
 
 /**
+ * The number of jobs of each outcome, the finished jobs being
+ * split between the succeeded ones and the failed ones (with an
+ * error result or with no result at all), as the server does
+ * for the statistics of the nodes, although the commands of the
+ * nodes (e.g., their updates) are counted as well, unlike there.
+ */
+export interface JobCounts {
+    succeeded: number;
+    failed: number;
+    printing: number;
+    queued: number;
+    cancelled: number;
+}
+
+/**
  * The types of the jobs that are commands for the nodes (e.g.,
  * their restart), instead of documents to be printed.
  */
@@ -15,6 +30,20 @@ export const COMMAND_TYPES = ["restart", "update", "auto-update"];
  * The types of the (command) jobs that restart their node.
  */
 export const RESTART_TYPES = ["restart", "update"];
+
+/**
+ * The variants of the statuses of the jobs, as shown by their
+ * indicators, the ones in flight being told apart by their stage.
+ */
+export const STATUS_VARIANTS = new Map<
+    string,
+    "success" | "warning" | "info" | "default"
+>([
+    ["finished", "success"],
+    ["printing", "warning"],
+    ["queued", "info"],
+    ["cancelled", "default"]
+]);
 
 /**
  * Checks if the job is a command for its node, which has
@@ -31,6 +60,23 @@ export const isCommandJob = (job?: JobInfo | null): boolean => {
 export const isRestartPending = (job?: JobInfo | null): boolean => {
     if (!job?.type || !RESTART_TYPES.includes(job.type)) return false;
     return job.status === "queued" || job.status === "printing";
+};
+
+/**
+ * Checks if the job failed, meaning that it's finished without
+ * a successful result (with an error result or with no result at
+ * all), as it's counted by countJobs.
+ */
+export const isJobFailed = (job?: JobInfo | null): boolean => {
+    return job?.status === "finished" && job.result?.result !== "success";
+};
+
+/**
+ * Formats the status of the job as a label (e.g., "Printing").
+ */
+export const formatStatus = (status?: string | null): string => {
+    if (!status) return "-";
+    return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
 /**
@@ -67,4 +113,27 @@ export const formatLibraries = (job?: JobInfo | null): string => {
             )
             .join(", ") || "-"
     );
+};
+
+/**
+ * Counts the jobs by their outcome, the jobs of an unknown
+ * status being left out.
+ */
+export const countJobs = (jobs: JobInfo[]): JobCounts => {
+    const counts = {
+        succeeded: 0,
+        failed: 0,
+        printing: 0,
+        queued: 0,
+        cancelled: 0
+    };
+    for (const job of jobs) {
+        if (job.status === "finished") {
+            if (job.result?.result === "success") counts.succeeded++;
+            else counts.failed++;
+        } else if (job.status === "printing") counts.printing++;
+        else if (job.status === "queued") counts.queued++;
+        else if (job.status === "cancelled") counts.cancelled++;
+    }
+    return counts;
 };

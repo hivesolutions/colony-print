@@ -12,33 +12,35 @@ interface DetailField {
 interface DetailGridProps {
     fields: DetailField[];
     loading?: boolean;
+    header?: ReactNode;
 }
 
 export function DetailGrid({
     fields,
-    loading = false
+    loading = false,
+    header
 }: DetailGridProps) {
-    if (loading) {
-        return (
-            <Card style={["detail-grid-loading"]}>
-                <Loader />
-            </Card>
-        );
-    }
     return (
         <Card style={["detail-grid-card"]}>
-            <dl className="detail-grid">
-                {fields.map((field, index) => (
-                    <div key={index} className="detail-grid-row">
-                        <dt className="detail-grid-label">
-                            {field.label}
-                        </dt>
-                        <dd className="detail-grid-value">
-                            {field.value}
-                        </dd>
-                    </div>
-                ))}
-            </dl>
+            {header}
+            {loading ? (
+                <div className="detail-grid-loading">
+                    <Loader />
+                </div>
+            ) : (
+                <dl className="detail-grid">
+                    {fields.map((field, index) => (
+                        <div key={index} className="detail-grid-row">
+                            <dt className="detail-grid-label">
+                                {field.label}
+                            </dt>
+                            <dd className="detail-grid-value">
+                                {field.value}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            )}
         </Card>
     );
 }

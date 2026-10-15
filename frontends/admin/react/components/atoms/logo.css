@@ -1,0 +1,20 @@
+.logo {
+    display: block;
+    flex: none;
+}
+
+.logo-ink {
+    fill: var(--color-logo-ink);
+}
+
+.logo-ink-stroke {
+    stroke: var(--color-logo-ink);
+}
+
+.logo-mint {
+    fill: var(--color-brand-mint);
+}
+
+.logo-mint-stroke {
+    stroke: var(--color-brand-mint);
+}

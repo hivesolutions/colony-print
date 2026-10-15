@@ -1,0 +1,32 @@
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-family);
+    color: var(--color-gray-700);
+    white-space: nowrap;
+}
+
+.status-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--color-gray-400);
+}
+
+.status-success .status-dot {
+    background-color: var(--color-success-500);
+}
+
+.status-error .status-dot {
+    background-color: var(--color-error-500);
+}
+
+.status-warning .status-dot {
+    background-color: var(--color-warning-500);
+}
+
+.status-info .status-dot {
+    background-color: var(--color-info-500);
+}

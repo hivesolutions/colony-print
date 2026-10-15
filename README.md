@@ -1,4 +1,4 @@
-# [Colony Print Infra-structure](http://colony-print.hive.pt)
+# [![Colony Print Infra-structure](https://raw.githubusercontent.com/hivesolutions/colony-print/master/res/logo.svg)](http://colony-print.hive.pt)
 
 Small web app for printing Colony-based documents.
 
@@ -327,6 +327,26 @@ npm run build
 ```
 
 The built assets are output to `src/colony_print/static/admin-ui/` and served at `/admin-ui` when the server is running.
+
+Its unit tests (under `frontends/admin/react/test/`) run with [Vitest](https://vitest.dev/), with their coverage measured by its `--coverage` option. They require Node.js 22.22 (or 24.15) and newer, as Vitest and jsdom do, and run on every push in the `Admin Workflow`.
+
+```bash
+cd frontends/admin
+npm test
+npm test -- --coverage
+```
+
+## Logo
+
+The logo is a C cut in three slices, its middle slice shifted to the right as a line being printed, followed by the "colony print" logotype, cut in the same slices. Its files are in `res/`, and switch from ink to white on dark backgrounds by themselves:
+
+| File               | Use                                                     |
+| ------------------ | ------------------------------------------------------- |
+| `res/logo.svg`     | The mark and the logotype together, for headers.        |
+| `res/logotype.svg` | The logotype alone, the text version of the logo.       |
+| `res/mark.svg`     | The mark alone, for icons, avatars and favicons.        |
+
+The colors are ink `#17181c` (white on dark backgrounds) and mint `#0fa47a`, used only for the middle slice. Below 48px of height the logotype is drawn solid, without its cuts, which blur at that size, as the side bar of the admin UI does.
 
 ## Development
 

@@ -2,8 +2,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 56px;
-    padding: 0 24px;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 20px;
     background-color: var(--color-white);
     border-bottom: 1px solid var(--color-gray-200);
 }
@@ -12,6 +13,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
 }
 
 .top-bar-toggle {
@@ -33,26 +35,80 @@
     color: var(--color-gray-900);
 }
 
-.top-bar-brand {
-    font-size: 16px;
-    font-weight: 700;
+.top-bar-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--color-gray-500);
+}
+
+.top-bar-breadcrumb .icon {
+    font-size: 12px;
+    color: var(--color-gray-500);
+}
+
+.top-bar-breadcrumb-link {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-gray-600);
+}
+
+.top-bar-breadcrumb-link:hover {
     color: var(--color-gray-900);
 }
 
-.top-bar-user {
-    font-size: 13px;
+.top-bar-breadcrumb-current {
     font-weight: 500;
-    color: var(--color-gray-500);
+    color: var(--color-gray-900);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.top-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.top-bar-refresh {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-white);
+    color: var(--color-gray-700);
+    cursor: pointer;
+}
+
+.top-bar-refresh:hover {
+    background-color: var(--color-gray-50);
+    color: var(--color-gray-900);
 }
 
 @media (max-width: 768px) {
     .top-bar {
-        padding: 0 16px;
-        position: relative;
-        z-index: 30;
+        flex-wrap: wrap;
+        padding: 8px 16px;
     }
 
     .top-bar-toggle {
         display: flex;
+    }
+
+    .top-bar-actions {
+        width: 100%;
+    }
+
+    .top-bar-breadcrumb-root,
+    .top-bar-breadcrumb-root + .icon {
+        display: none;
     }
 }

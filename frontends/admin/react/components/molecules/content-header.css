@@ -1,24 +1,35 @@
 .content-header {
     display: flex;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: flex-end;
     justify-content: space-between;
-    margin-bottom: 24px;
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
 .content-header-text {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    min-width: 0;
+}
+
+.content-header-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
 }
 
 .content-header-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
 @media (max-width: 768px) {
     .content-header {
         flex-direction: column;
-        gap: 12px;
+        align-items: stretch;
     }
 }

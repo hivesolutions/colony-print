@@ -2,11 +2,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     font-family: var(--font-family);
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease;
 }
@@ -17,13 +17,15 @@
 }
 
 .button-sm {
-    padding: 6px 12px;
+    min-height: 34px;
+    padding: 0 12px;
     font-size: 13px;
 }
 
 .button-md {
-    padding: 8px 16px;
-    font-size: 14px;
+    min-height: 38px;
+    padding: 0 16px;
+    font-size: 13px;
 }
 
 .button-lg {

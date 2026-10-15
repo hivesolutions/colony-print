@@ -1,12 +1,155 @@
-.dashboard-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+.dashboard {
+    display: flex;
+    flex-direction: column;
     gap: 16px;
-    margin-bottom: 24px;
 }
 
-.dashboard-recent {
-    margin-top: 8px;
+.dashboard > .content-header {
+    margin-bottom: 0;
+}
+
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-gray-200);
+    overflow: hidden;
+}
+
+.dashboard-stats .stat-card {
+    border: none;
+    border-radius: 0;
+}
+
+.dashboard-success {
+    color: var(--color-success-700);
+}
+
+.dashboard-error {
+    color: var(--color-error-700);
+}
+
+.dashboard-mono,
+.dashboard-mono:hover {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.dashboard-health {
+    gap: 8px;
+    color: inherit;
+}
+
+.dashboard-health .status-dot {
+    width: 9px;
+    height: 9px;
+}
+
+.dashboard-time {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    color: var(--color-gray-500);
+    white-space: nowrap;
+}
+
+.dashboard-job,
+.dashboard-job:hover {
+    color: var(--color-gray-900);
+}
+
+.dashboard-job:hover {
+    text-decoration: underline;
+}
+
+.dashboard-panels {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.dashboard-panel {
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+.dashboard-panel-wide {
+    flex: 2 1 520px;
+}
+
+.dashboard-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.dashboard-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+}
+
+.dashboard-empty {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--color-gray-400);
+}
+
+.dashboard-nodes {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.dashboard-node,
+.dashboard-node:hover {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--color-gray-100);
+    font-weight: 400;
+    color: var(--color-gray-900);
+}
+
+.dashboard-node:hover {
+    background-color: var(--color-gray-25);
+}
+
+.dashboard-nodes li:last-child .dashboard-node {
+    border-bottom: none;
+}
+
+.dashboard-node-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-node-id,
+.dashboard-node-version,
+.dashboard-node-seen {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-gray-500);
+}
+
+.dashboard-node-seen {
+    color: var(--color-gray-600);
+    white-space: nowrap;
+}
+
+.dashboard-node-offline {
+    color: var(--color-warning-700);
 }
 
 @media (max-width: 480px) {

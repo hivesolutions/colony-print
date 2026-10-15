@@ -339,6 +339,15 @@ class NodeController(appier.Controller):
             for value in appier.wait("jobs:%s" % id):
                 yield value
         yield json.dumps(jobs)
+
+        # the node is seen as it picks its jobs up, as when it registers
+        # itself, so that it's not taken as offline while printing them,
+        # unless that takes longer than the time after which a node is
+        # offline (it only registers itself again once they're all printed)
+        node = self.owner.nodes.get(id, None)
+        if node:
+            node["last_ping"] = time.time()
+
         for job in jobs:
             job_id = job["id"]
             if not job_id in self.owner.jobs_info:
