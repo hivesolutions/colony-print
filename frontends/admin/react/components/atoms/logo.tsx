@@ -54,8 +54,8 @@ interface LogoProps {
 
 export const Logo: FC<LogoProps> = ({
     variant = "lockup",
-    sliced = true,
     height = 32,
+    sliced = height >= 48,
     label = "Colony Print",
     style = []
 }) => {
@@ -89,7 +89,8 @@ export const Logo: FC<LogoProps> = ({
     // the sliced logotype is drawn three times, each one clipped to
     // one of the slices, the middle one in the brand mint and kept
     // aligned (unlike the mark, so that the letters stay readable),
-    // the solid one (for small sizes, where the cuts blur) once
+    // the solid one (the default below 48px of height, where the
+    // cuts blur) once
     const word = sliced ? (
         <g fill="none" strokeWidth={7}>
             <defs>

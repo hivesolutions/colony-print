@@ -328,7 +328,7 @@ npm run build
 
 The built assets are output to `src/colony_print/static/admin-ui/` and served at `/admin-ui` when the server is running.
 
-Its unit tests (under `frontends/admin/react/test/`) run with [Vitest](https://vitest.dev/), with their coverage measured by its `--coverage` option.
+Its unit tests (under `frontends/admin/react/test/`) run with [Vitest](https://vitest.dev/), with their coverage measured by its `--coverage` option. They require Node.js 22.22 (or 24.15) and newer, as Vitest and jsdom do, and run on every push in the `Admin Workflow`.
 
 ```bash
 cd frontends/admin

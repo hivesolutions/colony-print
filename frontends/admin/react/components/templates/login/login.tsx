@@ -41,7 +41,7 @@ export const Login: FC = () => {
         <div className="login-page">
             <Card style={["login-card"]}>
                 <h1 className="login-brand">
-                    <Logo height={44} />
+                    <Logo height={48} />
                 </h1>
                 <Form onSubmit={onSubmit}>
                     {error && <ErrorBox message={error} />}

@@ -72,8 +72,9 @@ export const Dashboard: FC = () => {
     const onlineCount = nodeEntries.filter((entry) =>
         isNodeOnline(entry.node)
     ).length;
-    const jobCount = Object.keys(jobs).length;
-    const counts = countJobs(Object.values(jobs).filter((j) => j && j.id));
+    const jobValues = Object.values(jobs).filter((j) => j && j.id);
+    const jobCount = jobValues.length;
+    const counts = countJobs(jobValues);
     const recentJobs = Object.values(jobs)
         .filter((j) => j && j.id)
         .sort((a, b) => (b.queued_time || 0) - (a.queued_time || 0))

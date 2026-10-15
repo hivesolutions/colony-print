@@ -26,7 +26,7 @@ pip install -r extra.txt
 python setup.py test
 ```
 
-The admin UI (`frontends/admin/`) has its own unit tests, under `react/test/` (mirroring the paths of the files they test), that run with Vitest.
+The admin UI (`frontends/admin/`) has its own unit tests, under `react/test/` (mirroring the paths of the files they test), that run with Vitest and require Node.js 22.22 (or 24.15) and newer.
 
 ```bash
 cd frontends/admin
@@ -54,7 +54,7 @@ npm test -- --coverage
 
 - The logo is the sliced C mark (`res/mark.svg`), the "colony print" logotype (`res/logotype.svg`) and their lockup (`res/logo.svg`), in ink `#17181c` (white on dark backgrounds) and mint `#0fa47a`, the mint being only used for the middle slice.
 - The middle slice of the mark is shifted to the right, the one of the logotype is never shifted, so that its letters stay aligned and readable.
-- In the admin UI use the `Logo` atom (`react/components/atoms/logo.tsx`), with the solid logotype (`sliced={false}`) below 48px of height, as the cuts of the sliced one blur at small sizes.
+- In the admin UI use the `Logo` atom (`react/components/atoms/logo.tsx`), that draws the solid logotype below 48px of height (unless `sliced` is set), as the cuts of the sliced one blur at small sizes.
 
 ## Admin UI Icons
 

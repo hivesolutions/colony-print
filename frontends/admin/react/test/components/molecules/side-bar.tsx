@@ -229,6 +229,30 @@ describe("SideBarTest", () => {
         expect(document.querySelector(".side-bar-badge")).toBe(null);
     });
 
+    test("test_click_stale", async () => {
+        // the status of a navigation that is gone is ignored once it's
+        // retrieved, instead of replacing the one of the current one
+        let resolve: (value: unknown) => void = () => {};
+        api.ping = vi
+            .fn()
+            .mockReturnValueOnce(new Promise((r) => (resolve = r)))
+            .mockResolvedValue({ time: 1 });
+        await renderBar("/");
+        expect(screen.getByText("Connecting")).toBeTruthy();
+        api.listJobs = vi.fn().mockResolvedValue({});
+        await act(async () => {
+            fireEvent.click(screen.getByRole("link", { name: "Jobs" }));
+        });
+        expect(screen.getByText("API healthy")).toBeTruthy();
+        expect(document.querySelector(".side-bar-badge")).toBe(null);
+
+        await act(async () => {
+            resolve(null);
+        });
+        expect(screen.getByText("API healthy")).toBeTruthy();
+        expect(document.querySelector(".side-bar-badge")).toBe(null);
+    });
+
     test("test_status", async () => {
         const { container } = await renderBar("/");
         expect(screen.getByText("API healthy")).toBeTruthy();

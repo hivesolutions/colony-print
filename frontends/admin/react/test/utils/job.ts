@@ -152,6 +152,22 @@ describe("JobTest", () => {
         });
     });
 
+    test("test_count_jobs_commands", () => {
+        // the commands of the nodes are counted as any other job,
+        // unlike in the statistics of the nodes, as a failed update
+        // is a failure as well
+        const counts = countJobs([
+            mockJob({
+                type: "update",
+                status: "finished",
+                result: { result: "error" }
+            }),
+            mockJob({ type: "restart", status: "queued" })
+        ]);
+        expect(counts.failed).toBe(1);
+        expect(counts.queued).toBe(1);
+    });
+
     test("test_count_jobs_without_result", () => {
         // a finished job without a result is failed, as the server
         // counts it for the statistics of the nodes

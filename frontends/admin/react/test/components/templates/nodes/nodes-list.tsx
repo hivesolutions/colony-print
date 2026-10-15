@@ -92,6 +92,8 @@ describe("NodesListTest", () => {
                 b: { id: "b", node_id: "shop-1" },
                 c: { id: "c", node_id: "engraver" },
                 d: { id: "d", node_id: "other" },
+                e: { id: "e", node_id: "shop-1", type: "restart" },
+                f: { id: "f", node_id: "engraver", type: "auto-update" },
                 broken: null
             })
         } as unknown as ColonyPrintAPI;
@@ -170,6 +172,22 @@ describe("NodesListTest", () => {
             "status status-success",
             "status status-success",
             "status status-default"
+        ]);
+    });
+
+    test("test_render_jobs", async () => {
+        // the commands of the nodes (e.g., their restarts) are not
+        // counted as their jobs, so that the count is the same as the
+        // total jobs of the page of the node (its statistics)
+        const { container } = await renderList();
+        expect(
+            rows(container).map((row) =>
+                cells(row).slice(1, 2).concat(cells(row)[8])
+            )
+        ).toEqual([
+            ["Shop 1 shop-1", "2"],
+            ["Warehouse warehouse", "0"],
+            ["Engraver engraver", "1"]
         ]);
     });
 
@@ -267,6 +285,32 @@ describe("NodesListTest", () => {
         fireEvent.click(screen.getByRole("button", { name: "All3" }));
         expect(rows(container).length).toBe(3);
         expect(search).toBe("");
+    });
+
+    test("test_filter_time", async () => {
+        // a node that goes offline while the page is shown keeps the
+        // state it was retrieved with, so that its counts, its filter
+        // and its rows agree until the page is refreshed
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(NOW * 1000);
+        try {
+            api.listNodes = vi.fn().mockResolvedValue({
+                edge: mockNode({ name: "Edge", last_ping: NOW - 890 })
+            });
+            const { container } = await renderList();
+            vi.setSystemTime((NOW + 20) * 1000);
+            fireEvent.click(screen.getByRole("button", { name: "Offline0" }));
+            expect(rows(container).map(cells)).toEqual([
+                ["No nodes registered"]
+            ]);
+
+            fireEvent.click(screen.getByRole("button", { name: "Online1" }));
+            expect(rows(container).map((row) => cells(row)[0])).toEqual([
+                "Online"
+            ]);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     test("test_filter_address", async () => {

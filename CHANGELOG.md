@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Jobs by status, jobs in flight, the online nodes and the version and uptime of the server in the dashboard of the admin UI
 * Health and uptime of the API, the user and its log out, and the counts of the online nodes and of the jobs in flight in the side bar of the admin UI
 * Refresh of the page shown in the admin UI from its top bar, replacing the refresh of the jobs
-* Unit tests of the admin UI, run with Vitest (`npm test`)
+* Unit tests of the admin UI, run with Vitest (`npm test`) on every push by the `Admin Workflow`
 
 ### Changed
 

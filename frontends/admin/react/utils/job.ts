@@ -9,7 +9,8 @@ interface NodeVersions {
  * The number of jobs of each outcome, the finished jobs being
  * split between the succeeded ones and the failed ones (with an
  * error result or with no result at all), as the server does
- * for the statistics of the nodes.
+ * for the statistics of the nodes, although the commands of the
+ * nodes (e.g., their updates) are counted as well, unlike there.
  */
 export interface JobCounts {
     succeeded: number;

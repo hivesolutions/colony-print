@@ -190,6 +190,27 @@ describe("DashboardTest", () => {
         ]);
     });
 
+    test("test_render_distribution_invalid", async () => {
+        // the entries that are not jobs (without an identifier) are
+        // left out of the jobs tracked, as they are of their counts
+        api.listJobs = vi.fn().mockResolvedValue({
+            a: mockJob({
+                id: "a",
+                status: "finished",
+                result: { result: "success" }
+            }),
+            b: mockJob({ id: "b", status: "printing" }),
+            partial: { name: "Partial" },
+            broken: null
+        });
+        const { container } = await renderDashboard();
+        expect(stat(container, "Jobs Tracked")).toEqual([
+            "2",
+            "1 ok, 0 failed"
+        ]);
+        expect(screen.getByText("The 2 jobs kept by the server")).toBeTruthy();
+    });
+
     test("test_render_recent", async () => {
         const { container } = await renderDashboard();
         const recent = panel("Recent Jobs");

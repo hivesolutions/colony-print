@@ -5,6 +5,7 @@ import React, {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState
 } from "react";
 import { useLocation } from "react-router-dom";
@@ -68,16 +69,23 @@ export const SideBar: FC<SideBarProps> = ({ open, onClose }) => {
     const [nodes, setNodes] = useState<NodeInfo[] | null>(null);
     const [jobs, setJobs] = useState<JobInfo[] | null>(null);
 
+    // keeps the number of the navigation whose status is retrieved, so
+    // that the status of a navigation (or of a side bar) that is gone
+    // is ignored once retrieved, instead of replacing the current one
+    const navigation = useRef(0);
+
     // the health of the API is the one of its (public) ping, its
     // version and uptime require the session, so that an expired
     // session is not shown as an unreachable server
     const fetchStatus = useCallback(async () => {
+        const current = navigation.current;
         const [pingData, infoData, nodesData, jobsData] = await Promise.all([
             api.ping().catch(() => null),
             api.getInfo().catch(() => null),
             api.listNodes().catch(() => null),
             api.listJobs().catch(() => null)
         ]);
+        if (navigation.current !== current) return;
         setHealthy(pingData !== null);
         setInfo(infoData);
         setNodes(
@@ -94,6 +102,9 @@ export const SideBar: FC<SideBarProps> = ({ open, onClose }) => {
     // of the nodes and jobs follow the ones shown in the pages
     useEffect(() => {
         fetchStatus();
+        return () => {
+            navigation.current++;
+        };
     }, [fetchStatus, location.pathname]);
 
     const badges = useMemo(() => {

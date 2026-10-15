@@ -20,24 +20,55 @@ describe("LogoTest", () => {
         );
 
         // the mark is drawn in its three slices, the middle one in
-        // the brand mint, and the logotype in its three clipped ones
+        // the brand mint, and the logotype solid, as its cuts blur
+        // at the (default) height below 48px
         expect(logo.querySelectorAll(".logo-ink").length).toBe(2);
         expect(logo.querySelectorAll(".logo-mint").length).toBe(1);
+        expect(logo.querySelectorAll("clipPath").length).toBe(0);
+        expect(logo.querySelectorAll(".logo-ink-stroke").length).toBe(1);
+        expect(logo.querySelectorAll(".logo-mint-stroke").length).toBe(0);
+    });
+
+    test("test_render_sliced", () => {
+        // the logotype is drawn in its three clipped slices from 48px
+        // of height, the middle one in the brand mint
+        render(<Logo height={48} />);
+        const logo = screen.getByRole("img", { name: "Colony Print" });
         expect(logo.querySelectorAll("clipPath").length).toBe(3);
         expect(logo.querySelectorAll(".logo-ink-stroke").length).toBe(2);
         expect(logo.querySelectorAll(".logo-mint-stroke").length).toBe(1);
+        cleanup();
+
+        // while just below it the logotype is solid
+        const { container } = render(<Logo height={47.9} />);
+        expect(container.querySelectorAll("clipPath").length).toBe(0);
+        expect(container.querySelectorAll(".logo-mint-stroke").length).toBe(0);
+    });
+
+    test("test_render_sliced_explicit", () => {
+        // an explicit choice is kept, whatever the height of the logo
+        const { container } = render(
+            <>
+                <Logo height={24} sliced />
+                <Logo height={72} sliced={false} />
+            </>
+        );
+        const [small, large] = Array.from(container.querySelectorAll("svg"));
+        expect(small.querySelectorAll("clipPath").length).toBe(3);
+        expect(large.querySelectorAll("clipPath").length).toBe(0);
+        expect(large.querySelectorAll(".logo-ink-stroke").length).toBe(1);
     });
 
     test("test_render_aligned", () => {
         // the middle slice of the logotype is never shifted, so that
         // its letters stay aligned, only the one of the mark is
-        const { container } = render(<Logo variant="logotype" />);
+        const { container } = render(<Logo variant="logotype" sliced />);
         const middle = container.querySelector(".logo-mint-stroke");
         expect(middle?.getAttribute("transform")).toBe(null);
     });
 
     test("test_render_clips", () => {
-        const { container } = render(<Logo variant="logotype" />);
+        const { container } = render(<Logo variant="logotype" sliced />);
         const ids = Array.from(container.querySelectorAll("clipPath")).map(
             (clip) => clip.getAttribute("id")
         );
@@ -53,8 +84,8 @@ describe("LogoTest", () => {
         // same page (e.g., the side bar and the login) don't share them
         const { container } = render(
             <>
-                <Logo />
-                <Logo />
+                <Logo sliced />
+                <Logo sliced />
             </>
         );
         const ids = Array.from(container.querySelectorAll("clipPath")).map(

@@ -72,7 +72,11 @@ describe("LoginTest", () => {
         renderLogin();
         const heading = screen.getByRole("heading", { name: "Colony Print" });
         expect(heading.className).toBe("login-brand");
-        expect(heading.querySelector("svg")?.getAttribute("height")).toBe("44");
+        expect(heading.querySelector("svg")?.getAttribute("height")).toBe("48");
+
+        // the logotype is drawn sliced, as the login is large enough
+        // for its cuts, with the middle slice in the brand mint
+        expect(heading.querySelectorAll("clipPath").length).toBe(3);
         expect(screen.getByLabelText("Password").getAttribute("type")).toBe(
             "password"
         );

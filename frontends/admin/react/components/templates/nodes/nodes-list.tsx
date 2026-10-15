@@ -9,6 +9,7 @@ import { ContentHeader, DataTable, FilterTabs } from "../../molecules";
 import {
     formatRelativeTime,
     formatTimestamp,
+    isCommandJob,
     isNodeBehind,
     isNodeOnline
 } from "../../../utils";
@@ -19,6 +20,7 @@ interface NodeEntry {
     id: string;
     node: NodeInfo;
     jobs: number;
+    online: boolean;
 }
 
 type StateFilter = "all" | "online" | "offline";
@@ -56,14 +58,22 @@ export const NodesList: FC = () => {
                 api.getInfo().catch(() => null),
                 api.listJobs().catch(() => ({}))
             ]);
-            const jobValues = Object.values(jobs).filter((j) => j && j.id);
+            // the commands of the nodes (e.g., their restarts) are not
+            // counted as their jobs, as in the statistics of each node
+            const jobValues = Object.values(jobs).filter(
+                (j) => j && j.id && !isCommandJob(j)
+            );
+
+            // the state of the nodes is taken once (as they're retrieved),
+            // so that their counts, filter and rows agree on it
             const items = Object.entries(data)
                 .filter(([, node]) => node && node.name)
                 .map(([id, node]) => ({
                     id,
                     node,
                     jobs: jobValues.filter((job) => job.node_id === id)
-                        .length
+                        .length,
+                    online: isNodeOnline(node)
                 }));
             setEntries(items);
             setVersion(info?.version ?? null);
@@ -79,7 +89,7 @@ export const NodesList: FC = () => {
     }, [fetchNodes]);
 
     const onlineCount = useMemo(
-        () => entries.filter((entry) => isNodeOnline(entry.node)).length,
+        () => entries.filter((entry) => entry.online).length,
         [entries]
     );
 
@@ -88,8 +98,7 @@ export const NodesList: FC = () => {
             filter === "all"
                 ? entries
                 : entries.filter(
-                      (entry) =>
-                          isNodeOnline(entry.node) === (filter === "online")
+                      (entry) => entry.online === (filter === "online")
                   ),
         [entries, filter]
     );
@@ -99,10 +108,8 @@ export const NodesList: FC = () => {
             key: "state",
             header: "State",
             render: (entry: NodeEntry) => (
-                <Status
-                    variant={isNodeOnline(entry.node) ? "success" : "default"}
-                >
-                    {isNodeOnline(entry.node) ? "Online" : "Offline"}
+                <Status variant={entry.online ? "success" : "default"}>
+                    {entry.online ? "Online" : "Offline"}
                 </Status>
             )
         },
@@ -197,7 +204,7 @@ export const NodesList: FC = () => {
             render: (entry: NodeEntry) => (
                 <span
                     className={
-                        isNodeOnline(entry.node)
+                        entry.online
                             ? "nodes-list-mono"
                             : "nodes-list-mono nodes-list-behind"
                     }
