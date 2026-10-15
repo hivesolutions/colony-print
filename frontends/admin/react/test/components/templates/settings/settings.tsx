@@ -66,6 +66,7 @@ describe("SettingsTest", () => {
                 nodes: 5,
                 jobs: 0
             }),
+            ping: vi.fn().mockResolvedValue({ time: 1 }),
             logout: vi.fn().mockResolvedValue(undefined)
         } as unknown as ColonyPrintAPI;
     });
@@ -135,11 +136,24 @@ describe("SettingsTest", () => {
 
     test("test_render_error", async () => {
         api.getInfo = vi.fn().mockRejectedValue(new Error("Offline"));
+        api.ping = vi.fn().mockRejectedValue(new Error("Offline"));
         const { container } = await renderSettings();
         expect(fields(container)).toEqual([]);
         const status = container.querySelector(".panel-actions .status");
         expect(status?.className).toBe("status status-error");
-        expect(status?.textContent).toBe("unavailable");
+        expect(status?.textContent).toBe("unreachable");
+    });
+
+    test("test_render_session", async () => {
+        // an expired session (whose info is refused) is not shown as
+        // an unreachable server, as the health is the one of the ping,
+        // as in the side bar shown next to it
+        api.getInfo = vi.fn().mockRejectedValue(new Error("Forbidden"));
+        const { container } = await renderSettings();
+        expect(fields(container)).toEqual([]);
+        const status = container.querySelector(".panel-actions .status");
+        expect(status?.className).toBe("status status-success");
+        expect(status?.textContent).toBe("healthy");
     });
 
     test("test_save", async () => {

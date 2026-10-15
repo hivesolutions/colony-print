@@ -187,10 +187,17 @@ describe("QuickSearchTest", () => {
         await search("4f1c");
         expect(location).toBe("/jobs/4f1c9a2e7d");
 
+        // while a node or job that is not found is not reported as
+        // missing, as it may be in the list that couldn't be retrieved
+        await search("shop-1");
+        expect(screen.getByRole("alert").textContent).toBe(
+            `Couldn't search for "shop-1", try again`
+        );
+
         api.listJobs = vi.fn().mockRejectedValue(new Error("Offline"));
         await search("4f1c");
         expect(screen.getByRole("alert").textContent).toBe(
-            'No node or job "4f1c"'
+            `Couldn't search for "4f1c", try again`
         );
     });
 

@@ -26,15 +26,21 @@ export const Settings: FC = () => {
         localStorage.getItem("baseUrl") ?? ""
     );
     const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+    const [healthy, setHealthy] = useState<boolean | null>(null);
     const [serverLoading, setServerLoading] = useState(true);
 
+    // the health of the server is the one of its (public) ping, as in
+    // the side bar, its info requiring the session, so that an expired
+    // session is not shown as an unreachable server
     const fetchServerInfo = useCallback(async () => {
         setServerLoading(true);
         try {
-            const data = await api.getInfo();
+            const [data, pingData] = await Promise.all([
+                api.getInfo().catch(() => null),
+                api.ping().catch(() => null)
+            ]);
             setServerInfo(data);
-        } catch {
-            setServerInfo(null);
+            setHealthy(pingData !== null);
         } finally {
             setServerLoading(false);
         }
@@ -65,12 +71,12 @@ export const Settings: FC = () => {
                                     !serverLoading && (
                                         <Status
                                             variant={
-                                                serverInfo ? "success" : "error"
+                                                healthy ? "success" : "error"
                                             }
                                         >
-                                            {serverInfo
+                                            {healthy
                                                 ? "healthy"
-                                                : "unavailable"}
+                                                : "unreachable"}
                                         </Status>
                                     )
                                 }

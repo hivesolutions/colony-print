@@ -40,9 +40,17 @@ export const QuickSearch: FC = () => {
         setError(null);
         setSearching(true);
         try {
+            // a list that can't be retrieved doesn't fail the search, as
+            // the other one is still searched, but then a missing node or
+            // job is not reported as so, as it may be in that list
+            let failed = false;
+            const onError = () => {
+                failed = true;
+                return {};
+            };
             const [nodes, jobs] = await Promise.all([
-                api.listNodes().catch(() => ({})),
-                api.listJobs().catch(() => ({}))
+                api.listNodes().catch(onError),
+                api.listJobs().catch(onError)
             ]);
             const path = findSearchTarget(
                 query,
@@ -50,7 +58,11 @@ export const QuickSearch: FC = () => {
                 Object.keys(jobs)
             );
             if (!path) {
-                setError(`No node or job "${query.trim()}"`);
+                setError(
+                    failed
+                        ? `Couldn't search for "${query.trim()}", try again`
+                        : `No node or job "${query.trim()}"`
+                );
                 return;
             }
             setQuery("");
