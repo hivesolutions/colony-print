@@ -68,6 +68,17 @@ export const PrintersList: FC = () => {
             .map((entry) => entry.printer.node_id)
     );
 
+    // the devices of the nodes (an engraver not being one), as the only
+    // device of a node is the default one of the node that names none
+    const devices = entries.filter(
+        (entry) => entry.printer.engine === "npcolony"
+    );
+    const isOnly = (entry: PrinterEntry) =>
+        entry.printer.engine === "npcolony" &&
+        devices.filter(
+            (device) => device.printer.node_id === entry.printer.node_id
+        ).length === 1;
+
     const columns = [
         {
             key: "name",
@@ -77,7 +88,9 @@ export const PrintersList: FC = () => {
                     <span className="printers-list-strong">
                         {entry.printer.name}
                     </span>
-                    {isNodeDefault(entry.printer) && <Tag>default</Tag>}
+                    {isNodeDefault(entry.printer, isOnly(entry)) && (
+                        <Tag>default</Tag>
+                    )}
                 </span>
             )
         },

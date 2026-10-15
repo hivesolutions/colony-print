@@ -194,7 +194,10 @@ export const Settings: FC = () => {
                             message={`You're signed in as ${username || "-"}. You'll need to sign in again to manage the nodes, jobs and printers.`}
                             confirmLabel="Log out"
                             icon={logOutOutline}
-                            onConfirm={onLogout}
+                            onConfirm={() => {
+                                setConfirming(false);
+                                onLogout();
+                            }}
                             onCancel={() => setConfirming(false)}
                         />
                     )}

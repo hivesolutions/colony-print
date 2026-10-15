@@ -20,11 +20,16 @@ export const formatPaper = (
  * printer named by the node (its `NODE_PRINTER`, the case being
  * ignored as the node does) or the default one of the system
  * when it names none (or "default", its value when the node
- * is not configured).
+ * is not configured), or the only printer of the node (`only`)
+ * in such case, as npcolony prints to it when the system has
+ * no default printer.
  */
-export const isNodeDefault = (printer: NodePrinterInfo): boolean => {
+export const isNodeDefault = (
+    printer: NodePrinterInfo,
+    only = false
+): boolean => {
     const name = printer.node_printer;
     if (typeof name !== "string" || ["", "default"].includes(name))
-        return Boolean(printer.is_default);
+        return Boolean(printer.is_default) || only;
     return printer.name.toLowerCase() === name.toLowerCase();
 };

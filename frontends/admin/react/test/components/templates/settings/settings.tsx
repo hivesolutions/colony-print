@@ -235,4 +235,29 @@ describe("SettingsTest", () => {
         expect(localStorage.getItem("sessionId")).toBe("preview-session");
         expect(location).toBe("/settings");
     });
+
+    test("test_logout_pending", async () => {
+        // the dialog is closed once the log out is confirmed, as the log
+        // out is done whatever happens to its request, so that no cancel
+        // (that wouldn't keep the session) is offered while it's pending
+        let resolve: (value: unknown) => void = () => {};
+        api.logout = vi.fn().mockReturnValue(new Promise((r) => (resolve = r)));
+        localStorage.setItem("sessionId", "preview-session");
+        await renderSettings();
+        fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+        fireEvent.click(
+            within(screen.getByRole("dialog")).getByRole("button", {
+                name: "Log out"
+            })
+        );
+        expect(screen.queryByRole("dialog")).toBe(null);
+        expect(api.logout).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem("sessionId")).toBe("preview-session");
+
+        await act(async () => {
+            resolve(undefined);
+        });
+        expect(localStorage.getItem("sessionId")).toBe(null);
+        expect(location).toBe("/login");
+    });
 });

@@ -77,4 +77,21 @@ describe("PrinterTest", () => {
             })
         ).toBe(true);
     });
+
+    test("test_is_node_default_only", () => {
+        // the only printer of a node that names none is its default one,
+        // even when it's not the default printer of the system (that may
+        // have none), as npcolony prints to it, but not when the node
+        // names another printer
+        expect(
+            isNodeDefault({ ...printer, node_printer: "default" }, true)
+        ).toBe(true);
+        expect(isNodeDefault(printer, true)).toBe(true);
+        expect(
+            isNodeDefault({ ...printer, node_printer: "office" }, true)
+        ).toBe(false);
+        expect(
+            isNodeDefault({ ...printer, node_printer: "default" }, false)
+        ).toBe(false);
+    });
 });

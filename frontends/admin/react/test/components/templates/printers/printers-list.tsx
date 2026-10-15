@@ -136,7 +136,7 @@ describe("PrintersListTest", () => {
                 "No test page"
             ],
             [
-                "office",
+                "officedefault",
                 " warehouse warehouse",
                 "npcolony",
                 "A4",
@@ -186,7 +186,9 @@ describe("PrintersListTest", () => {
     test("test_render_default", async () => {
         // the printer named by the node is the one tagged as its default
         // (the one of its jobs that select none) rather than the default
-        // of the system, that is only tagged for the nodes that name none
+        // of the system, that is only tagged for the nodes that name none,
+        // as is the only device of a node (its engraver not being one) for
+        // the nodes whose system has no default printer
         api.listNodePrinters = vi.fn().mockResolvedValue([
             mockPrinter({ node_printer: "OFFICE", is_default: true }),
             mockPrinter({ name: "office", node_printer: "OFFICE" }),
@@ -195,13 +197,27 @@ describe("PrintersListTest", () => {
                 node_printer: "default",
                 is_default: true
             }),
-            mockPrinter({ name: "office", node_id: "warehouse" })
+            mockPrinter({ name: "office", node_id: "warehouse" }),
+            mockPrinter({ node_id: "kiosk", node_printer: "default" }),
+            mockPrinter({
+                name: "Gravo engraver",
+                engine: "gravo",
+                node_id: "kiosk",
+                node_printer: "default",
+                is_default: undefined
+            }),
+            mockPrinter({ node_id: "office" }),
+            mockPrinter({ name: "office", node_id: "office" })
         ]);
         await renderList();
         expect(rows(table("Nodes")).map((row) => row[0])).toEqual([
             "Receipt",
             "officedefault",
             "Receiptdefault",
+            "office",
+            "Receiptdefault",
+            "Gravo engraver",
+            "Receipt",
             "office"
         ]);
     });

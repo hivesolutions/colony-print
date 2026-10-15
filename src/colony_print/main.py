@@ -145,9 +145,12 @@ class ColonyPrintApp(appier.APIApp):
 
             # the devices reported by npcolony are the printers of the node,
             # keeping their complete information (eg: their media and size),
-            # the invalid ones (not objects) being skipped
+            # the invalid ones (not objects or without a name, that can't be
+            # printed to) being skipped
             for device in devices:
                 if not isinstance(device, dict):
+                    continue
+                if not appier.legacy.is_string(device.get("name", None)):
                     continue
                 printer = dict(device, engine="npcolony")
                 printer.update(base)

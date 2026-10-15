@@ -354,12 +354,22 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.assertEqual(self.app.node_printers(), [])
 
     def test_node_printers_invalid(self):
-        # the devices that are not objects are skipped, keeping the valid
-        # ones of the same node and the printers of the other nodes
+        # the devices that are not objects or that have no name (that can't
+        # be printed to) are skipped, keeping the valid ones of the same node
+        # and the printers of the other nodes
         self.app.nodes["invalid"] = dict(
             name="Invalid",
             engine_info=dict(
-                colony=dict(devices=[None, "Receipt", ["office"], dict(name="A4")])
+                colony=dict(
+                    devices=[
+                        None,
+                        "Receipt",
+                        ["office"],
+                        dict(media="A4"),
+                        dict(name=1),
+                        dict(name="A4"),
+                    ]
+                )
             ),
         )
         self.app.nodes["shop"] = dict(
