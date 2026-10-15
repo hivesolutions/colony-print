@@ -37,7 +37,7 @@ Defines a box (`x`, `y`, `width` and `height`, in twips, unlike the size of the 
 
 #### Paragraph Element: `paragraph`
 
-Represents a paragraph of the document, grouping lines, texts and images.
+Represents a paragraph of the document, grouping lines (its texts and images being placed inside of its lines).
 
 ```xml
 <paragraph>
@@ -57,7 +57,7 @@ Denotes a single line within a paragraph, typically holding text or image elemen
 
 #### Text Element: `text`
 
-Specifies a segment of text within a line or a paragraph.
+Specifies a segment of text within a line or a block.
 
 ```xml
 <text>
@@ -67,7 +67,7 @@ Specifies a segment of text within a line or a paragraph.
 
 #### Image Element: `image`
 
-Used for embedding images within the document layout.
+Used for embedding images within the document layout, inside of a line or a block.
 
 ```xml
 <image>
