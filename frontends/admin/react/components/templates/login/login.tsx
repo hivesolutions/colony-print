@@ -160,7 +160,6 @@ export const Login: FC = () => {
                             aria-label={
                                 showPassword ? "Hide password" : "Show password"
                             }
-                            aria-pressed={showPassword}
                         >
                             <Icon
                                 icon={showPassword ? eyeOffOutline : eyeOutline}

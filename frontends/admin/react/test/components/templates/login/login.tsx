@@ -288,22 +288,25 @@ describe("LoginTest", () => {
         await renderLogin();
         const input = screen.getByLabelText("Password");
         const toggle = screen.getByRole("button", { name: "Show password" });
-        expect(toggle.getAttribute("aria-pressed")).toBe("false");
         expect(toggle.getAttribute("type")).toBe("button");
         expect(toggle.querySelector("ion-icon")?.getAttribute("icon")).toBe(
             eyeOutline
         );
 
-        // the password is shown (and hidden again) without submitting
+        // the password is shown (and hidden again) without submitting, the
+        // label of the toggle giving its state, so that it's not a pressed
+        // toggle (that would be announced as "Hide password, pressed")
         fireEvent.click(toggle);
         expect(input.getAttribute("type")).toBe("text");
         expect(toggle.getAttribute("aria-label")).toBe("Hide password");
-        expect(toggle.getAttribute("aria-pressed")).toBe("true");
+        expect(toggle.getAttribute("aria-pressed")).toBe(null);
         expect(toggle.querySelector("ion-icon")?.getAttribute("icon")).toBe(
             eyeOffOutline
         );
         fireEvent.click(toggle);
         expect(input.getAttribute("type")).toBe("password");
+        expect(toggle.getAttribute("aria-label")).toBe("Show password");
+        expect(toggle.getAttribute("aria-pressed")).toBe(null);
         expect(api.login).not.toHaveBeenCalled();
     });
 });
