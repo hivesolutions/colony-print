@@ -326,6 +326,13 @@ describe("JobsListTest", () => {
             "0d92f6c4"
         ]);
 
+        // while the identifier only matches by its start (as the list
+        // shortens it), not by an end that is not shown
+        filter("bb");
+        expect(screen.getByText("No jobs found")).toBeTruthy();
+        filter("f6c4");
+        expect(screen.getByText("No jobs found")).toBeTruthy();
+
         // and is combined with the filter of the status, both being
         // kept in the address of the page
         filter("shop");

@@ -63,6 +63,15 @@ export const isRestartPending = (job?: JobInfo | null): boolean => {
 };
 
 /**
+ * Checks if the job failed, meaning that it's finished without
+ * a successful result (with an error result or with no result at
+ * all), as it's counted by countJobs.
+ */
+export const isJobFailed = (job?: JobInfo | null): boolean => {
+    return job?.status === "finished" && job.result?.result !== "success";
+};
+
+/**
  * Formats the status of the job as a label (e.g., "Printing").
  */
 export const formatStatus = (status?: string | null): string => {

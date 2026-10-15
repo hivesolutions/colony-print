@@ -8,6 +8,7 @@ import {
     formatStatus,
     formatVersions,
     isCommandJob,
+    isJobFailed,
     isRestartPending
 } from "../../utils";
 
@@ -49,6 +50,29 @@ describe("JobTest", () => {
             isRestartPending(mockJob({ type: "auto-update", status: "queued" }))
         ).toBe(false);
         expect(isRestartPending(undefined)).toBe(false);
+    });
+
+    test("test_is_job_failed", () => {
+        // the finished jobs without a successful result failed, as
+        // they're counted by countJobs, the other ones didn't (yet)
+        expect(
+            isJobFailed(
+                mockJob({ status: "finished", result: { result: "error" } })
+            )
+        ).toBe(true);
+        expect(isJobFailed(mockJob({ status: "finished" }))).toBe(true);
+        expect(
+            isJobFailed(
+                mockJob({ status: "finished", result: { result: "success" } })
+            )
+        ).toBe(false);
+        expect(
+            isJobFailed(
+                mockJob({ status: "cancelled", result: { result: "error" } })
+            )
+        ).toBe(false);
+        expect(isJobFailed(mockJob({ status: "printing" }))).toBe(false);
+        expect(isJobFailed(null)).toBe(false);
     });
 
     test("test_format_status", () => {

@@ -10,6 +10,7 @@ export {
     STATUS_VARIANTS,
     isCommandJob,
     isRestartPending,
+    isJobFailed,
     formatStatus,
     formatVersions,
     formatLibraries,

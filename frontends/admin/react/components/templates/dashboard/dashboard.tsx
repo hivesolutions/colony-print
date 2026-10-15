@@ -26,6 +26,7 @@ import {
     formatStatus,
     formatTime,
     formatTimestamp,
+    isJobFailed,
     isNodeBehind,
     isNodeOnline
 } from "../../../utils";
@@ -120,11 +121,14 @@ export const Dashboard: FC = () => {
         {
             key: "status",
             header: "Status",
-            render: (job: JobInfo) => (
-                <Status variant={STATUS_VARIANTS.get(job.status)}>
-                    {formatStatus(job.status)}
-                </Status>
-            )
+            render: (job: JobInfo) =>
+                isJobFailed(job) ? (
+                    <Status variant="error">Failed</Status>
+                ) : (
+                    <Status variant={STATUS_VARIANTS.get(job.status)}>
+                        {formatStatus(job.status)}
+                    </Status>
+                )
         }
     ];
 

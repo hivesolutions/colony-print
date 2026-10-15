@@ -227,7 +227,7 @@ describe("DashboardTest", () => {
         );
         expect(rows).toEqual([
             ["just now", "Label", "shop-1", "Printing"],
-            ["just now", "FS 2", "shop-1", "Finished"],
+            ["just now", "FS 2", "shop-1", "Failed"],
             ["1m ago", "FS 1", "shop-1", "Finished"],
             ["1m ago", "d", "shop-1", "Queued"],
             ["2m ago", "Old", "-", "Cancelled"]
@@ -238,7 +238,7 @@ describe("DashboardTest", () => {
             )
         ).toEqual([
             "status status-warning",
-            "status status-success",
+            "status status-error",
             "status status-success",
             "status status-info",
             "status status-default"

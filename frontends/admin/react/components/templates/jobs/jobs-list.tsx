@@ -98,7 +98,8 @@ export const JobsList: FC = () => {
             .filter(
                 (j) =>
                     !value ||
-                    [j.id, j.name, j.node_id].some((field) =>
+                    j.id.toLowerCase().startsWith(value) ||
+                    [j.name, j.node_id].some((field) =>
                         (field || "").toLowerCase().includes(value)
                     )
             );
