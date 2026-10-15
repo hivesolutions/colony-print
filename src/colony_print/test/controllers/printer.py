@@ -37,6 +37,7 @@ class PrinterControllerTest(unittest.TestCase):
         # engraver being listed for the nodes with the gravo engine
         self.app.nodes["shop"] = dict(
             name="Shop",
+            printer="default",
             engines=["npcolony"],
             engine_info=dict(colony=dict(devices=[dict(name="Receipt")])),
             last_ping=100.0,
@@ -52,6 +53,7 @@ class PrinterControllerTest(unittest.TestCase):
                     engine="gravo",
                     node_id="engraver",
                     node_name="Engraver",
+                    node_printer=None,
                     last_ping=None,
                 ),
                 dict(
@@ -59,6 +61,7 @@ class PrinterControllerTest(unittest.TestCase):
                     engine="npcolony",
                     node_id="shop",
                     node_name="Shop",
+                    node_printer="default",
                     last_ping=100.0,
                 ),
             ],

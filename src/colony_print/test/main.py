@@ -262,6 +262,7 @@ class ColonyPrintAppTest(unittest.TestCase):
         office = dict(name="office", is_default=False, media="A4")
         self.app.nodes["shop"] = dict(
             name="Shop",
+            printer="office",
             engines=["npcolony", "text"],
             engine_info=dict(colony=dict(devices=[receipt, office])),
             last_ping=100.0,
@@ -275,8 +276,8 @@ class ColonyPrintAppTest(unittest.TestCase):
 
         # the printers of each node follow the order in which the node
         # reports them, the nodes being sorted by their identifier, and
-        # each one carries its node and its engine, its own information
-        # (as reported by npcolony) being kept as it is
+        # each one carries its node (with its printer) and its engine, its
+        # own information (as reported by npcolony) being kept as it is
         self.assertEqual(
             self.app.node_printers(),
             [
@@ -285,6 +286,7 @@ class ColonyPrintAppTest(unittest.TestCase):
                     engine="gravo",
                     node_id="engraver",
                     node_name="Engraver",
+                    node_printer=None,
                     last_ping=50.0,
                 ),
                 dict(
@@ -294,6 +296,7 @@ class ColonyPrintAppTest(unittest.TestCase):
                     engine="npcolony",
                     node_id="shop",
                     node_name="Shop",
+                    node_printer="office",
                     last_ping=100.0,
                 ),
                 dict(
@@ -303,6 +306,7 @@ class ColonyPrintAppTest(unittest.TestCase):
                     engine="npcolony",
                     node_id="shop",
                     node_name="Shop",
+                    node_printer="office",
                     last_ping=100.0,
                 ),
             ],

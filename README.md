@@ -328,7 +328,7 @@ npm run build
 
 The built assets are output to `src/colony_print/static/admin-ui/` and served at `/admin-ui` when the server is running.
 
-Its printers are the ones of every node, listed by `GET /printers/nodes`: the devices that each node reports from npcolony (with their media and size) and an engraver for each node with the gravo engine, each with its node and the time it was last seen. The printers of the server itself (`GET /printers`) are listed apart.
+Its printers are the ones of every node, listed by `GET /printers/nodes`: the devices that each node reports from npcolony (with their media and size) and an engraver for each node with the gravo engine, each with its node, the printer of its node and the time it was last seen. The default printer of a node is the one that prints its jobs that select none: the one it names (`NODE_PRINTER`) or the default of the system when it names none. The printers of the server itself (`GET /printers`) are listed apart.
 
 Its unit tests (under `frontends/admin/react/test/`) run with [Vitest](https://vitest.dev/), with their coverage measured by its `--coverage` option. They require Node.js 22.22 (or 24.15) and newer, as Vitest and jsdom do, and run on every push in the `Admin Workflow`.
 

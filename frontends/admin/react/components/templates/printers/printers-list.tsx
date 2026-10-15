@@ -5,7 +5,7 @@ import { useAPI } from "../../../hooks";
 import { NodePrinterInfo, PrinterInfo } from "../../../api/colony-print";
 import { Button, Icon, Link, Status, Tag } from "../../atoms";
 import { ContentHeader, DataTable, PanelHeader } from "../../molecules";
-import { formatPaper, isNodeOnline } from "../../../utils";
+import { formatPaper, isNodeDefault, isNodeOnline } from "../../../utils";
 
 import "./printers-list.css";
 
@@ -77,7 +77,7 @@ export const PrintersList: FC = () => {
                     <span className="printers-list-strong">
                         {entry.printer.name}
                     </span>
-                    {entry.printer.is_default && <Tag>default</Tag>}
+                    {isNodeDefault(entry.printer) && <Tag>default</Tag>}
                 </span>
             )
         },

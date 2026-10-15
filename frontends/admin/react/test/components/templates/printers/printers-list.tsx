@@ -183,6 +183,29 @@ describe("PrintersListTest", () => {
         ]);
     });
 
+    test("test_render_default", async () => {
+        // the printer named by the node is the one tagged as its default
+        // (the one of its jobs that select none) rather than the default
+        // of the system, that is only tagged for the nodes that name none
+        api.listNodePrinters = vi.fn().mockResolvedValue([
+            mockPrinter({ node_printer: "OFFICE", is_default: true }),
+            mockPrinter({ name: "office", node_printer: "OFFICE" }),
+            mockPrinter({
+                node_id: "warehouse",
+                node_printer: "default",
+                is_default: true
+            }),
+            mockPrinter({ name: "office", node_id: "warehouse" })
+        ]);
+        await renderList();
+        expect(rows(table("Nodes")).map((row) => row[0])).toEqual([
+            "Receipt",
+            "officedefault",
+            "Receiptdefault",
+            "office"
+        ]);
+    });
+
     test("test_render_test", async () => {
         // the test page is only printed by npcolony, and is not offered
         // for the printers of the offline nodes, as it would wait for them

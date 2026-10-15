@@ -105,9 +105,10 @@ class ColonyPrintApp(appier.APIApp):
         and an engraver for each node with the gravo engine, as gravo
         drives its own device without reporting it.
 
-        Each printer carries the identifier, the name and the time of the
-        last ping of its node, so that the printers of the nodes that are
-        offline can be told apart, the nodes being listed by identifier.
+        Each printer carries the identifier, the name, the printer (the one
+        of the jobs that select none) and the time of the last ping of its
+        node, so that the printers of the nodes that are offline can be told
+        apart, the nodes being listed by identifier.
 
         :rtype: List
         :return: The printers of the registered nodes, the ones of each
@@ -138,6 +139,7 @@ class ColonyPrintApp(appier.APIApp):
             base = dict(
                 node_id=id,
                 node_name=node.get("name", None),
+                node_printer=node.get("printer", None),
                 last_ping=node.get("last_ping", None),
             )
 

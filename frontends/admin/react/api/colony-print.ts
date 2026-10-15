@@ -113,6 +113,7 @@ export interface NodePrinterInfo {
     engine: string;
     node_id: string;
     node_name: string | null;
+    node_printer?: string | null;
     last_ping: number | null;
     is_default?: boolean;
     media?: string;
