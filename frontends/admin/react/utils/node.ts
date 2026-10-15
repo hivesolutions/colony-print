@@ -4,7 +4,8 @@ import { NodeInfo } from "../api/colony-print";
  * The time (in seconds) since the last time a node was seen
  * after which it's considered offline, longer than the time a
  * node waits for its jobs (up to 10 minutes) before it registers
- * itself again.
+ * itself again, the node being seen as well when it picks its
+ * jobs up, so that it's not offline while printing them.
  */
 export const ONLINE_THRESHOLD = 900;
 

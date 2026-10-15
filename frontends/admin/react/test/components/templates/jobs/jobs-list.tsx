@@ -18,7 +18,7 @@ import { ColonyPrintAPI, JobInfo } from "../../../../api/colony-print";
 import { APIContext } from "../../../../contexts";
 import { JobsList } from "../../../../components/templates/jobs/jobs-list";
 
-const NOW = Date.now() / 1000;
+const NOW = new Date(2026, 9, 15, 14, 33, 12).getTime() / 1000;
 
 let search = "";
 
@@ -73,6 +73,10 @@ describe("JobsListTest", () => {
         );
 
     beforeEach(() => {
+        // pins the clock to the middle of a day, so that all of the
+        // jobs are from today, shown by their time of day
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(NOW * 1000);
         search = "";
         api = {
             listJobs: vi.fn().mockResolvedValue({
@@ -131,6 +135,7 @@ describe("JobsListTest", () => {
 
     afterEach(() => {
         cleanup();
+        vi.useRealTimers();
     });
 
     test("test_render", async () => {

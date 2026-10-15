@@ -977,6 +977,31 @@ class NodeControllerTest(unittest.TestCase):
         self.assertEqual("title" in valid_options, False)
         self.assertEqual("output_path" in valid_options, False)
 
+    def test_wait_jobs(self):
+        self._node()
+        self.app.nodes["node"]["last_ping"] = 100.0
+        code, job_info = self._print()
+        self.assertEqual(code, 200)
+
+        # the jobs picked up by the node are the ones in flight (printing)
+        # and the node is seen as it picks them up, as when it registers
+        # itself, so that it's not taken as offline while printing them
+        jobs = self._deliver()
+        self.assertEqual([job["id"] for job in jobs], [job_info["id"]])
+        job_info = self.app.jobs_info[job_info["id"]]
+        self.assertEqual(job_info["status"], "printing")
+        self.assertEqual(type(job_info["printing_time"]), float)
+        self.assertEqual(type(self.app.nodes["node"]["last_ping"]), float)
+        self.assertEqual(self.app.nodes["node"]["last_ping"] > 100.0, True)
+
+        # the jobs of a node that is not registered (eg: removed while the
+        # jobs were queued) are delivered without registering the node
+        self.app.jobs["other"] = [dict(id="unknown")]
+        jobs = self._deliver(id="other")
+        self.assertEqual(jobs, [dict(id="unknown")])
+        self.assertEqual("other" in self.app.nodes, False)
+        self.assertEqual("unknown" in self.app.jobs_info, False)
+
     def test_enrich_node_includes_stats(self):
         controller = colony_print.controllers.NodeController(self.app)
         self.app.nodes["name"] = dict(name="Node", libraries=dict(appier="1.0.0"))
