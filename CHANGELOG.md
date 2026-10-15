@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Redesign of the admin UI (the console design), with a dark side bar, the IBM Plex fonts (mono for identifiers, versions and times), the mint of the logo as accent, flat cards and Ionicons icons
 * Properties, updates (with an auto-update switch), last job and capabilities of the nodes in the admin UI split into their own panels
-* Last ping of the nodes also set when they pick up their jobs, so that a node printing a batch is not shown as offline until it registers itself again
+* Last ping of the nodes also set when they pick up their jobs, so that a node printing a batch is not shown as offline, unless the batch takes longer than 15 minutes
 * Status of the result posted by a node for the job of another node (`Node ID mismatch`), a conflict (409) instead of a server error (500)
 * Logging of the existing service by the Windows installers, with its image path, the exit codes of its stop and deletion and whether it's marked for deletion, explaining why the service of another installer is not removed
 
