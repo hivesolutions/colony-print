@@ -17,7 +17,7 @@ XML documents are structured with nested elements, each representing a part of t
 #### Document Root: `printing_document`
 
 The root element for any XMPL document. It encapsulates all the content elements of the document.
-Its `width` and `height` are the size of the document and not the ones of a block, so the texts and images are only inside of a block (aligned, broken into pages and wrapped within it) when inside of a `block` element with its own `width` and `height`.
+Its `width` and `height` (in tenths of a millimeter) are the size of the document and not the ones of a block, so the texts and images are only inside of a block (aligned, broken into pages and wrapped within it) when inside of a `block` element with its own `width` and `height`.
 
 ```xml
 <printing_document>
@@ -27,7 +27,7 @@ Its `width` and `height` are the size of the document and not the ones of a bloc
 
 #### Block Element: `block`
 
-Defines a box (`x`, `y`, `width` and `height`) that holds text and image elements only, placed relative to the current position of the flow without advancing it.
+Defines a box (`x`, `y`, `width` and `height`, in twips, unlike the size of the document, in tenths of a millimeter) that holds text and image elements only, placed relative to the current position of the flow (`y` below it) without advancing it.
 
 ```xml
 <block>
