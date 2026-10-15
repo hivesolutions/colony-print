@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+*
+
+### Changed
+
+*
+
+### Fixed
+
+*
+
+## [0.27.0] - 2026-10-16
+
+### Added
+
 * Specification of the wrapping of long texts in Binie and XMPL documents - [hivesolutions/colony-npapi#7](https://github.com/hivesolutions/colony-npapi/issues/7)
 * Printers of every node in the admin UI, the ones reported by npcolony (with their media and paper) and an engraver for the nodes with the gravo engine, from the new `GET /printers/nodes`, with a test page for each printer and the printers of the server listed apart
 * Confirmation of the log out of the admin UI, from its side bar and its settings, so that it's not done by mistake
