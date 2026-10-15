@@ -1,4 +1,4 @@
-# XMPL – XML Markup Language for Printing 1.0
+# XMPL – XML Markup Language for Printing 1.1
 
 ## Motivation
 
@@ -17,6 +17,7 @@ XML documents are structured with nested elements, each representing a part of t
 #### Document Root: `printing_document`
 
 The root element for any XMPL document. It encapsulates all the content elements of the document.
+Its `width` and `height` (in tenths of a millimeter) are the size of the document and not the ones of a block, so the texts and images are only inside of a block (aligned, broken into pages and wrapped within it) when inside of a `block` element with its own `width` and `height`.
 
 ```xml
 <printing_document>
@@ -26,7 +27,7 @@ The root element for any XMPL document. It encapsulates all the content elements
 
 #### Block Element: `block`
 
-Defines a container for grouping related content elements like paragraphs, text, and images.
+Defines a box (`x`, `y`, `width` and `height`, in twips, unlike the size of the document, in tenths of a millimeter) that holds text and image elements only, placed relative to the current position of the flow (`y` below it) without advancing it.
 
 ```xml
 <block>
@@ -36,7 +37,7 @@ Defines a container for grouping related content elements like paragraphs, text,
 
 #### Paragraph Element: `paragraph`
 
-Represents a paragraph within a block, including lines, text, or images.
+Represents a paragraph of the document, grouping lines (its texts and images being placed inside of its lines).
 
 ```xml
 <paragraph>
@@ -56,7 +57,7 @@ Denotes a single line within a paragraph, typically holding text or image elemen
 
 #### Text Element: `text`
 
-Specifies a segment of text within a line or a paragraph.
+Specifies a segment of text within a line or a block.
 
 ```xml
 <text>
@@ -66,7 +67,7 @@ Specifies a segment of text within a line or a paragraph.
 
 #### Image Element: `image`
 
-Used for embedding images within the document layout.
+Used for embedding images within the document layout, inside of a line or a block.
 
 ```xml
 <image>
@@ -89,6 +90,20 @@ The attributes of the element are the fields of the entries of the fonts of a pr
 ### Attributes and Properties
 
 Elements in XMPL files may have various attributes defining their properties, such as font for text or size for images.
+
+#### Text Wrapping
+
+The `text_wrap` attribute defines if a text wider than the available width is wrapped into as many lines as needed (`wrap`) or kept in a single line (`nowrap`, the default, also used for any other value).
+As the other attributes of the text (such as `text_align` or `font_style`) it can be defined in the `text` element or in one of its parents (`line`, `paragraph`, `block` or `printing_document`), the closest one being used.
+
+```xml
+<paragraph text_align="center" text_wrap="wrap">
+    <line><text>A long note for the team that prepares the order, wrapped to the width of the paper</text></line>
+</paragraph>
+```
+
+The wrapped texts are converted into Binie text elements with the wrap flag, that are laid out by the renderer, see [Text Wrapping](binie.md#text-wrapping).
+The conversion of XMPL documents straight into PDF documents (`POST /documents.pdf`) applies the same rules from the attribute, wrapping the texts to the width of the page (instead of the printable area of a printer) and measuring them with its own font metrics, so the PDF version of a document wraps its texts as the printed one does when its page has the width of the printable area, a line breaking one word earlier or later in a few cases (as between the renderers, see [Renderers and PDF](binie.md#renderers-and-pdf)).
 
 ### Convertibility to Binie
 
@@ -113,3 +128,10 @@ Below is an example of an XMPL document designed to display "Hello World" in a c
 
 XMPL is structured to be robust and flexible, ensuring that the conversion to Binie maintains the integrity and layout of the document.
 Implementations are expected to handle XMPL structure gracefully, supporting a wide range of document configurations.
+
+## Version History
+
+| Version | Changes                                                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | Initial version                                                                                                                                                     |
+| 1.1     | `text_wrap` attribute, converted into the Binie 1.1 wrap flag, and the `width` and `height` of `printing_document` no longer making a block of its texts and images |
