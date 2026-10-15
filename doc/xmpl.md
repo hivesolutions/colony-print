@@ -94,6 +94,7 @@ Elements in XMPL files may have various attributes defining their properties, su
 
 The `text_wrap` attribute defines if a text wider than the available width is wrapped into as many lines as needed (`wrap`) or kept in a single line (`nowrap`, the default).
 As the other attributes of the text (such as `text_align` or `font_style`) it can be defined in the `text` element or in one of its parents (`line`, `paragraph`, `block` or `printing_document`), the closest one being used.
+The `width` and `height` of the `printing_document` are the size of the document and not the ones of a block, so its texts are only wrapped to the width of a block when inside of a `block` element.
 
 ```xml
 <paragraph text_align="center" text_wrap="wrap">
