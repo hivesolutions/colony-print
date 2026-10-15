@@ -349,6 +349,24 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.app.nodes["none"] = dict(name="None", engine_info=dict(colony=None))
         self.assertEqual(self.app.node_printers(), [])
 
+    def test_node_printers_invalid(self):
+        # the devices that are not objects are skipped, keeping the valid
+        # ones of the same node and the printers of the other nodes
+        self.app.nodes["invalid"] = dict(
+            name="Invalid",
+            engine_info=dict(
+                colony=dict(devices=[None, "Receipt", ["office"], dict(name="A4")])
+            ),
+        )
+        self.app.nodes["shop"] = dict(
+            name="Shop", engine_info=dict(colony=dict(devices=[dict(name="Receipt")]))
+        )
+        printers = self.app.node_printers()
+        self.assertEqual(
+            [(printer["node_id"], printer["name"]) for printer in printers],
+            [("invalid", "A4"), ("shop", "Receipt")],
+        )
+
     def test_queue_job(self):
         # the job is kept (its information, its data and its fonts) and sent
         # to its node with the data and with the fonts of the request in the

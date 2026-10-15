@@ -133,6 +133,32 @@ describe("ConfirmDialogTest", () => {
         }
     });
 
+    test("test_focus_keys", () => {
+        // the keys don't reach the page behind the dialog, whose shortcuts
+        // (e.g., the "/" of the quick search, listened in the document as
+        // the one of this test) would take the focus out of the dialog
+        const outside = document.createElement("input");
+        const onKeyDown = vi.fn(() => outside.focus());
+        document.body.appendChild(outside);
+        document.addEventListener("keydown", onKeyDown);
+        try {
+            const { unmount } = renderDialog();
+            const cancel = screen.getByRole("button", { name: "Cancel" });
+            fireEvent.keyDown(cancel, { key: "/" });
+            expect(onKeyDown).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(cancel);
+
+            // and the page gets them back once the dialog is gone
+            unmount();
+            fireEvent.keyDown(document.body, { key: "/" });
+            expect(onKeyDown).toHaveBeenCalledTimes(1);
+            expect(document.activeElement).toBe(outside);
+        } finally {
+            document.removeEventListener("keydown", onKeyDown);
+            outside.remove();
+        }
+    });
+
     test("test_confirm", () => {
         const onConfirm = vi.fn();
         const onCancel = vi.fn();

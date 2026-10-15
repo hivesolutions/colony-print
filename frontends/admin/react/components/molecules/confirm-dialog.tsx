@@ -25,16 +25,26 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
     const id = useId();
     const dialog = useRef<HTMLDivElement>(null);
     const cancel = useRef(onCancel);
-    cancel.current = onCancel;
+
+    // keeps the cancel handler of the last render, used by the escape
+    // key, as the components that render the dialog create a new one
+    // each time
+    useEffect(() => {
+        cancel.current = onCancel;
+    }, [onCancel]);
 
     // focuses the cancel action (the safe one) once shown, cancels the
     // dialog with the escape key, keeps the focus in its actions (as the
     // page behind it can't be used), and gives the focus back to the
-    // element that had it (e.g., the button that opened it) once gone
+    // element that had it (e.g., the button that opened it) once gone,
+    // the keys being handled before the page and kept from it, as its
+    // shortcuts (e.g., the "/" of the quick search) would take the focus
+    // out of the dialog
     useEffect(() => {
         const previous = document.activeElement as HTMLElement | null;
         dialog.current?.querySelector("button")?.focus();
         const onKeyDown = (event: KeyboardEvent) => {
+            event.stopPropagation();
             if (event.key === "Escape") cancel.current();
             if (event.key !== "Tab" || !dialog.current) return;
             const buttons = Array.from(
@@ -47,9 +57,9 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
             event.preventDefault();
             buttons[(index + step + buttons.length) % buttons.length].focus();
         };
-        document.addEventListener("keydown", onKeyDown);
+        document.addEventListener("keydown", onKeyDown, true);
         return () => {
-            document.removeEventListener("keydown", onKeyDown);
+            document.removeEventListener("keydown", onKeyDown, true);
             previous?.focus();
         };
     }, []);
