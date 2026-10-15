@@ -93,7 +93,7 @@ Elements in XMPL files may have various attributes defining their properties, su
 #### Text Wrapping
 
 The `text_wrap` attribute defines if a text wider than the available width is wrapped into as many lines as needed (`wrap`) or kept in a single line (`nowrap`, the default).
-As the other attributes of the text (such as `text_align` or `font_style`) it can be defined in the `text` element or in one of its parents (`line`, `paragraph` or `block`), the closest one being used.
+As the other attributes of the text (such as `text_align` or `font_style`) it can be defined in the `text` element or in one of its parents (`line`, `paragraph`, `block` or `printing_document`), the closest one being used.
 
 ```xml
 <paragraph text_align="center" text_wrap="wrap">
@@ -102,7 +102,7 @@ As the other attributes of the text (such as `text_align` or `font_style`) it ca
 ```
 
 The wrapped texts are converted into Binie text elements with the wrap flag, that are laid out by the renderer, see [Text Wrapping](binie.md#text-wrapping).
-The conversion of XMPL documents straight into PDF documents (`POST /documents.pdf`) applies the same rules from the attribute, so the PDF version of a document wraps its texts as the printed one does (see [Renderers and PDF](binie.md#renderers-and-pdf)).
+The conversion of XMPL documents straight into PDF documents (`POST /documents.pdf`) applies the same rules from the attribute, wrapping the texts to the width of the page (instead of the printable area of a printer) and measuring them with its own font metrics, so the PDF version of a document wraps its texts as the printed one does when its page has the width of the printable area, a line breaking one word earlier or later in a few cases (as between the renderers, see [Renderers and PDF](binie.md#renderers-and-pdf)).
 
 ### Convertibility to Binie
 

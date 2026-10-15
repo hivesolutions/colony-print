@@ -60,12 +60,13 @@ The element type for text elements is identified by the value `1`.
 #### Text Data
 
 Follows immediately after the text element header and contains the context specific payload of the text - typically the text itself.
-The encoding of the text is not specified and should be handled by the application.
+The text is encoded in UTF-8 and ends with a null byte, that is counted by the text data length.
 
 #### Text Extension
 
 The text data may be followed by an extension with additional properties of the text.
-The extension is present when the element data length is larger than the size of the text element header (without the common header) plus the text data length, and producers only add it when one of its properties is set.
+The extension is present when the element data length leaves room for its fields (8 bytes) after the text element header (without the common header) and the text data, and producers only add it when one of its properties is set.
+A shorter remainder is not an extension and is ignored, as are the bytes after the fields of the extension, that future versions may use (keeping the last byte of the element zero).
 
 | Offset (from extension start) | Length (bytes) | Content    |
 | ----------------------------- | -------------- | ---------- |
@@ -119,17 +120,17 @@ Text alignment within the elements is specified using alignment values:
 A text without the wrap flag is drawn in a single line, even when it goes beyond the available width (and is cut by the edges of the paper).
 A text with the wrap flag is laid out in as many lines as needed, following the same rules in every renderer, so that a document prints the same way on every system:
 
-* The available width is the width of the printable area, or of the block when the text is inside one, minus the left and right margins of the text.
-* Lines are broken at spaces, each line taking as many words as fit in the available width, measured with the font of the text, and the space where a line is broken is not drawn. A word wider than the available width is broken between characters, so that no text is lost. A line feed (`\n`) always starts a new line.
-* Each line is aligned according to the text alignment of the element, the first one at the position of the element and each next one a text height below the previous one, the font size times 20 twips (the height producers give to the lines of text). Every line goes through the page break rules of the renderer, as any other text.
-* The lines added by the wrapping move down every element of the following lines of the document by their height. The elements of the same line (the ones with the same vertical position) keep their position, and the line grows by the height of its tallest wrapped text.
-* A text inside a block (with a non zero block width and height) is wrapped to the width of the block and clipped by it, it never moves other elements nor is moved by them.
+* The available width is the width of the printable area, or of the block when the text is inside one, minus the left and right margins of the text (in points, 20 twips each). When it's not positive, the text is drawn in a single line, as if it had no wrap flag.
+* Lines are broken at spaces, each line taking as many words as fit in the available width, measured with the font of the text, and the space where a line is broken is not drawn. A word wider than the available width is broken between characters (the Unicode code points of the text, never splitting the bytes of a character nor a UTF-16 surrogate pair), each line taking at least one character, so that no text is lost. A line feed (`\n`) always starts a new line.
+* Each line is aligned according to the text alignment of the element inside of the available width (a left aligned line starts at the left margin, a right aligned one ends at the right margin and a centered one is centered between them), the first one at the position of the element and each next one a text height below the previous one, the font size times 20 twips (the height producers give to the lines of text). The left and right aligned lines are then placed as the texts without the wrap flag (that are moved by the difference of their margins), unlike the centered ones with different margins. Every line goes through the page break rules of the renderer, as any other text.
+* The elements of the same line (the ones with the same vertical position, outside of blocks) keep their position, and the elements of the following lines of the document are moved down by `max(0, H - h)`, where `H` is the largest height of the wrapped texts of the line (the number of lines times the font size times 20 twips) and `h` is the height of the line before the wrapping, the one of its tallest element (the font size times 20 twips for the texts and the height of the bitmap in pixels times 10 twips for the images), so that a wrapped text that fits in a single line (or beside a taller element) moves nothing, the moves of the lines adding up.
+* An element inside a block (with a non zero block width and height) never moves other elements nor is moved by them. A wrapped text inside a block is wrapped to the width of the block, its lines beyond the height of the block being drawn as they are (not clipped, as the texts that go beyond a block).
 
 The wrapping happens in the renderer as it's the only one that knows both the available width (the paper of the printer, for the documents without a size) and the metrics of the fonts, the producers only set the flag.
 
 #### Renderers and PDF
 
-The Binie documents are rendered by the GDI renderer of npcolony (the Windows nodes and the browser plugin) and by the PDF renderer of Colony Print, that replays them into PDF documents with the GDI layout. The PDF renderer is used by the Linux nodes (that print the PDF documents through CUPS), by the nodes in the email mode (that send them by email) and by the nodes that save their output, such as the ones that generate the PDF version of a document for a client. Both renderers follow the rules above, with these consequences for the PDF documents:
+The Binie documents are rendered by the GDI renderer of npcolony (the Windows nodes and the browser plugin) and by the PDF renderer of Colony Print, that replays them into PDF documents with the GDI layout. The PDF renderer is used by the Linux nodes, which convert every Binie document into PDF, whether they print it through CUPS, send it by email or save it as the output of the job (such as the PDF version of a document for a client). The Windows nodes in email mode print through GDI to a PDF printer. Both renderers follow the rules above, with these consequences for the PDF documents:
 
 * The lines are measured with the font embedded in the PDF document, the same font file the GDI renderer uses when it's installed. The GDI renderer rounds and hints the metrics of the fonts, so in a few cases a line may break one word earlier or later in one of the renderers.
 * A wrapped text makes the document taller, so the documents get more pages when their content goes beyond the page, as with any other content.

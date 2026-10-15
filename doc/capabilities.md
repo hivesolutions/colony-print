@@ -56,7 +56,8 @@ The node information of a Linux node with the npcolony engine, as sent to the se
     "xmpl",
     "pdf",
     "custom-paper",
-    "dynamic-fonts"
+    "dynamic-fonts",
+    "text-wrap"
   ],
   "fonts": [
     {
