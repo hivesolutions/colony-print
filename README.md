@@ -1,4 +1,4 @@
-# [![Colony Print Infra-structure](res/logo.svg)](http://colony-print.hive.pt)
+# [![Colony Print Infra-structure](https://raw.githubusercontent.com/hivesolutions/colony-print/master/res/logo.svg)](http://colony-print.hive.pt)
 
 Small web app for printing Colony-based documents.
 

@@ -287,6 +287,27 @@ describe("NodesListTest", () => {
         expect(search).toBe("");
     });
 
+    test("test_filter_empty", async () => {
+        // a filter without nodes says so, instead of saying that there
+        // are no nodes registered at all
+        api.listNodes = vi.fn().mockResolvedValue({
+            "shop-1": mockNode({ name: "Shop 1" })
+        });
+        const { container } = await renderList();
+        fireEvent.click(screen.getByRole("button", { name: "Offline0" }));
+        expect(rows(container).map(cells)).toEqual([["No offline nodes"]]);
+        cleanup();
+
+        api.listNodes = vi.fn().mockResolvedValue({
+            engraver: mockNode({ name: "Engraver", last_ping: NOW - 3 * 3600 })
+        });
+        const other = await renderList("/nodes?state=online");
+        expect(rows(other.container).map(cells)).toEqual([["No online nodes"]]);
+        expect(
+            other.container.querySelector(".nodes-list-footer")?.textContent
+        ).toBe("0 of 1 nodes");
+    });
+
     test("test_filter_time", async () => {
         // a node that goes offline while the page is shown keeps the
         // state it was retrieved with, so that its counts, its filter
@@ -300,9 +321,7 @@ describe("NodesListTest", () => {
             const { container } = await renderList();
             vi.setSystemTime((NOW + 20) * 1000);
             fireEvent.click(screen.getByRole("button", { name: "Offline0" }));
-            expect(rows(container).map(cells)).toEqual([
-                ["No nodes registered"]
-            ]);
+            expect(rows(container).map(cells)).toEqual([["No offline nodes"]]);
 
             fireEvent.click(screen.getByRole("button", { name: "Online1" }));
             expect(rows(container).map((row) => cells(row)[0])).toEqual([

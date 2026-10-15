@@ -250,7 +250,11 @@ export const NodesList: FC = () => {
                 columns={columns}
                 data={filteredEntries}
                 loading={loading}
-                emptyMessage="No nodes registered"
+                emptyMessage={
+                    entries.length
+                        ? `No ${filter} nodes`
+                        : "No nodes registered"
+                }
                 footer={
                     <>
                         <span className="nodes-list-footer">
