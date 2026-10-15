@@ -257,6 +257,98 @@ class ColonyPrintAppTest(unittest.TestCase):
         self.assertEqual(stats["total"], 2)
         self.assertEqual(stats["in_flight"], 1)
 
+    def test_node_printers(self):
+        receipt = dict(name="Receipt", is_default=True, media="RP80x297")
+        office = dict(name="office", is_default=False, media="A4")
+        self.app.nodes["shop"] = dict(
+            name="Shop",
+            engines=["npcolony", "text"],
+            engine_info=dict(colony=dict(devices=[receipt, office])),
+            last_ping=100.0,
+        )
+        self.app.nodes["engraver"] = dict(
+            name="Engraver",
+            engines=["gravo", "text"],
+            engine_info=dict(gravo=dict(version="0.9.2")),
+            last_ping=50.0,
+        )
+
+        # the printers of each node follow the order in which the node
+        # reports them, the nodes being sorted by their identifier, and
+        # each one carries its node and its engine, its own information
+        # (as reported by npcolony) being kept as it is
+        self.assertEqual(
+            self.app.node_printers(),
+            [
+                dict(
+                    name="Gravo engraver",
+                    engine="gravo",
+                    node_id="engraver",
+                    node_name="Engraver",
+                    last_ping=50.0,
+                ),
+                dict(
+                    name="Receipt",
+                    is_default=True,
+                    media="RP80x297",
+                    engine="npcolony",
+                    node_id="shop",
+                    node_name="Shop",
+                    last_ping=100.0,
+                ),
+                dict(
+                    name="office",
+                    is_default=False,
+                    media="A4",
+                    engine="npcolony",
+                    node_id="shop",
+                    node_name="Shop",
+                    last_ping=100.0,
+                ),
+            ],
+        )
+
+        # the devices reported by the node are not changed by the listing
+        self.assertEqual(
+            receipt, dict(name="Receipt", is_default=True, media="RP80x297")
+        )
+
+    def test_node_printers_both(self):
+        # a node with both engines has its devices and its engraver, the
+        # engraver being listed after the devices
+        self.app.nodes["node"] = dict(
+            name="Node",
+            engines=["npcolony", "gravo", "text"],
+            engine_info=dict(colony=dict(devices=[dict(name="Receipt")])),
+        )
+        printers = self.app.node_printers()
+        self.assertEqual(
+            [(printer["name"], printer["engine"]) for printer in printers],
+            [("Receipt", "npcolony"), ("Gravo engraver", "gravo")],
+        )
+        self.assertEqual(printers[0]["last_ping"], None)
+
+    def test_node_printers_empty(self):
+        self.assertEqual(self.app.node_printers(), [])
+
+        # the nodes that report no printer (eg: an older node, without the
+        # information of its engines, or one with the text engine only) and
+        # the ones whose information is invalid have none listed
+        self.app.nodes["old"] = dict(name="Old")
+        self.app.nodes["text"] = dict(
+            name="Text", engines=["text"], engine_info=dict(text=dict())
+        )
+        self.app.nodes["empty"] = dict(
+            name="Empty", engines=["npcolony"], engine_info=dict(colony=dict())
+        )
+        self.app.nodes["invalid"] = dict(
+            name="Invalid",
+            engines=None,
+            engine_info=dict(colony=dict(devices=None)),
+        )
+        self.app.nodes["none"] = dict(name="None", engine_info=dict(colony=None))
+        self.assertEqual(self.app.node_printers(), [])
+
     def test_queue_job(self):
         # the job is kept (its information, its data and its fonts) and sent
         # to its node with the data and with the fonts of the request in the

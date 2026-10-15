@@ -5,7 +5,8 @@ import {
     cleanup,
     fireEvent,
     render,
-    screen
+    screen,
+    within
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -203,11 +204,35 @@ describe("SettingsTest", () => {
         expect(button.className).toBe(
             "button button-secondary button-sm settings-logout"
         );
+
+        // the log out is confirmed first, so that it's not done by mistake
+        fireEvent.click(button);
+        const dialog = screen.getByRole("dialog", {
+            name: "Log out of Colony Print?"
+        });
+        expect(api.logout).not.toHaveBeenCalled();
+        expect(localStorage.getItem("sessionId")).toBe("preview-session");
         await act(async () => {
-            fireEvent.click(button);
+            fireEvent.click(
+                within(dialog).getByRole("button", { name: "Log out" })
+            );
         });
         expect(api.logout).toHaveBeenCalledTimes(1);
         expect(localStorage.getItem("sessionId")).toBe(null);
         expect(location).toBe("/login");
+    });
+
+    test("test_logout_cancel", async () => {
+        localStorage.setItem("sessionId", "preview-session");
+        await renderSettings(null);
+        fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+        expect(screen.getByRole("dialog").textContent).toContain(
+            "You're signed in as -."
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+        expect(screen.queryByRole("dialog")).toBe(null);
+        expect(api.logout).not.toHaveBeenCalled();
+        expect(localStorage.getItem("sessionId")).toBe("preview-session");
+        expect(location).toBe("/settings");
     });
 });

@@ -1,21 +1,58 @@
 .printers-list {
     display: flex;
     flex-direction: column;
+    gap: 16px;
 }
 
-.printers-list-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
+.printers-list > .content-header {
+    margin-bottom: 0;
 }
 
-.printers-list-item {
-    padding: 16px 20px;
-}
-
-.printers-list-empty {
-    padding: 48px;
-    display: flex;
+.printers-list-name {
+    display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
+}
+
+.printers-list-strong {
+    font-weight: 500;
+}
+
+.printers-list-node,
+.printers-list-node:hover {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 400;
+    color: var(--color-gray-900);
+}
+
+.printers-list-node:hover > span:not(.printers-list-mono) {
+    text-decoration: underline;
+}
+
+.printers-list-mono {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    color: var(--color-gray-600);
+    white-space: nowrap;
+}
+
+.printers-list-none {
+    font-size: 12px;
+    color: var(--color-gray-400);
+    white-space: nowrap;
+}
+
+.printers-list-test {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.printers-list-button {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
 }

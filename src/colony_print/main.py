@@ -98,6 +98,49 @@ class ColonyPrintApp(appier.APIApp):
             )
         return stats
 
+    def node_printers(self):
+        """
+        Lists the printers of the registered nodes, the devices reported
+        by the npcolony engine of each node (as part of its information)
+        and an engraver for each node with the gravo engine, as gravo
+        drives its own device without reporting it.
+
+        Each printer carries the identifier, the name and the time of the
+        last ping of its node, so that the printers of the nodes that are
+        offline can be told apart, the nodes being listed by identifier.
+
+        :rtype: List
+        :return: The printers of the registered nodes, the ones of each
+        node in the order in which the node reports them.
+        """
+
+        printers = []
+        for id in sorted(self.nodes.keys()):
+            node = self.nodes[id]
+            engine_info = node.get("engine_info", None) or dict()
+            colony_info = engine_info.get("colony", None) or dict()
+            base = dict(
+                node_id=id,
+                node_name=node.get("name", None),
+                last_ping=node.get("last_ping", None),
+            )
+
+            # the devices reported by npcolony are the printers of the node,
+            # keeping their complete information (eg: their media and size)
+            for device in colony_info.get("devices", None) or []:
+                printer = dict(device, engine="npcolony")
+                printer.update(base)
+                printers.append(printer)
+
+            # gravo drives its own device (an engraver) without reporting it,
+            # so the engraver is listed without any information of its own
+            if "gravo" in (node.get("engines", None) or []):
+                printer = dict(name="Gravo engraver", engine="gravo")
+                printer.update(base)
+                printers.append(printer)
+
+        return printers
+
     def queue_job(self, job_info, data_b64=None, fonts=None):
         """
         Queues the job with the provided information for its node, keeping

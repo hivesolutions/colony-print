@@ -13,6 +13,10 @@ const mockNode = (values: Partial<NodeInfo>): NodeInfo =>
 
 describe("NodeTest", () => {
     test("test_is_node_online", () => {
+        // the printers of the nodes carry the time of their node, which
+        // is null for a node that has never been seen
+        expect(isNodeOnline({ last_ping: 1000 }, 1600)).toBe(true);
+        expect(isNodeOnline({ last_ping: null }, 1600)).toBe(false);
         const node = mockNode({ last_ping: 1000 });
         expect(isNodeOnline(node, 1000)).toBe(true);
         expect(isNodeOnline(node, 1600)).toBe(true);

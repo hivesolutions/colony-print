@@ -12,6 +12,11 @@ class PrinterController(appier.Controller):
             return []
         return self.npcolony.get_devices()
 
+    @appier.route("/printers/nodes", "GET", json=True)
+    @appier.ensure(token="admin")
+    def nodes(self):
+        return self.owner.node_printers()
+
     @appier.route("/printers/hello", "GET", json=True)
     @appier.ensure(token="admin")
     def hello(self):

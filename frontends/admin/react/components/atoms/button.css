@@ -55,12 +55,12 @@
 }
 
 .button-danger {
-    background-color: var(--color-error-500);
-    border-color: var(--color-error-500);
+    background-color: var(--color-error-700);
+    border-color: var(--color-error-700);
     color: var(--color-white);
 }
 
 .button-danger:hover:not(:disabled) {
-    background-color: var(--color-error-700);
-    border-color: var(--color-error-700);
+    background-color: var(--color-error-800);
+    border-color: var(--color-error-800);
 }
