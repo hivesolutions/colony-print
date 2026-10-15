@@ -27,7 +27,7 @@ Its `width` and `height` are the size of the document and not the ones of a bloc
 
 #### Block Element: `block`
 
-Defines a container for grouping related content elements like paragraphs, text, and images.
+Defines a box (`x`, `y`, `width` and `height`) that holds text and image elements only, placed relative to the current position of the flow without advancing it.
 
 ```xml
 <block>
@@ -37,7 +37,7 @@ Defines a container for grouping related content elements like paragraphs, text,
 
 #### Paragraph Element: `paragraph`
 
-Represents a paragraph within a block, including lines, text, or images.
+Represents a paragraph of the document, grouping lines, texts and images.
 
 ```xml
 <paragraph>
@@ -93,7 +93,7 @@ Elements in XMPL files may have various attributes defining their properties, su
 
 #### Text Wrapping
 
-The `text_wrap` attribute defines if a text wider than the available width is wrapped into as many lines as needed (`wrap`) or kept in a single line (`nowrap`, the default).
+The `text_wrap` attribute defines if a text wider than the available width is wrapped into as many lines as needed (`wrap`) or kept in a single line (`nowrap`, the default, also used for any other value).
 As the other attributes of the text (such as `text_align` or `font_style`) it can be defined in the `text` element or in one of its parents (`line`, `paragraph`, `block` or `printing_document`), the closest one being used.
 
 ```xml
