@@ -68,9 +68,15 @@ describe("NavigationTest", () => {
     });
 
     test("test_find_search_target_ambiguous", () => {
+        // the start of several jobs leads to the jobs list filtered by
+        // it, so that the job can be picked from there, as it exists
         const jobIds = ["4f1c9a2e7d", "4f1c0000aa"];
-        expect(findSearchTarget("4f1c", [], jobIds)).toBe(null);
+        expect(findSearchTarget("4f1c", [], jobIds)).toBe("/jobs?query=4f1c");
+        expect(findSearchTarget(" 4F1C ", [], jobIds)).toBe("/jobs?query=4F1C");
         expect(findSearchTarget("4f1c9", [], jobIds)).toBe("/jobs/4f1c9a2e7d");
+        expect(findSearchTarget("4f&c", [], ["4f&c1", "4f&c2"])).toBe(
+            "/jobs?query=4f%26c"
+        );
     });
 
     test("test_find_search_target_exact", () => {

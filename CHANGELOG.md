@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Verification of the packages updated by the nodes, by importing their modules, failing the update (naming the modules that are not loaded) when they're not loaded by the system (eg: native modules not supported by Windows XP) instead of the node silently dropping their engine
 * End to end tests of the printing in CI, comparing the PDF documents with the output of the GDI renderer of npcolony under Wine
 * Logo of Colony Print (the sliced C mark, its logotype and their lockup) in `res/`, shown in the README and in the side bar, login and favicon of the admin UI
-* Quick search of the admin UI, in its top bar, that goes to a node or job by its ID (or the start of the ID of a job), focused with the `/` key
+* Quick search of the admin UI, in its top bar, that goes to a node or job by its ID (or the start of the ID of a job, listing the jobs that start with it when several do), focused with the `/` key
 * Online and offline state of the nodes in the admin UI (seen in the last 15 minutes), with their filter, the number of jobs of each node and the versions behind the one of the server highlighted
 * Status of the jobs, their counts and a text filter (by name, node or ID) in the jobs of the admin UI, the filters being kept in the address of the page
 * Jobs by status, jobs in flight, the online nodes and the version and uptime of the server in the dashboard of the admin UI

@@ -51,7 +51,8 @@ export const getBreadcrumbs = (pathname: string): Breadcrumb[] => {
  * Finds the page of the node or of the job with the provided
  * identifier (case insensitive), the jobs also being found by
  * the start of their identifier (as the lists shorten it) when
- * only one job starts with it, null when nothing is found.
+ * only one job starts with it, or the jobs list filtered by it
+ * when several do, null when nothing is found.
  */
 export const findSearchTarget = (
     query: string,
@@ -67,5 +68,8 @@ export const findSearchTarget = (
         matches.find((id) => id.toLowerCase() === value) ??
         (matches.length === 1 ? matches[0] : undefined);
     if (jobId !== undefined) return `/jobs/${encodeURIComponent(jobId)}`;
+    if (matches.length > 1) {
+        return `/jobs?query=${encodeURIComponent(query.trim())}`;
+    }
     return null;
 };

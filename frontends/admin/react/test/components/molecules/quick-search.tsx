@@ -16,7 +16,8 @@ import { QuickSearch } from "../../../components/molecules";
 let location = "";
 
 const MockLocation: FC = () => {
-    location = useLocation().pathname;
+    const { pathname, search } = useLocation();
+    location = pathname + search;
     return null;
 };
 
@@ -155,6 +156,20 @@ describe("QuickSearchTest", () => {
         renderSearch();
         await search("b7e3");
         expect(location).toBe("/jobs/b7e30d51aa");
+    });
+
+    test("test_search_jobs", async () => {
+        // the start of several jobs leads to the jobs filtered by it,
+        // instead of reporting jobs that exist as missing
+        api.listJobs = vi.fn().mockResolvedValue({
+            "4f1c9a2e7d": { id: "4f1c9a2e7d" },
+            "4f1c0000aa": { id: "4f1c0000aa" }
+        });
+        renderSearch();
+        const input = await search("4f1c");
+        expect(location).toBe("/jobs?query=4f1c");
+        expect(screen.queryByRole("alert")).toBe(null);
+        expect(input.value).toBe("");
     });
 
     test("test_search_missing", async () => {
