@@ -338,6 +338,19 @@ PYTHONPATH=$BASE_PATH/colony_print/src python \
 $BASE_PATH/colony_print/src/colony_print/main.py
 ```
 
+### End to End Tests
+
+The end to end tests (`src/colony_print/test/printing/e2e.py`) print the XMPL documents of `src/colony_print/test/printing/resources` with every renderer and compare their layout: the conversion of XMPL into PDF, the conversion into Binie rendered as PDF (as the Linux nodes do) and the same Binie document printed through the GDI renderer of npcolony (as the Windows nodes do), under Wine. The outputs are rasterized and the texts of each of their lines must have the same positions, extents and ink (telling the bold texts from the regular ones), within the small differences of the metrics of GDI, and the texts that go beyond the printable area must be the same in both renderers of Binie.
+
+They require Wine with a Windows Python that has npcolony (`E2E_PYTHON`, the path of its `python.exe`, run by the `wine` of the `PATH` or by the one of `E2E_WINE`), a printer that uses the `receipt.ppd` description of the resources (`E2E_PRINTER`, a 72 mm printable area in a sheet wide enough for the texts beyond it to be visible), Ghostscript and Poppler, and they only run when `E2E` is set, keeping the outputs in `E2E_OUTPUT` when defined:
+
+```bash
+E2E=1 E2E_PYTHON=$HOME/wine-python/python.exe E2E_PRINTER=colony-print-e2e \
+E2E_OUTPUT=e2e-output pytest src/colony_print/test/printing/e2e.py
+```
+
+The `E2E Workflow` runs them on every push, with both the stable and the development versions of Wine (from the WineHQ packages), installing the embedded Windows Python (with npcolony from PyPI) and the printer, and keeps the outputs (PDF documents, rasterized pages, Binie documents, and the PostScript of the printer driver and the log of Wine of the GDI prints), including the ones produced before a print that fails, in the `colony-print-e2e-stable` and `colony-print-e2e-devel` artifacts.
+
 ## License
 
 Colony Print Infra-structure is currently licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/).

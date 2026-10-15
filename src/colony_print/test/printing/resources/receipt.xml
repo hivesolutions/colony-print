@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<printing_document name="money_sale_slip" font="Calibri" font_size="9">
+    <paragraph text_align="center">
+        <line><text>Loja Exemplo Porto</text></line>
+        <line margin_top="10"></line>
+        <line><text>Loja Exemplo, Lda.</text></line>
+        <line><text>Rua de Exemplo, 100</text></line>
+        <line><text>4000-542 Porto</text></line>
+        <line><text>Telefone: 220000000</text></line>
+        <line><text>E-Mail: loja@exemplo.pt</text></line>
+        <line><text>Nr. Contr.: 500000000</text></line>
+    </paragraph>
+    <line margin_top="10"></line>
+    <paragraph>
+        <line font_style="bold"><text text_align="left">Fatura Simplificada</text><text text_align="right" font_style="bold">FS 2026/1234</text></line>
+        <line><text text_align="left">FS LDJ/1234</text><text text_align="right">2026/10/14 17:46:40</text></line>
+        <line margin_top="10"></line>
+        <line><text text_align="left" font_style="bold">Nome</text><text text_align="left" margin_left="50">Maria Silva</text></line>
+        <line><text text_align="left" font_style="bold">N.Contr.</text><text text_align="left" margin_left="50">123456789</text></line>
+    </paragraph>
+    <line margin_top="10"></line>
+    <paragraph>
+        <line><text text_align="left" font_style="bold">AN0412</text><text text_align="right" margin_right="100">23.00%</text><text text_align="right" margin_right="80">1x</text><text text_align="right" margin_right="40">49.90€</text><text text_align="right">49.90€</text></line>
+        <line font_style="bold"><text text_align="left">Anel Solitário</text></line>
+        <line margin_top="5"></line>
+        <line><text text_align="left" font_style="bold">BR0087</text><text text_align="right" margin_right="100">23.00%</text><text text_align="right" margin_right="80">1x</text><text text_align="right" margin_right="40">34.50€</text><text text_align="right">34.50€</text></line>
+        <line font_style="bold"><text text_align="left">Brincos Filigrana</text></line>
+    </paragraph>
+    <line margin_top="10"></line>
+    <paragraph font_size="11">
+        <line><text text_align="left">IVA (23.00%)</text><text text_align="right">15.78€</text></line>
+        <line><text text_align="left" font_style="bold">Total</text><text text_align="right">84.40€</text></line>
+    </paragraph>
+    <line margin_top="15"></line>
+    <paragraph text_align="center">
+        <line><text font_style="bold">Obrigado pela sua preferência.</text></line>
+    </paragraph>
+    <line margin_top="6"></line>
+    <paragraph text_align="center" text_wrap="nowrap">
+        <line><text font_style="bold">Budy order - BD-012345</text></line>
+        <line><text font_style="bold">Gift slip</text></line>
+        <line><text font_style="bold">Notes - Por favor embrulhem o anel e os brincos em separado, são para duas pessoas diferentes.</text></line>
+        <line><text font_style="bold">O anel é para a minha mãe e os brincos para a minha irmã, obrigada!</text></line>
+    </paragraph>
+    <line margin_top="15"></line>
+    <paragraph text_align="center">
+        <line margin_bottom="10"><text font_style="bold">ATCUD: JFAB1234-1234</text></line>
+        <line><text font_style="bold">Frontdoor by Hive Solutions</text></line>
+    </paragraph>
+</printing_document>

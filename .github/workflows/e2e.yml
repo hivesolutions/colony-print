@@ -1,0 +1,84 @@
+name: E2E Workflow
+on:
+  push:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        wine: [stable, devel]
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.12"
+      WINE_PYTHON_VERSION: "3.12.10"
+      WINE_PYTHON_SHA256: "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
+      WINEPREFIX: ${{ github.workspace }}/.wine
+      WINEDEBUG: "-all"
+      WINEDLLOVERRIDES: "mscoree,mshtml="
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cups-daemon cups-client ghostscript poppler-utils
+      - name: Install Wine
+        run: |
+          # the Wine of the Ubuntu runners (9.0) fails to initialize the
+          # standard streams of the Windows Python, so the WineHQ packages
+          # are used instead, both the stable and the development versions
+          sudo dpkg --add-architecture i386
+          sudo mkdir -pm755 /etc/apt/keyrings
+          curl -fsSL --retry 5 https://dl.winehq.org/wine-builds/winehq.key | sudo gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key
+          Codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          sudo curl -fsSL --retry 5 -o /etc/apt/sources.list.d/winehq-$Codename.sources https://dl.winehq.org/wine-builds/ubuntu/dists/$Codename/winehq-$Codename.sources
+          sudo apt-get update
+          sudo apt-get install -y --install-recommends winehq-${{ matrix.wine }}
+          wine --version
+      - name: Add the end to end printer
+        run: |
+          echo "FileDevice Yes" | sudo tee -a /etc/cups/cups-files.conf
+          sudo systemctl restart cups
+          for _ in $(seq 1 30); do lpstat -r | grep -q "scheduler is running" && break; sleep 1; done
+          sudo lpadmin -p colony-print-e2e -E -v file:///dev/null -P src/colony_print/test/printing/resources/receipt.ppd
+          lpstat -p colony-print-e2e
+      - name: Install the Windows Python with npcolony
+        run: |
+          Url="https://www.python.org/ftp/python/$WINE_PYTHON_VERSION/python-$WINE_PYTHON_VERSION-embed-amd64.zip"
+          curl -fsSL --retry 5 --retry-delay 15 -o python.zip "$Url"
+          echo "$WINE_PYTHON_SHA256  python.zip" | sha256sum -c -
+          unzip -q python.zip -d wine-python
+          pip download npcolony --platform win_amd64 --python-version 3.12 --only-binary=:all: --no-deps -d wheels
+          unzip -q -o wheels/npcolony-*.whl -d wine-python
+          ls wheels
+      - name: Create the Wine prefix
+        run: |
+          wine wineboot --init
+          wineserver -w
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r extra.txt
+          pip install pytest
+      - name: Run end to end tests
+        env:
+          E2E: "1"
+          E2E_PYTHON: ${{ github.workspace }}/wine-python/python.exe
+          E2E_PRINTER: colony-print-e2e
+          E2E_OUTPUT: ${{ github.workspace }}/e2e-output
+        run: pytest -v src/colony_print/test/printing/e2e.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: colony-print-e2e-${{ matrix.wine }}
+          path: e2e-output
+          if-no-files-found: ignore

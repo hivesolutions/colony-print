@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Verification of the packages updated by the nodes, by importing their modules, failing the update (naming the modules that are not loaded) when they're not loaded by the system (eg: native modules not supported by Windows XP) instead of the node silently dropping their engine
+* End to end tests of the printing in CI, comparing the PDF documents with the output of the GDI renderer of npcolony under Wine
 
 ### Changed
 
