@@ -187,6 +187,7 @@ The `gravo` engine accepts a JSON payload submitted as base64 to the print endpo
 | `record`      | boolean         | no       | When `true` a video of the engraving session is captured and returned with the screenshots. Defaults to `false`.                                                                                                                            |
 | `check_path`  | boolean         | no       | When `true` the engraving path is traced with the laser light only, without engraving the material, for test verification. Defaults to `false`.                                                                                             |
 | `debug`       | boolean         | no       | When `true` the response includes the captured gravo pilot logs. Defaults to `false`.                                                                                                                                                       |
+| `job`         | boolean         | no       | When `true` the composition is saved as a job file of the engraving software, returned with the screenshots (`composition.job`). Skipped by the nodes without the `gravo-job` capability. Defaults to `false`.                              |
 | `extra_fonts` | object          | no       | Mapping of font name to the base64 encoded `.f3s` payload that should be installed for the duration of the engraving session. Each entry is staged on a per job temporary directory and forwarded to gravo pilot's `extra_fonts` parameter. |
 
 ### Text Print Payload

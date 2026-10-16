@@ -126,14 +126,16 @@ class MockGravostyleAPI(object):
     """
     Stand-in for gravo pilot's GravostyleAPI that records the keyword
     arguments passed to write_text, so that the flag forwarding done by
-    the node can be inspected without driving the real software.
+    the node can be inspected without driving the real software, and
+    returns the configured screenshots (name and value tuples).
     """
 
     calls = []
+    screenshots = []
 
     def write_text(self, text, **kwargs):
         MockGravostyleAPI.calls.append(kwargs)
-        return []
+        return MockGravostyleAPI.screenshots
 
 
 class MockGravoPilot(object):
@@ -147,7 +149,7 @@ class MockGravoPilot(object):
 
     GravostyleAPI = MockGravostyleAPI
 
-    FEATURES = ("depth",)
+    FEATURES = ("depth", "job")
 
     @staticmethod
     def capture_logs(*args, **kwargs):
@@ -487,7 +489,9 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.errors = dict()
         MockNPColonyWindows.error = None
         MockGravostyleAPI.calls = []
+        MockGravostyleAPI.screenshots = []
         MockGravostyleAPILegacy.calls = []
+        MockGravoPilot.FEATURES = ("depth", "job")
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
         MockNPColony.format = "pdf"
@@ -1355,13 +1359,22 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 "gravo-record",
                 "gravo-check-path",
                 "gravo-depth",
+                "gravo-job",
             ],
         )
+
+        # the gravo pilot of the system doesn't report the job feature (a
+        # version released before it), so the job file can't be saved
+        MockGravoPilot.FEATURES = ("depth",)
+        self.assertEqual("gravo-depth" in self.node.capabilities, True)
+        self.assertEqual("gravo-job" in self.node.capabilities, False)
+        MockGravoPilot.FEATURES = ("depth", "job")
 
         # the gravo pilot of the system doesn't report its features (an
         # older version), so the depth of the tool can't be set by the node
         sys.modules["gravo_pilot"] = MockGravoPilotLegacy
         self.assertEqual("gravo-depth" in self.node.capabilities, False)
+        self.assertEqual("gravo-job" in self.node.capabilities, False)
         self.assertEqual("gravo-check-path" in self.node.capabilities, True)
         sys.modules["gravo_pilot"] = MockGravoPilot
 
@@ -2217,6 +2230,58 @@ class ColonyPrintNodeTest(unittest.TestCase):
             )
         self.assertEqual(MockGravostyleAPILegacy.calls, [])
 
+    def test_handle_gravo_forwards_job(self):
+        job_path = os.path.join(self.target_dir, "composition.job")
+        with open(job_path, "wb") as file:
+            file.write(b"\x01\x00VGBA")
+        MockGravostyleAPI.screenshots = [("composition.job", job_path)]
+
+        # the job file saved by gravo pilot is returned with the other
+        # screenshots, read from the path that gravo pilot returns for it
+        result = self.node._handle_gravo(self._gravo_payload(job=True, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual(MockGravostyleAPI.calls[0]["job"], True)
+        self.assertEqual(len(result["files"]), 1)
+        self.assertEqual(result["files"][0]["name"], "composition.job")
+        self.assertEqual(base64.b64decode(result["files"][0]["data"]), b"\x01\x00VGBA")
+
+    def test_handle_gravo_job_defaults_to_unset(self):
+        # the job is not forwarded when the job doesn't request it, so
+        # that the composition is not saved in the engraving software
+        self.node._handle_gravo(self._gravo_payload(dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual("job" in MockGravostyleAPI.calls[0], False)
+
+        self.node._handle_gravo(self._gravo_payload(job=False, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 2)
+        self.assertEqual("job" in MockGravostyleAPI.calls[1], False)
+
+        self.node._handle_gravo(self._gravo_payload(job=None, dry_run=True))
+        self.assertEqual(len(MockGravostyleAPI.calls), 3)
+        self.assertEqual("job" in MockGravostyleAPI.calls[2], False)
+
+    def test_handle_gravo_job_skipped(self):
+        # the gravo pilot of the system supports the depth but not the
+        # job (a version released before it), so the job is engraved
+        # without saving its job file, with the depth still forwarded
+        MockGravoPilot.FEATURES = ("depth",)
+        result = self.node._handle_gravo(
+            self._gravo_payload(job=True, depth=0.5, dry_run=True)
+        )
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual("job" in MockGravostyleAPI.calls[0], False)
+        self.assertEqual(MockGravostyleAPI.calls[0]["depth"], 0.5)
+        self.assertEqual(result["files"], [])
+
+        # the gravo pilot of the system doesn't report its features (an
+        # older version, that fails for the arguments it doesn't know)
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        result = self.node._handle_gravo(self._gravo_payload(job=True, dry_run=True))
+        self.assertEqual(
+            MockGravostyleAPILegacy.calls, [dict(dry_run=True, check_path=False)]
+        )
+        self.assertEqual(result["files"], [])
+
     def test_stage_extra_fonts_writes_payloads(self):
         payload_a = b"\x00\x01\x00\x00font-a-payload"
         payload_b = b"\x00\x01\x00\x00font-b-payload"
@@ -2993,10 +3058,12 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
     def test_has_gravo_feature(self):
         self.assertEqual(self.node._has_gravo_feature("depth"), True)
+        self.assertEqual(self.node._has_gravo_feature("job"), True)
         self.assertEqual(self.node._has_gravo_feature("unknown"), False)
 
         sys.modules["gravo_pilot"] = MockGravoPilotLegacy
         self.assertEqual(self.node._has_gravo_feature("depth"), False)
+        self.assertEqual(self.node._has_gravo_feature("job"), False)
 
     def test_is_enabled(self):
         self.assertEqual(self.node._is_enabled("NODE_CONTROL"), True)

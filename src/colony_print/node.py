@@ -540,6 +540,8 @@ class ColonyPrintNode(object):
             )
             if self._has_gravo_feature("depth"):
                 capabilities.append("gravo-depth")
+            if self._has_gravo_feature("job"):
+                capabilities.append("gravo-job")
         if self.node_mode == "email":
             capabilities.append("email")
         if self.node_control:
@@ -897,6 +899,7 @@ class ColonyPrintNode(object):
         check_path = data_j.get("check_path", False)
         depth = data_j.get("depth", None)
         debug = data_j.get("debug", False)
+        job = data_j.get("job", False)
         extra_fonts = data_j.get("extra_fonts", None)
 
         if margins:
@@ -928,6 +931,15 @@ class ColonyPrintNode(object):
                 % depth
             )
             result["depth_skipped"] = True
+
+        # forwards the saving of the composition as a job file of the
+        # engraving software only to the versions of gravo pilot that
+        # support it, the job file being returned with the screenshots
+        # so that the composed text can be read back from it
+        if job and "gravo-job" in self.capabilities:
+            kwargs["job"] = True
+        elif job:
+            logging.warning("Job file not supported by node, engraving without it")
 
         # stages every extra font payload onto a per job temporary
         # directory so that gravo pilot can find the requested fonts
