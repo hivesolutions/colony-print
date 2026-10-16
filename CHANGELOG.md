@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Option to return the composition of the gravo jobs as a job file of the engraving software, to read back the composed text
 
 ### Changed
 
