@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Option to return the composition of the gravo jobs as a job file of the engraving software, to read back the composed text
+*
 
 ### Changed
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 *
+
+## [0.28.0] - 2026-10-16
+
+### Added
+
+* Option to return the composition of the gravo jobs as a job file of the engraving software, to read back the composed text
 
 ## [0.27.0] - 2026-10-16
 
