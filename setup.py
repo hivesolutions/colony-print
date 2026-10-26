@@ -42,7 +42,8 @@ setuptools.setup(
         "pillow",
         'reportlab<3.5.54; python_version >= "3.0" and python_version < "3.6"',
         'reportlab<4.4.3; python_version >= "3.6" and python_version < "3.9"',
-        'reportlab; python_version < "3.0" or python_version >= "3.9"',
+        'reportlab<5.1.0; python_version >= "3.9" and python_version < "3.10"',
+        'reportlab; python_version < "3.0" or python_version >= "3.10"',
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
