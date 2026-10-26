@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-*
+* PDF support on Python 3.9 after the latest reportlab release
 
 ## [0.28.0] - 2026-10-16
 
