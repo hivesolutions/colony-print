@@ -127,15 +127,44 @@ class MockGravostyleAPI(object):
     Stand-in for gravo pilot's GravostyleAPI that records the keyword
     arguments passed to write_text, so that the flag forwarding done by
     the node can be inspected without driving the real software, and
-    returns the configured screenshots (name and value tuples).
+    returns the configured screenshots (name and value tuples), or fails
+    with the configured error, the screenshots being then the ones taken
+    before the error, and the path of the video of the session being the
+    configured one, as left by a recorded session that failed.
     """
 
     calls = []
     screenshots = []
+    error = None
+    recording_path = None
 
     def write_text(self, text, **kwargs):
         MockGravostyleAPI.calls.append(kwargs)
+        if MockGravostyleAPI.error:
+            raise MockGravostyleAPI.error
         return MockGravostyleAPI.screenshots
+
+
+class MockMachineNotFound(Exception):
+    """
+    Stand-in for the error of gravo pilot raised when the engraving
+    software does not find the machine once a job is sent to it.
+    """
+
+    pass
+
+
+class MockImage(object):
+    """
+    Stand-in for an image (screenshot) of gravo pilot that is saved
+    with the configured data, whatever the format it's saved in.
+    """
+
+    def __init__(self, data):
+        self.data = data
+
+    def save(self, file, format=None):
+        file.write(self.data)
 
 
 class MockGravoPilot(object):
@@ -149,7 +178,9 @@ class MockGravoPilot(object):
 
     GravostyleAPI = MockGravostyleAPI
 
-    FEATURES = ("depth", "job")
+    MachineNotFound = MockMachineNotFound
+
+    FEATURES = ("depth", "job", "machine")
 
     @staticmethod
     def capture_logs(*args, **kwargs):
@@ -167,10 +198,12 @@ class MockGravostyleAPILegacy(object):
     Stand-in for the GravostyleAPI of a legacy version of gravo pilot,
     whose write_text accepts only the arguments that existed before the
     depth of the tool (failing for any other one, as the real one does),
-    recording the keyword arguments it receives.
+    recording the keyword arguments it receives, or failing with the
+    configured error, as it has no screenshots taken before the error.
     """
 
     calls = []
+    error = None
 
     def write_text(
         self,
@@ -188,6 +221,8 @@ class MockGravostyleAPILegacy(object):
         MockGravostyleAPILegacy.calls.append(
             dict(dry_run=dry_run, check_path=check_path)
         )
+        if MockGravostyleAPILegacy.error:
+            raise MockGravostyleAPILegacy.error
         return []
 
 
@@ -199,6 +234,31 @@ class MockGravoPilotLegacy(object):
     """
 
     GravostyleAPI = MockGravostyleAPILegacy
+
+    capture_logs = staticmethod(MockGravoPilot.capture_logs)
+
+
+class MockGravostyleAPIBroken(object):
+    """
+    Stand-in for the GravostyleAPI of gravo pilot that can't be built
+    (eg: the engraving software is not installed), failing as soon as
+    it's created, before any job is engraved.
+    """
+
+    def __init__(self):
+        raise IOError("Engraving software not found")
+
+
+class MockGravoPilotBroken(object):
+    """
+    Stand-in for the gravo pilot module whose GravostyleAPI can't be
+    built, so that the jobs that fail before the engraving software is
+    driven can be exercised.
+    """
+
+    GravostyleAPI = MockGravostyleAPIBroken
+
+    FEATURES = ("depth", "job", "machine")
 
     capture_logs = staticmethod(MockGravoPilot.capture_logs)
 
@@ -490,8 +550,11 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockNPColonyWindows.error = None
         MockGravostyleAPI.calls = []
         MockGravostyleAPI.screenshots = []
+        MockGravostyleAPI.error = None
+        MockGravostyleAPI.recording_path = None
         MockGravostyleAPILegacy.calls = []
-        MockGravoPilot.FEATURES = ("depth", "job")
+        MockGravostyleAPILegacy.error = None
+        MockGravoPilot.FEATURES = ("depth", "job", "machine")
         self._gravo_pilot = sys.modules.get("gravo_pilot")
         sys.modules["gravo_pilot"] = MockGravoPilot
         MockNPColony.format = "pdf"
@@ -982,6 +1045,120 @@ class ColonyPrintNodeTest(unittest.TestCase):
 
         self.assertEqual(results["node/jobs/text/result"]["result"], "success")
 
+    def test_loop_gravo_error(self):
+        # the gravo job whose machine is not found by the engraving software
+        # is posted as an error with its code and the screenshots taken by
+        # gravo pilot before it, waiting for the machine the time configured
+        # for the node, and the job that follows it is printed as usual
+        screenshot_path = os.path.join(self.target_dir, "error-machine_not_found.png")
+        with open(screenshot_path, "wb") as file:
+            file.write(b"\x89PNG machine")
+        MockGravostyleAPI.screenshots = [
+            ("error-machine_not_found.png", screenshot_path)
+        ]
+        MockGravostyleAPI.error = MockMachineNotFound(
+            "Machine not found after 45.0 seconds"
+        )
+        data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
+        batch = [
+            dict(
+                id="gravo",
+                name="gravo",
+                type="gravo",
+                data_b64=self._gravo_payload().decode("utf-8"),
+            ),
+            dict(id="text", name="text", type="text", data_b64=data_b64),
+        ]
+        MockQueue.batches = [json.loads(json.dumps(batch))]
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        self._loop(GRAVO_MACHINE_TIMEOUT="45")
+        self.assertEqual(self.node.gravo_machine_timeout, 45.0)
+        self.assertEqual(MockGravostyleAPI.calls[0]["machine_timeout"], 45.0)
+        results = dict(
+            (url, data_j)
+            for url, (_url, data_j, _headers) in zip(
+                self._urls(MockQueue.calls), MockQueue.calls
+            )
+            if url.endswith("/result")
+        )
+
+        result = results["node/jobs/gravo/result"]
+        self.assertEqual(json.loads(json.dumps(result)), result)
+        self.assertEqual(result["result"], "error")
+        self.assertEqual(
+            result["error"],
+            "Machine not found after 45.0 seconds",
+        )
+        self.assertEqual(result["error_code"], "machine_not_found")
+        self.assertEqual("MockMachineNotFound" in result["traceback"], True)
+        self.assertEqual(type(result["data"]["duration"]), float)
+        self.assertEqual(len(result["data"]["files"]), 1)
+        self.assertEqual(
+            result["data"]["files"][0]["name"], "error-machine_not_found.png"
+        )
+        self.assertEqual(
+            base64.b64decode(result["data"]["files"][0]["data"]), b"\x89PNG machine"
+        )
+        self.assertEqual("logs" in result["data"], False)
+
+        self.assertEqual(results["node/jobs/text/result"]["result"], "success")
+        self.assertEqual("error_code" in results["node/jobs/text/result"], False)
+
+    def test_loop_gravo_machine_timeout_defaults_to_unset(self):
+        # the time to wait for the machine is not forwarded when it's not
+        # configured for the node, so that gravo pilot waits its default one
+        MockQueue.batches = [
+            [
+                dict(
+                    id="gravo",
+                    name="gravo",
+                    type="gravo",
+                    data_b64=self._gravo_payload(dry_run=True).decode("utf-8"),
+                )
+            ]
+        ]
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        self._loop()
+        self.assertEqual(self.node.gravo_machine_timeout, None)
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual("machine_timeout" in MockGravostyleAPI.calls[0], False)
+        results = [
+            data_j
+            for url, (_url, data_j, _headers) in zip(
+                self._urls(MockQueue.calls), MockQueue.calls
+            )
+            if url.endswith("/result")
+        ]
+        self.assertEqual([result["result"] for result in results], ["success"])
+
+    def test_loop_gravo_machine_timeout_invalid(self):
+        # the times that are not positive finite numbers are ignored, so
+        # that gravo pilot waits its default one, instead of cancelling the
+        # jobs whose machine is still being found (zero or negative) or of
+        # never stopping to wait for it (infinite or not a number)
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        for value in ("0", "-30", "inf", "nan"):
+            MockQueue.batches = []
+            self._loop(GRAVO_MACHINE_TIMEOUT=value)
+            self.assertEqual(self.node.gravo_machine_timeout, None)
+
+        # the values that are not numbers (eg: with a unit or a comma as
+        # the decimal separator) and the empty one, as kept by the boot for
+        # a value left empty in its configuration, are ignored as well,
+        # instead of preventing the node from starting
+        for value in ("45s", "7,5", ""):
+            MockQueue.batches = []
+            self._loop(GRAVO_MACHINE_TIMEOUT=value)
+            self.assertEqual(self.node.gravo_machine_timeout, None)
+
+        # a time below a second is still a positive one to wait for
+        MockQueue.batches = []
+        self._loop(GRAVO_MACHINE_TIMEOUT="0.5")
+        self.assertEqual(self.node.gravo_machine_timeout, 0.5)
+
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
         self.node.node_email_receivers = []
@@ -1360,21 +1537,29 @@ class ColonyPrintNodeTest(unittest.TestCase):
                 "gravo-check-path",
                 "gravo-depth",
                 "gravo-job",
+                "gravo-machine",
             ],
         )
+
+        # the gravo pilot of the system doesn't report the machine feature
+        # (a version released before it), so it doesn't wait for the machine
+        MockGravoPilot.FEATURES = ("depth", "job")
+        self.assertEqual("gravo-job" in self.node.capabilities, True)
+        self.assertEqual("gravo-machine" in self.node.capabilities, False)
 
         # the gravo pilot of the system doesn't report the job feature (a
         # version released before it), so the job file can't be saved
         MockGravoPilot.FEATURES = ("depth",)
         self.assertEqual("gravo-depth" in self.node.capabilities, True)
         self.assertEqual("gravo-job" in self.node.capabilities, False)
-        MockGravoPilot.FEATURES = ("depth", "job")
+        MockGravoPilot.FEATURES = ("depth", "job", "machine")
 
         # the gravo pilot of the system doesn't report its features (an
         # older version), so the depth of the tool can't be set by the node
         sys.modules["gravo_pilot"] = MockGravoPilotLegacy
         self.assertEqual("gravo-depth" in self.node.capabilities, False)
         self.assertEqual("gravo-job" in self.node.capabilities, False)
+        self.assertEqual("gravo-machine" in self.node.capabilities, False)
         self.assertEqual("gravo-check-path" in self.node.capabilities, True)
         sys.modules["gravo_pilot"] = MockGravoPilot
 
@@ -2282,6 +2467,159 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         self.assertEqual(result["files"], [])
 
+    def test_handle_gravo_forwards_machine_timeout(self):
+        self.node.gravo_machine_timeout = 45.0
+        self.node._handle_gravo(self._gravo_payload())
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual(MockGravostyleAPI.calls[0]["machine_timeout"], 45.0)
+
+    def test_handle_gravo_machine_timeout_defaults_to_unset(self):
+        # the time to wait for the machine is not forwarded when it's not
+        # configured for the node, gravo pilot waiting its default one
+        self.node._handle_gravo(self._gravo_payload())
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual("machine_timeout" in MockGravostyleAPI.calls[0], False)
+
+    def test_handle_gravo_machine_timeout_skipped(self):
+        # the gravo pilot of the system doesn't support the wait for the
+        # machine (a version released before it), so the time configured
+        # for the node is not forwarded, as it would fail the job
+        self.node.gravo_machine_timeout = 45.0
+        MockGravoPilot.FEATURES = ("depth", "job")
+        self.node._handle_gravo(self._gravo_payload())
+        self.assertEqual(len(MockGravostyleAPI.calls), 1)
+        self.assertEqual("machine_timeout" in MockGravostyleAPI.calls[0], False)
+
+        # the gravo pilot of the system doesn't report its features (an
+        # older version, that fails for the arguments it doesn't know)
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        result = self.node._handle_gravo(self._gravo_payload())
+        self.assertEqual(
+            MockGravostyleAPILegacy.calls, [dict(dry_run=False, check_path=False)]
+        )
+        self.assertEqual(result["files"], [])
+
+    def test_handle_gravo_machine_not_found(self):
+        screenshot_path = os.path.join(self.target_dir, "error-machine_not_found.png")
+        with open(screenshot_path, "wb") as file:
+            file.write(b"\x89PNG machine")
+        MockGravostyleAPI.screenshots = [
+            ("composition.png", MockImage(b"\x89PNG composition")),
+            ("error-machine_not_found.png", screenshot_path),
+        ]
+        MockGravostyleAPI.error = MockMachineNotFound("Machine not found")
+        extra_fonts = dict(font_a=base64.b64encode(b"font-a-payload").decode("utf-8"))
+        with self.assertRaises(MockMachineNotFound) as context:
+            self.node._handle_gravo(
+                self._gravo_payload(extra_fonts=extra_fonts, debug=True)
+            )
+
+        # the error is the one of gravo pilot, with the fields of the result
+        # attached to it, and the extra fonts staged for the job are removed
+        job_result = context.exception.job_result
+        self.assertEqual(job_result["error_code"], "machine_not_found")
+        self.assertEqual(
+            [file["name"] for file in job_result["data"]["files"]],
+            ["composition.png", "error-machine_not_found.png"],
+        )
+        self.assertEqual(
+            base64.b64decode(job_result["data"]["files"][0]["data"]),
+            b"\x89PNG composition",
+        )
+        self.assertEqual(
+            base64.b64decode(job_result["data"]["files"][1]["data"]),
+            b"\x89PNG machine",
+        )
+        self.assertEqual(job_result["data"]["logs"], [])
+        self.assertEqual(type(job_result["data"]["duration"]), float)
+        font_path = MockGravostyleAPI.calls[0]["extra_fonts"]["font_a"]
+        self.assertEqual(os.path.exists(os.path.dirname(font_path)), False)
+
+    def test_handle_gravo_error(self):
+        # the other errors of gravo pilot have no code, while still having
+        # the screenshots taken before them posted with the result
+        MockGravostyleAPI.screenshots = [
+            ("composition.png", MockImage(b"\x89PNG composition"))
+        ]
+        MockGravostyleAPI.error = IOError("Could not focus the depth field")
+        with self.assertRaises(IOError) as context:
+            self.node._handle_gravo(self._gravo_payload())
+        job_result = context.exception.job_result
+        self.assertEqual("error_code" in job_result, False)
+        self.assertEqual(
+            [file["name"] for file in job_result["data"]["files"]], ["composition.png"]
+        )
+        self.assertEqual("logs" in job_result["data"], False)
+
+    def test_handle_gravo_error_legacy(self):
+        # the gravo pilot of the system doesn't define the error of the
+        # machine not found (an older version), neither keeping the
+        # screenshots taken before an error, so the error has no code
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        MockGravostyleAPILegacy.error = IOError("Image not found")
+        with self.assertRaises(IOError) as context:
+            self.node._handle_gravo(self._gravo_payload())
+        job_result = context.exception.job_result
+        self.assertEqual("error_code" in job_result, False)
+        self.assertEqual(job_result["data"]["files"], [])
+
+    def test_handle_gravo_error_record(self):
+        # the video of the recorded session of a failed job is posted with
+        # the screenshots taken before the error, as gravo pilot only adds
+        # it to the screenshots of the jobs that succeed
+        video_path = os.path.join(self.target_dir, "recording.mp4")
+        with open(video_path, "wb") as file:
+            file.write(b"video")
+        MockGravostyleAPI.screenshots = [
+            ("composition.png", MockImage(b"\x89PNG composition"))
+        ]
+        MockGravostyleAPI.recording_path = video_path
+        MockGravostyleAPI.error = MockMachineNotFound("Machine not found")
+        with self.assertRaises(MockMachineNotFound) as context:
+            self.node._handle_gravo(self._gravo_payload(record=True))
+        files = context.exception.job_result["data"]["files"]
+        self.assertEqual(
+            [file["name"] for file in files], ["composition.png", "session.mp4"]
+        )
+        self.assertEqual(base64.b64decode(files[1]["data"]), b"video")
+        self.assertEqual(
+            MockGravostyleAPI.screenshots,
+            [("composition.png", MockGravostyleAPI.screenshots[0][1])],
+        )
+
+    def test_handle_gravo_record(self):
+        # the video of a job that succeeds is the one gravo pilot adds to
+        # the screenshots, so that it's not posted twice
+        video_path = os.path.join(self.target_dir, "recording.mp4")
+        with open(video_path, "wb") as file:
+            file.write(b"video")
+        MockGravostyleAPI.screenshots = [("session.mp4", video_path)]
+        MockGravostyleAPI.recording_path = video_path
+        result = self.node._handle_gravo(self._gravo_payload(record=True))
+        self.assertEqual([file["name"] for file in result["files"]], ["session.mp4"])
+
+    def test_handle_gravo_api_error(self):
+        # the gravo pilot of the system can't build its api (eg: the
+        # engraving software is not installed), so the job fails without
+        # screenshots and the extra fonts staged for it are removed
+        sys.modules["gravo_pilot"] = MockGravoPilotBroken
+        created = []
+        mkdtemp = tempfile.mkdtemp
+        colony_print.node.tempfile.mkdtemp = lambda prefix: (
+            created.append(mkdtemp(prefix=prefix)) or created[-1]
+        )
+        extra_fonts = dict(font_a=base64.b64encode(b"font-a-payload").decode("utf-8"))
+        try:
+            with self.assertRaises(IOError) as context:
+                self.node._handle_gravo(self._gravo_payload(extra_fonts=extra_fonts))
+        finally:
+            colony_print.node.tempfile.mkdtemp = mkdtemp
+        self.assertEqual(len(created), 1)
+        self.assertEqual(os.path.exists(created[0]), False)
+        job_result = context.exception.job_result
+        self.assertEqual("error_code" in job_result, False)
+        self.assertEqual(job_result["data"]["files"], [])
+
     def test_stage_extra_fonts_writes_payloads(self):
         payload_a = b"\x00\x01\x00\x00font-a-payload"
         payload_b = b"\x00\x01\x00\x00font-b-payload"
@@ -2316,6 +2654,76 @@ class ColonyPrintNodeTest(unittest.TestCase):
         )
         with open(paths["font_a"], "rb") as file:
             self.assertEqual(file.read(), payload)
+
+    def test_gravo_files(self):
+        video_path = os.path.join(self.target_dir, "session.mp4")
+        with open(video_path, "wb") as file:
+            file.write(b"video")
+        files = self.node._gravo_files(
+            [
+                ("composition.png", MockImage(b"\x89PNG composition")),
+                ("session.mp4", video_path),
+            ]
+        )
+        self.assertEqual(
+            [file["name"] for file in files], ["composition.png", "session.mp4"]
+        )
+        self.assertEqual(base64.b64decode(files[0]["data"]), b"\x89PNG composition")
+        self.assertEqual(base64.b64decode(files[1]["data"]), b"video")
+        self.assertEqual(json.loads(json.dumps(files)), files)
+
+    def test_gravo_files_empty(self):
+        self.assertEqual(self.node._gravo_files([]), [])
+
+    def test_gravo_files_missing(self):
+        self.assertRaises(
+            IOError,
+            lambda: self.node._gravo_files(
+                [("session.mp4", os.path.join(self.target_dir, "missing.mp4"))]
+            ),
+        )
+
+    def test_gravo_error_result(self):
+        result = self.node._gravo_error_result(
+            MockMachineNotFound("Machine not found"),
+            [("composition.png", MockImage(b"\x89PNG composition"))],
+            12.5,
+            [],
+        )
+        self.assertEqual(result["error_code"], "machine_not_found")
+        self.assertEqual(result["data"]["duration"], 12.5)
+        self.assertEqual(
+            [file["name"] for file in result["data"]["files"]], ["composition.png"]
+        )
+        self.assertEqual("logs" in result["data"], False)
+
+    def test_gravo_error_result_debug(self):
+        logs = [("2026-11-12 10:00:00", "gravo_pilot.app", "INFO", "Sending job")]
+        result = self.node._gravo_error_result(
+            IOError("Could not focus the depth field"), [], 3.0, logs, debug=True
+        )
+        self.assertEqual("error_code" in result, False)
+        self.assertEqual(result["data"], dict(duration=3.0, logs=logs, files=[]))
+
+    def test_gravo_error_result_files_error(self):
+        # a screenshot that can't be converted (eg: a file that was removed)
+        # leaves the job without files, the error keeping its code
+        result = self.node._gravo_error_result(
+            MockMachineNotFound("Machine not found"),
+            [("session.mp4", os.path.join(self.target_dir, "missing.mp4"))],
+            12.5,
+            [],
+        )
+        self.assertEqual(result["error_code"], "machine_not_found")
+        self.assertEqual(result["data"]["files"], [])
+
+    def test_gravo_error_result_legacy(self):
+        sys.modules["gravo_pilot"] = MockGravoPilotLegacy
+        result = self.node._gravo_error_result(
+            MockMachineNotFound("Machine not found"), [], 1.0, []
+        )
+        self.assertEqual("error_code" in result, False)
+        self.assertEqual(result["data"], dict(duration=1.0, files=[]))
 
     def test_decode_payload_json(self):
         data = json.dumps(dict(text="Hello World", font="HELVETICA 1L"))
