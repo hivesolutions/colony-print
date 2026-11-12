@@ -1145,6 +1145,15 @@ class ColonyPrintNodeTest(unittest.TestCase):
             self._loop(GRAVO_MACHINE_TIMEOUT=value)
             self.assertEqual(self.node.gravo_machine_timeout, None)
 
+        # the values that are not numbers (eg: with a unit or a comma as
+        # the decimal separator) and the empty one, as kept by the boot for
+        # a value left empty in its configuration, are ignored as well,
+        # instead of preventing the node from starting
+        for value in ("45s", "7,5", ""):
+            MockQueue.batches = []
+            self._loop(GRAVO_MACHINE_TIMEOUT=value)
+            self.assertEqual(self.node.gravo_machine_timeout, None)
+
         # a time below a second is still a positive one to wait for
         MockQueue.batches = []
         self._loop(GRAVO_MACHINE_TIMEOUT="0.5")

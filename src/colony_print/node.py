@@ -159,21 +159,26 @@ class ColonyPrintNode(object):
 
         # the time (in seconds) that gravo pilot waits for the engraving
         # software to find the machine once a job is sent, the default one
-        # of gravo pilot being used when it's not configured for the node,
-        # or when it's not a positive finite number, as gravo pilot would
-        # then cancel the jobs whose machine is still being found (zero or
-        # negative) or never stop waiting for it (infinite or not a number)
-        self.gravo_machine_timeout = appier.conf(
-            "GRAVO_MACHINE_TIMEOUT", None, cast=float
-        )
-        if not self.gravo_machine_timeout == None and not (
-            0 < self.gravo_machine_timeout < float("inf")
-        ):
-            logging.warning(
-                "Machine timeout %s not valid, waiting the default of gravo pilot"
-                % self.gravo_machine_timeout
-            )
-            self.gravo_machine_timeout = None
+        # of gravo pilot being used when it's not configured for the node
+        # (or it's empty), or when it's not a positive finite number, as
+        # gravo pilot would then cancel the jobs whose machine is still being
+        # found (zero or negative) or never stop waiting for it (infinite or
+        # not a number), a value that is not a number (eg: 45s) being ignored
+        # as well, instead of preventing the node from starting
+        self.gravo_machine_timeout = None
+        gravo_machine_timeout = appier.conf("GRAVO_MACHINE_TIMEOUT", None)
+        if not gravo_machine_timeout in (None, ""):
+            try:
+                timeout = float(gravo_machine_timeout)
+            except (TypeError, ValueError):
+                timeout = None
+            if not timeout == None and 0 < timeout < float("inf"):
+                self.gravo_machine_timeout = timeout
+            else:
+                logging.warning(
+                    "Machine timeout %s not valid, waiting the default of gravo pilot"
+                    % gravo_machine_timeout
+                )
 
         logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
         logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
