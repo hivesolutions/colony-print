@@ -108,6 +108,7 @@ class ColonyPrintNode(object):
         self.node_boot = False
         self.node_update = True
         self.node_state = None
+        self.gravo_machine_timeout = None
         self.font_cache = None
         self.loaded_fonts = set()
         self.restart_jobs = []
@@ -155,6 +156,13 @@ class ColonyPrintNode(object):
         self.node_boot = self._is_enabled("NODE_BOOT", default="0")
         self.node_update = self._is_enabled("NODE_UPDATE")
         self.node_state = appier.conf("NODE_STATE_PATH", None)
+
+        # the time (in seconds) that gravo pilot waits for the engraving
+        # software to find the machine once a job is sent, the default one
+        # of gravo pilot being used when it's not configured for the node
+        self.gravo_machine_timeout = appier.conf(
+            "GRAVO_MACHINE_TIMEOUT", None, cast=float
+        )
 
         logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
         logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
@@ -225,6 +233,12 @@ class ColonyPrintNode(object):
                             error=self._message(exception),
                             traceback=self._text(traceback.format_exc()),
                         )
+
+                        # adds the fields of the result that the handler of
+                        # the job attached to its error (eg: the code of the
+                        # error and the screenshots of a gravo job), so that
+                        # they're posted together with the error
+                        result.update(getattr(exception, "job_result", None) or dict())
 
                     # the jobs that restart the node have no result, as they
                     # are finished by the server once the node (restarted)
@@ -542,6 +556,8 @@ class ColonyPrintNode(object):
                 capabilities.append("gravo-depth")
             if self._has_gravo_feature("job"):
                 capabilities.append("gravo-job")
+            if self._has_gravo_feature("machine"):
+                capabilities.append("gravo-machine")
         if self.node_mode == "email":
             capabilities.append("email")
         if self.node_control:
@@ -941,6 +957,20 @@ class ColonyPrintNode(object):
         elif job:
             logging.warning("Job file not supported by node, engraving without it")
 
+        # forwards the time to wait for the engraving software to find the
+        # machine (when it's configured for the node) only to the versions of
+        # gravo pilot that support it, as the older ones don't accept it, the
+        # versions that support it waiting for their own default otherwise
+        if (
+            not self.gravo_machine_timeout == None
+            and "gravo-machine" in self.capabilities
+        ):
+            kwargs["machine_timeout"] = self.gravo_machine_timeout
+        elif not self.gravo_machine_timeout == None:
+            logging.warning(
+                "Machine timeout not supported by node, not waiting for the machine"
+            )
+
         # stages every extra font payload onto a per job temporary
         # directory so that gravo pilot can find the requested fonts
         # on disk by name and install them into the engraving software
@@ -953,10 +983,12 @@ class ColonyPrintNode(object):
             extra_fonts_dir = tempfile.mkdtemp(prefix="colony-print-fonts-")
             extra_fonts_paths = self._stage_extra_fonts(extra_fonts, extra_fonts_dir)
 
+        api = gravo_pilot.GravostyleAPI()
+        logs = []
+        start = time.time()
         try:
-            start = time.time()
             with gravo_pilot.capture_logs() as logs:
-                screenshots = gravo_pilot.GravostyleAPI().write_text(
+                screenshots = api.write_text(
                     text,
                     font=font,
                     font_size=font_size,
@@ -970,23 +1002,24 @@ class ColonyPrintNode(object):
                     **kwargs
                 )
             duration = time.time() - start
+        except Exception as exception:
+            # attaches the code of the error (eg: the machine was not found)
+            # and the screenshots taken by gravo pilot before it (eg: the one
+            # of the engraving software once the machine was not found) to
+            # the error, so that they're posted with the result of the job
+            exception.job_result = self._gravo_error_result(
+                exception,
+                getattr(api, "screenshots", None) or [],
+                time.time() - start,
+                logs,
+                debug=debug,
+            )
+            raise
         finally:
             if extra_fonts_dir:
                 shutil.rmtree(extra_fonts_dir, ignore_errors=True)
 
-        files = []
-
-        for screenshot in screenshots:
-            name, value = screenshot
-            if appier.legacy.is_string(value):
-                with open(value, "rb") as file:
-                    data = file.read()
-            else:
-                buffer = appier.legacy.BytesIO()
-                value.save(buffer, format="PNG")
-                data = buffer.getvalue()
-            _data_b64 = base64.b64encode(data)
-            files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
+        files = self._gravo_files(screenshots)
 
         result.update(
             dict(duration=duration, logs=logs, files=files)
@@ -1026,6 +1059,86 @@ class ColonyPrintNode(object):
                 file.write(payload)
             paths[name] = target_path
         return paths
+
+    def _gravo_files(self, screenshots):
+        """
+        Converts the provided screenshots of gravo pilot into the files
+        of the result of a gravo job, each one with its name and its base64
+        encoded data, as saved by the server in the directory of the job.
+
+        :type screenshots: list
+        :param screenshots: The (name and value) tuples of the screenshots
+        of gravo pilot, the value being either an image or the path of the
+        file (eg: the video of the session or the job file).
+        :rtype: list
+        :return: The files of the result of the job, in the same order as
+        the screenshots.
+        """
+
+        files = []
+        for screenshot in screenshots:
+            name, value = screenshot
+            if appier.legacy.is_string(value):
+                with open(value, "rb") as file:
+                    data = file.read()
+            else:
+                buffer = appier.legacy.BytesIO()
+                value.save(buffer, format="PNG")
+                data = buffer.getvalue()
+            _data_b64 = base64.b64encode(data)
+            files.append(appier.File(dict(name=name, data=_data_b64)).json_v())
+        return files
+
+    def _gravo_error_result(self, exception, screenshots, duration, logs, debug=False):
+        """
+        Builds the fields of the result of a gravo job that failed with the
+        provided error, to be posted together with the error, namely the
+        machine readable code of the error, when it's known (eg: the
+        `machine_not_found` code when the engraving software did not find
+        the machine), and the data of the job, with the screenshots taken
+        by gravo pilot before the error, so that the reason of the failure
+        can be shown and inspected.
+
+        A problem converting the screenshots is only logged, so that the
+        error of the job is never hidden by it, the job having no files.
+
+        :type exception: Exception
+        :param exception: The error raised by gravo pilot for the job.
+        :type screenshots: list
+        :param screenshots: The (name and value) tuples of the screenshots
+        taken by gravo pilot before the error.
+        :type duration: float
+        :param duration: The time (in seconds) the job ran before the error.
+        :type logs: list
+        :param logs: The logs of gravo pilot captured until the error.
+        :type debug: bool
+        :param debug: If the logs should be included in the data of the job.
+        :rtype: Dictionary
+        :return: The fields to be added to the (error) result of the job.
+        """
+
+        import gravo_pilot
+
+        result = dict()
+        machine_not_found = getattr(gravo_pilot, "MachineNotFound", None)
+        if machine_not_found and isinstance(exception, machine_not_found):
+            result["error_code"] = "machine_not_found"
+
+        try:
+            files = self._gravo_files(screenshots)
+        except Exception as _exception:
+            logging.warning(
+                "Problem converting the screenshots of the job: %s"
+                % self._message(_exception)
+            )
+            files = []
+
+        result["data"] = (
+            dict(duration=duration, logs=logs, files=files)
+            if debug
+            else dict(duration=duration, files=files)
+        )
+        return result
 
     def _decode_payload(self, data_b64):
         """
