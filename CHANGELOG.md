@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-*
+* Setting of how long the nodes wait for the engraving machine to be found once a job is sent - [#90](https://github.com/hivesolutions/signatur/issues/90)
+* Screenshots of the engraving jobs that fail, kept with the job - [#90](https://github.com/hivesolutions/signatur/issues/90)
 
 ### Changed
 
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * PDF support on Python 3.9 after the latest reportlab release
+* Engraving jobs whose machine is not found now fail with a code telling why, instead of being reported as engraved - [#90](https://github.com/hivesolutions/signatur/issues/90)
 
 ## [0.28.0] - 2026-10-16
 
