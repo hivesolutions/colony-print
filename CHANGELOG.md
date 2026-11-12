@@ -9,12 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Setting of how long the nodes wait for the engraving machine to be found once a job is sent - [#90](https://github.com/hivesolutions/signatur/issues/90)
-* Screenshots of the engraving jobs that fail, kept with the job - [#90](https://github.com/hivesolutions/signatur/issues/90)
+*
 
 ### Changed
 
 *
+
+### Fixed
+
+*
+
+## [0.29.0] - 2026-11-12
+
+### Added
+
+* Setting of how long the nodes wait for the engraving machine to be found once a job is sent - [#90](https://github.com/hivesolutions/signatur/issues/90)
+* Screenshots of the engraving jobs that fail, kept with the job - [#90](https://github.com/hivesolutions/signatur/issues/90)
 
 ### Fixed
 

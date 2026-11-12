@@ -6,7 +6,7 @@ import setuptools
 
 setuptools.setup(
     name="colony-print",
-    version="0.28.0",
+    version="0.29.0",
     author="Hive Solutions Lda.",
     author_email="development@hive.pt",
     description="Colony Print Infra-structure",
