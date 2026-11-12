@@ -1029,7 +1029,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
             ("error-machine_not_found.png", screenshot_path)
         ]
         MockGravostyleAPI.error = MockMachineNotFound(
-            "Machine not found after 45.0 seconds (Searching for the machine ...)"
+            "Machine not found after 45.0 seconds"
         )
         data_b64 = base64.b64encode(b"Hello World").decode("utf-8")
         batch = [
@@ -1060,7 +1060,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(result["result"], "error")
         self.assertEqual(
             result["error"],
-            "Machine not found after 45.0 seconds (Searching for the machine ...)",
+            "Machine not found after 45.0 seconds",
         )
         self.assertEqual(result["error_code"], "machine_not_found")
         self.assertEqual("MockMachineNotFound" in result["traceback"], True)
