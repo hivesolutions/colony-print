@@ -159,10 +159,21 @@ class ColonyPrintNode(object):
 
         # the time (in seconds) that gravo pilot waits for the engraving
         # software to find the machine once a job is sent, the default one
-        # of gravo pilot being used when it's not configured for the node
+        # of gravo pilot being used when it's not configured for the node,
+        # or when it's not a positive finite number, as gravo pilot would
+        # then cancel the jobs whose machine is still being found (zero or
+        # negative) or never stop waiting for it (infinite or not a number)
         self.gravo_machine_timeout = appier.conf(
             "GRAVO_MACHINE_TIMEOUT", None, cast=float
         )
+        if not self.gravo_machine_timeout == None and not (
+            0 < self.gravo_machine_timeout < float("inf")
+        ):
+            logging.warning(
+                "Machine timeout %s not valid, waiting the default of gravo pilot"
+                % self.gravo_machine_timeout
+            )
+            self.gravo_machine_timeout = None
 
         logging.info("Booting %s %s (%s)" % (NAME, VERSION, appier.PLATFORM))
         logging.info("Running node '%s' in '%s' mode" % (node_id, self.node_mode))
@@ -983,10 +994,11 @@ class ColonyPrintNode(object):
             extra_fonts_dir = tempfile.mkdtemp(prefix="colony-print-fonts-")
             extra_fonts_paths = self._stage_extra_fonts(extra_fonts, extra_fonts_dir)
 
-        api = gravo_pilot.GravostyleAPI()
+        api = None
         logs = []
         start = time.time()
         try:
+            api = gravo_pilot.GravostyleAPI()
             with gravo_pilot.capture_logs() as logs:
                 screenshots = api.write_text(
                     text,
@@ -1006,10 +1018,17 @@ class ColonyPrintNode(object):
             # attaches the code of the error (eg: the machine was not found)
             # and the screenshots taken by gravo pilot before it (eg: the one
             # of the engraving software once the machine was not found) to
-            # the error, so that they're posted with the result of the job
+            # the error, so that they're posted with the result of the job,
+            # together with the video of the session (if recorded), that gravo
+            # pilot only adds to the screenshots of the jobs that succeed
+            screenshots = list(getattr(api, "screenshots", None) or [])
+            recording_path = getattr(api, "recording_path", None)
+            if recording_path:
+                extension = os.path.splitext(recording_path)[1]
+                screenshots.append(("session%s" % extension, recording_path))
             exception.job_result = self._gravo_error_result(
                 exception,
-                getattr(api, "screenshots", None) or [],
+                screenshots,
                 time.time() - start,
                 logs,
                 debug=debug,

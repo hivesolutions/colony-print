@@ -129,12 +129,14 @@ class MockGravostyleAPI(object):
     the node can be inspected without driving the real software, and
     returns the configured screenshots (name and value tuples), or fails
     with the configured error, the screenshots being then the ones taken
-    before the error.
+    before the error, and the path of the video of the session being the
+    configured one, as left by a recorded session that failed.
     """
 
     calls = []
     screenshots = []
     error = None
+    recording_path = None
 
     def write_text(self, text, **kwargs):
         MockGravostyleAPI.calls.append(kwargs)
@@ -232,6 +234,31 @@ class MockGravoPilotLegacy(object):
     """
 
     GravostyleAPI = MockGravostyleAPILegacy
+
+    capture_logs = staticmethod(MockGravoPilot.capture_logs)
+
+
+class MockGravostyleAPIBroken(object):
+    """
+    Stand-in for the GravostyleAPI of gravo pilot that can't be built
+    (eg: the engraving software is not installed), failing as soon as
+    it's created, before any job is engraved.
+    """
+
+    def __init__(self):
+        raise IOError("Engraving software not found")
+
+
+class MockGravoPilotBroken(object):
+    """
+    Stand-in for the gravo pilot module whose GravostyleAPI can't be
+    built, so that the jobs that fail before the engraving software is
+    driven can be exercised.
+    """
+
+    GravostyleAPI = MockGravostyleAPIBroken
+
+    FEATURES = ("depth", "job", "machine")
 
     capture_logs = staticmethod(MockGravoPilot.capture_logs)
 
@@ -524,6 +551,7 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockGravostyleAPI.calls = []
         MockGravostyleAPI.screenshots = []
         MockGravostyleAPI.error = None
+        MockGravostyleAPI.recording_path = None
         MockGravostyleAPILegacy.calls = []
         MockGravostyleAPILegacy.error = None
         MockGravoPilot.FEATURES = ("depth", "job", "machine")
@@ -1104,6 +1132,23 @@ class ColonyPrintNodeTest(unittest.TestCase):
             if url.endswith("/result")
         ]
         self.assertEqual([result["result"] for result in results], ["success"])
+
+    def test_loop_gravo_machine_timeout_invalid(self):
+        # the times that are not positive finite numbers are ignored, so
+        # that gravo pilot waits its default one, instead of cancelling the
+        # jobs whose machine is still being found (zero or negative) or of
+        # never stopping to wait for it (infinite or not a number)
+        appier.get = MockQueue.get
+        appier.post = MockQueue.post
+        for value in ("0", "-30", "inf", "nan"):
+            MockQueue.batches = []
+            self._loop(GRAVO_MACHINE_TIMEOUT=value)
+            self.assertEqual(self.node.gravo_machine_timeout, None)
+
+        # a time below a second is still a positive one to wait for
+        MockQueue.batches = []
+        self._loop(GRAVO_MACHINE_TIMEOUT="0.5")
+        self.assertEqual(self.node.gravo_machine_timeout, 0.5)
 
     def test_print_job_email_binie(self):
         self.node.node_printer = "Receipt"
@@ -2419,12 +2464,6 @@ class ColonyPrintNodeTest(unittest.TestCase):
         self.assertEqual(len(MockGravostyleAPI.calls), 1)
         self.assertEqual(MockGravostyleAPI.calls[0]["machine_timeout"], 45.0)
 
-        # a time of zero is still forwarded, so that gravo pilot doesn't
-        # wait for the machine to be found once the job is sent
-        self.node.gravo_machine_timeout = 0.0
-        self.node._handle_gravo(self._gravo_payload())
-        self.assertEqual(MockGravostyleAPI.calls[1]["machine_timeout"], 0.0)
-
     def test_handle_gravo_machine_timeout_defaults_to_unset(self):
         # the time to wait for the machine is not forwarded when it's not
         # configured for the node, gravo pilot waiting its default one
@@ -2511,6 +2550,63 @@ class ColonyPrintNodeTest(unittest.TestCase):
         MockGravostyleAPILegacy.error = IOError("Image not found")
         with self.assertRaises(IOError) as context:
             self.node._handle_gravo(self._gravo_payload())
+        job_result = context.exception.job_result
+        self.assertEqual("error_code" in job_result, False)
+        self.assertEqual(job_result["data"]["files"], [])
+
+    def test_handle_gravo_error_record(self):
+        # the video of the recorded session of a failed job is posted with
+        # the screenshots taken before the error, as gravo pilot only adds
+        # it to the screenshots of the jobs that succeed
+        video_path = os.path.join(self.target_dir, "recording.mp4")
+        with open(video_path, "wb") as file:
+            file.write(b"video")
+        MockGravostyleAPI.screenshots = [
+            ("composition.png", MockImage(b"\x89PNG composition"))
+        ]
+        MockGravostyleAPI.recording_path = video_path
+        MockGravostyleAPI.error = MockMachineNotFound("Machine not found")
+        with self.assertRaises(MockMachineNotFound) as context:
+            self.node._handle_gravo(self._gravo_payload(record=True))
+        files = context.exception.job_result["data"]["files"]
+        self.assertEqual(
+            [file["name"] for file in files], ["composition.png", "session.mp4"]
+        )
+        self.assertEqual(base64.b64decode(files[1]["data"]), b"video")
+        self.assertEqual(
+            MockGravostyleAPI.screenshots,
+            [("composition.png", MockGravostyleAPI.screenshots[0][1])],
+        )
+
+    def test_handle_gravo_record(self):
+        # the video of a job that succeeds is the one gravo pilot adds to
+        # the screenshots, so that it's not posted twice
+        video_path = os.path.join(self.target_dir, "recording.mp4")
+        with open(video_path, "wb") as file:
+            file.write(b"video")
+        MockGravostyleAPI.screenshots = [("session.mp4", video_path)]
+        MockGravostyleAPI.recording_path = video_path
+        result = self.node._handle_gravo(self._gravo_payload(record=True))
+        self.assertEqual([file["name"] for file in result["files"]], ["session.mp4"])
+
+    def test_handle_gravo_api_error(self):
+        # the gravo pilot of the system can't build its api (eg: the
+        # engraving software is not installed), so the job fails without
+        # screenshots and the extra fonts staged for it are removed
+        sys.modules["gravo_pilot"] = MockGravoPilotBroken
+        created = []
+        mkdtemp = tempfile.mkdtemp
+        colony_print.node.tempfile.mkdtemp = lambda prefix: (
+            created.append(mkdtemp(prefix=prefix)) or created[-1]
+        )
+        extra_fonts = dict(font_a=base64.b64encode(b"font-a-payload").decode("utf-8"))
+        try:
+            with self.assertRaises(IOError) as context:
+                self.node._handle_gravo(self._gravo_payload(extra_fonts=extra_fonts))
+        finally:
+            colony_print.node.tempfile.mkdtemp = mkdtemp
+        self.assertEqual(len(created), 1)
+        self.assertEqual(os.path.exists(created[0]), False)
         job_result = context.exception.job_result
         self.assertEqual("error_code" in job_result, False)
         self.assertEqual(job_result["data"]["files"], [])
